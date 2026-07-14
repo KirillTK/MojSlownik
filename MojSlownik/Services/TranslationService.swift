@@ -22,7 +22,9 @@ enum TranslationError: LocalizedError {
 /// затем Google (веб, лучшее качество), затем MyMemory (веб, запасной).
 enum Translator {
     static func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
-        #if canImport(Translation)
+        // В симуляторе Translation framework не работает и показывает
+        // системный экран ошибки поверх приложения — путь отключён целиком.
+        #if canImport(Translation) && !targetEnvironment(simulator)
         if #available(iOS 18.0, *) {
             do {
                 return try await withTimeout(seconds: 4) {
