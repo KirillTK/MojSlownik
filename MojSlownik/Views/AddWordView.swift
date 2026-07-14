@@ -117,6 +117,7 @@ struct AddWordView: View {
                 .font(.title3.weight(.medium))
                 .focused($sourceFieldFocused)
                 .autocorrectionDisabled()
+                .accessibilityIdentifier("sourceField")
                 .onChange(of: sourceText) {
                     scheduleTranslation()
                 }
@@ -142,6 +143,7 @@ struct AddWordView: View {
             TextField("Перевод появится автоматически…", text: $translatedText, axis: .vertical)
                 .font(.title3.weight(.medium))
                 .autocorrectionDisabled()
+                .accessibilityIdentifier("translationField")
 
             if let translationError {
                 Label(translationError, systemImage: "wifi.exclamationmark")

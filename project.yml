@@ -32,3 +32,27 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.kirill.personal.mojslownik
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UIUserInterfaceStyle: Automatic
+  MojSlownikUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - MojSlownikUITests
+    dependencies:
+      - target: MojSlownik
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kirill.personal.mojslownik.uitests
+        TEST_TARGET_NAME: MojSlownik
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  MojSlownik:
+    build:
+      targets:
+        MojSlownik: all
+        MojSlownikUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MojSlownikUITests

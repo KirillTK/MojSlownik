@@ -55,11 +55,14 @@ struct FlashcardsView: View {
             Spacer()
 
             card(word: word)
+                .contentShape(Rectangle())
                 .onTapGesture {
                     withAnimation(.spring(duration: 0.45)) {
                         isFlipped.toggle()
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("flashcard")
 
             Spacer()
 

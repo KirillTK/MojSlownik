@@ -9,6 +9,7 @@ struct WordListView: View {
     @State private var showAddSheet = false
     @State private var showScanner = false
     @State private var scannedPrefill: ScannedText?
+    @State private var didHandleTestPrefill = false
 
     private var filteredWords: [Word] {
         guard !searchText.isEmpty else { return words }
@@ -71,6 +72,15 @@ struct WordListView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         scannedPrefill = ScannedText(text: text)
                     }
+                }
+            }
+            .onAppear {
+                // Вход для UI-тестов: имитирует префилл из сканера (ввод кириллицы
+                // с тестовой клавиатуры ненадёжен).
+                if !didHandleTestPrefill,
+                   let prefill = ProcessInfo.processInfo.environment["UITEST_PREFILL"] {
+                    didHandleTestPrefill = true
+                    scannedPrefill = ScannedText(text: prefill)
                 }
             }
         }
