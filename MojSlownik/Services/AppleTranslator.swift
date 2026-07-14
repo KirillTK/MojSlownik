@@ -18,18 +18,31 @@ final class AppleTranslationModel: ObservableObject {
     private var pending: (text: String, continuation: CheckedContinuation<String, Error>)?
 
     func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            pending?.continuation.resume(throwing: CancellationError())
-            pending = (text, continuation)
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                pending?.continuation.resume(throwing: CancellationError())
+                pending = (text, continuation)
 
-            let sourceLanguage = Locale.Language(identifier: source.rawValue)
-            let targetLanguage = Locale.Language(identifier: target.rawValue)
-            if configuration?.source == sourceLanguage, configuration?.target == targetLanguage {
-                configuration?.invalidate()
-            } else {
-                configuration = TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
+                let sourceLanguage = Locale.Language(identifier: source.rawValue)
+                let targetLanguage = Locale.Language(identifier: target.rawValue)
+                if configuration?.source == sourceLanguage, configuration?.target == targetLanguage {
+                    configuration?.invalidate()
+                } else {
+                    configuration = TranslationSession.Configuration(source: sourceLanguage, target: targetLanguage)
+                }
+            }
+        } onCancel: {
+            // Иначе continuation зависает навсегда, если сессия так и не пришла
+            // (нет языковых пакетов и т.п.), и таймаут в Translator не срабатывает.
+            Task { @MainActor in
+                AppleTranslationModel.shared.cancelPending()
             }
         }
+    }
+
+    func cancelPending() {
+        pending?.continuation.resume(throwing: CancellationError())
+        pending = nil
     }
 
     func run(session: TranslationSession) async {

@@ -167,10 +167,12 @@ struct AddWordView: View {
     private func scheduleTranslation() {
         translationTask?.cancel()
         translationError = nil
+        // Перевод всегда сбрасывается: иначе при быстрой правке слова можно
+        // сохранить пару со старым переводом.
+        translatedText = ""
 
         let text = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            translatedText = ""
             isTranslating = false
             return
         }

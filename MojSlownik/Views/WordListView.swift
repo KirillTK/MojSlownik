@@ -77,8 +77,10 @@ struct WordListView: View {
     }
 
     private func deleteWords(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(filteredWords[index])
+        // Снимок до удаления: filteredWords пересчитывается после каждого delete.
+        let wordsToDelete = offsets.map { filteredWords[$0] }
+        for word in wordsToDelete {
+            modelContext.delete(word)
         }
     }
 }

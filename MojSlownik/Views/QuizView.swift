@@ -164,15 +164,22 @@ struct QuizQuestion {
 
     static func generate(from words: [Word], count: Int) -> [QuizQuestion] {
         guard words.count >= 4 else { return [] }
-        return words.shuffled().prefix(count).map { word in
+        return words.shuffled().prefix(count).compactMap { word in
             let promptLanguage: AppLanguage = Bool.random() ? .russian : .polish
             let answerLanguage = promptLanguage.other
             let correct = word.text(in: answerLanguage)
-            let distractors = words
-                .filter { $0.persistentModelID != word.persistentModelID }
-                .shuffled()
-                .prefix(3)
-                .map { $0.text(in: answerLanguage) }
+            // Дедупликация по тексту: слова с одинаковым переводом не должны
+            // давать два одинаковых варианта ответа.
+            var seen: Set<String> = [correct]
+            var distractors: [String] = []
+            for candidate in words.shuffled() where distractors.count < 3 {
+                guard candidate.persistentModelID != word.persistentModelID else { continue }
+                let text = candidate.text(in: answerLanguage)
+                if seen.insert(text).inserted {
+                    distractors.append(text)
+                }
+            }
+            guard !distractors.isEmpty else { return nil }
             return QuizQuestion(
                 prompt: word.text(in: promptLanguage),
                 promptLanguage: promptLanguage,

@@ -35,7 +35,7 @@ struct FlashcardsView: View {
     }
 
     private func startSession() {
-        guard sessionWords.isEmpty else { return }
+        guard sessionWords.isEmpty, !allWords.isEmpty else { return }
         let due = allWords.filter(\.isDue).shuffled()
         // Если повторять нечего — даём потренировать 10 случайных слов.
         sessionWords = due.isEmpty ? Array(allWords.shuffled().prefix(10)) : due
@@ -122,6 +122,10 @@ struct FlashcardsView: View {
 
     private func apply(_ grade: ReviewGrade, to word: Word) {
         SRSEngine.apply(grade, to: word)
+        // «Не помню» — карточка вернётся ещё раз в конце этой же сессии.
+        if grade == .again {
+            sessionWords.append(word)
+        }
         reviewedCount += 1
         withAnimation(.easeInOut(duration: 0.25)) {
             isFlipped = false

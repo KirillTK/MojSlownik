@@ -18,6 +18,9 @@ struct MyMemoryTranslator: TranslationService {
             items.append(URLQueryItem(name: "de", value: contactEmail))
         }
         components.queryItems = items
+        // «+» не входит в urlQueryAllowed-экранирование, а сервер трактует его как пробел.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
 
         let (data, response) = try await URLSession.shared.data(from: components.url!)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
