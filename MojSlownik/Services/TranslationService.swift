@@ -19,7 +19,7 @@ enum TranslationError: LocalizedError {
 }
 
 /// Единая точка входа: на iOS 18+ пробует офлайн-перевод Apple,
-/// при любой ошибке или на iOS 17 использует MyMemory (нужен интернет).
+/// затем Google (веб, лучшее качество), затем MyMemory (веб, запасной).
 enum Translator {
     static func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
         #if canImport(Translation)
@@ -35,7 +35,13 @@ enum Translator {
             }
         }
         #endif
-        return try await MyMemoryTranslator().translate(text, from: source, to: target)
+        do {
+            return try await GoogleWebTranslator().translate(text, from: source, to: target)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return try await MyMemoryTranslator().translate(text, from: source, to: target)
+        }
     }
 
     private static func withTimeout<T: Sendable>(

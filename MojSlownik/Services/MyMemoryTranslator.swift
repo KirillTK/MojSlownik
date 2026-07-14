@@ -1,7 +1,9 @@
 import Foundation
 
-/// Бесплатный веб-API перевода: https://mymemory.translated.net
+/// Запасной веб-переводчик: https://mymemory.translated.net
 /// Без ключа. Email в параметре `de` поднимает лимит до 50 000 символов/день.
+/// Качество краудсорсных совпадений нестабильно, поэтому результат валидируется
+/// по алфавиту целевого языка, а из `matches` выбирается лучший корректный вариант.
 struct MyMemoryTranslator: TranslationService {
     /// Необязательно; можно заменить или убрать.
     var contactEmail: String?
@@ -26,17 +28,43 @@ struct MyMemoryTranslator: TranslationService {
             struct ResponseData: Decodable {
                 let translatedText: String
             }
+            struct Match: Decodable {
+                let translation: String
+                let match: Double?
+            }
             let responseData: ResponseData
+            let matches: [Match]?
         }
 
         let payload = try JSONDecoder().decode(Payload.self, from: data)
-        let translated = payload.responseData.translatedText
+
+        var candidates = [payload.responseData.translatedText]
+        candidates += (payload.matches ?? [])
+            .sorted { ($0.match ?? 0) > ($1.match ?? 0) }
+            .map(\.translation)
+
+        for candidate in candidates {
+            let cleaned = unescape(candidate)
+            if isValid(cleaned, sourceText: text, target: target) {
+                return cleaned
+            }
+        }
+        throw TranslationError.emptyResult
+    }
+
+    /// Отсекает пустые ответы, «перевод = оригинал» и неправильный алфавит.
+    private func isValid(_ translated: String, sourceText: String, target: AppLanguage) -> Bool {
+        guard !translated.isEmpty,
+              translated.lowercased() != sourceText.lowercased() else { return false }
+        let hasCyrillic = translated.unicodeScalars.contains { (0x0400...0x04FF).contains($0.value) }
+        return target == .russian ? hasCyrillic : !hasCyrillic
+    }
+
+    private func unescape(_ text: String) -> String {
+        text
             .replacingOccurrences(of: "&#39;", with: "'")
             .replacingOccurrences(of: "&quot;", with: "\"")
             .replacingOccurrences(of: "&amp;", with: "&")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !translated.isEmpty else { throw TranslationError.emptyResult }
-        return translated
     }
 }

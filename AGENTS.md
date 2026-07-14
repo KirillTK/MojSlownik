@@ -25,11 +25,14 @@ MojSlownik/
 ├── Services/
 │   ├── LanguageDetector.swift    # enum AppLanguage (ru/pl) + детекция по алфавиту:
 │   │                             #   есть кириллица → русский, иначе польский
-│   ├── TranslationService.swift  # протокол TranslationService + фасад Translator:
-│   │                             #   iOS 18+ → Apple Translation (офлайн, с 4-с таймаутом),
-│   │                             #   иначе/при ошибке → MyMemory
-│   ├── MyMemoryTranslator.swift  # GET api.mymemory.translated.net/get (бесплатно, без ключа;
-│   │                             #   email в параметре de поднимает лимит до 50k симв/день)
+│   ├── TranslationService.swift  # протокол TranslationService + фасад Translator, цепочка:
+│   │                             #   iOS 18+ Apple Translation (офлайн, 4-с таймаут) →
+│   │                             #   Google gtx (веб) → MyMemory (веб, запасной)
+│   ├── GoogleWebTranslator.swift # неофициальный translate.googleapis.com client=gtx:
+│   │                             #   без ключа, лучшее качество; основной путь на iOS 17
+│   ├── MyMemoryTranslator.swift  # api.mymemory.translated.net (без ключа; email в de
+│   │                             #   поднимает лимит). Краудсорсные совпадения бывают мусорными,
+│   │                             #   поэтому кандидаты валидируются по алфавиту целевого языка
 │   ├── AppleTranslator.swift     # мост к Translation framework: TranslationSession выдаётся
 │   │                             #   только через .translationTask, поэтому AppleTranslationModel
 │   │                             #   хранит continuation, а AppleTranslationHost (модификатор на
@@ -59,9 +62,9 @@ MojSlownik/
 
 ## Ключевые решения и ограничения
 
-- **Перевод**: основной путь на iOS 17 — MyMemory (нужен интернет при добавлении
-  слова). Перевод всегда редактируемый перед сохранением — качество MyMemory
-  нестабильно для редких слов. После обновления устройства до iOS 18 Translator
+- **Перевод**: основной путь на iOS 17 — Google gtx (нужен интернет при добавлении
+  слова); эндпоинт неофициальный, при поломке Translator сам падает на MyMemory.
+  Перевод всегда редактируемый перед сохранением. После обновления устройства до iOS 18 Translator
   автоматически предпочитает офлайн-перевод Apple (нужно один раз скачать
   языковые пакеты ru/pl; в симуляторе Apple Translation не работает).
 - **Направление**: определяется автоматически — `LanguageDetector` смотрит на
