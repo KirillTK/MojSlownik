@@ -1,11 +1,12 @@
 import Foundation
 
 /// Запасной веб-переводчик: https://mymemory.translated.net
-/// Без ключа. Email в параметре `de` поднимает лимит до 50 000 символов/день.
+/// Без ключа; анонимный лимит 5 000 символов/день (email в параметре `de`
+/// поднял бы его до 50 000, но для запасного пути это не нужно).
 /// Качество краудсорсных совпадений нестабильно, поэтому результат валидируется
 /// по алфавиту целевого языка, а из `matches` выбирается лучший корректный вариант.
 struct MyMemoryTranslator: TranslationService {
-    /// Необязательно; можно заменить или убрать.
+    /// Email для повышения дневного лимита MyMemory; по умолчанию не используется.
     var contactEmail: String?
 
     func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
