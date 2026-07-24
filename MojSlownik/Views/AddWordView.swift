@@ -18,22 +18,10 @@ struct AddWordView: View {
         LanguageDetector.detect(sourceText)
     }
 
-    /// Слова из отсканированной строки — быстрый выбор одного слова чипами.
-    private var scannedWords: [String] {
-        let parts = initialText
-            .components(separatedBy: CharacterSet.alphanumerics.union(.init(charactersIn: "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ'-")).inverted)
-            .filter { $0.count > 1 }
-        return parts.count > 1 ? parts : []
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    if !scannedWords.isEmpty {
-                        scannedWordChips
-                    }
-
                     inputCard
 
                     translationCard
@@ -56,7 +44,7 @@ struct AddWordView: View {
             }
             .onAppear {
                 if sourceText.isEmpty {
-                    sourceText = scannedWords.isEmpty ? initialText : ""
+                    sourceText = initialText
                     if !sourceText.isEmpty {
                         scheduleTranslation()
                     }
@@ -64,37 +52,6 @@ struct AddWordView: View {
                 sourceFieldFocused = true
             }
         }
-    }
-
-    private var scannedWordChips: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Распознанные слова")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(Color.subtleText)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(scannedWords, id: \.self) { word in
-                        Button {
-                            sourceText = word
-                            scheduleTranslation()
-                        } label: {
-                            Text(word)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(
-                                    sourceText == word
-                                        ? Color.appAccent
-                                        : Color.appAccent.opacity(0.12)
-                                )
-                                .foregroundStyle(sourceText == word ? .white : Color.appAccent)
-                                .clipShape(Capsule())
-                        }
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var inputCard: some View {

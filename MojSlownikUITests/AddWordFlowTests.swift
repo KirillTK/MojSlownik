@@ -1,6 +1,6 @@
 import XCTest
 
-/// Сквозная проверка основного сценария: слово (через путь сканера/префилла) →
+/// Сквозная проверка сценария сканера: результат распознавания → выбор слова →
 /// автоперевод → сохранение → список → флешкарточки.
 final class AddWordFlowTests: XCTestCase {
 
@@ -23,9 +23,28 @@ final class AddWordFlowTests: XCTestCase {
         return field.value as? String ?? ""
     }
 
+    private func assertScanResult(in app: XCUIApplication) {
+        let original = app.descendants(matching: .any)["scanOriginalText"]
+        XCTAssertTrue(original.waitForExistence(timeout: 5), "Экран результата сканирования не открылся")
+
+        let translation = app.staticTexts["scanTranslationText"]
+        XCTAssertTrue(
+            translation.waitForExistence(timeout: 20),
+            "Перевод распознанного предложения не появился за 20 с"
+        )
+        XCTAssertFalse(translation.label.isEmpty, "Перевод распознанного предложения пустой")
+    }
+
     @MainActor
     func testRussianWordFullFlow() throws {
-        let app = launchApp(prefill: "привет")
+        let source = "привет мир"
+        let app = launchApp(prefill: source)
+
+        assertScanResult(in: app)
+
+        let wordChip = app.buttons["scanWordChip-привет-0"]
+        XCTAssertTrue(wordChip.waitForExistence(timeout: 5), "Облачко слова не показалось")
+        wordChip.tap()
 
         let translation = waitForTranslation(in: app)
         XCTAssertNil(translation.range(of: "[а-яА-ЯёЁ]", options: .regularExpression),
@@ -51,7 +70,14 @@ final class AddWordFlowTests: XCTestCase {
 
     @MainActor
     func testPolishWordTranslatesToRussian() throws {
-        let app = launchApp(prefill: "dziękuję")
+        let source = "dziękuję bardzo"
+        let app = launchApp(prefill: source)
+
+        assertScanResult(in: app)
+
+        let inlineWord = app.buttons["scanInlineWord-0"]
+        XCTAssertTrue(inlineWord.waitForExistence(timeout: 5), "Слово в исходной строке не кликабельно")
+        inlineWord.tap()
 
         let translation = waitForTranslation(in: app)
         XCTAssertNotNil(translation.range(of: "[а-яА-ЯёЁ]", options: .regularExpression),

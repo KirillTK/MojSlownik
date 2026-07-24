@@ -8,7 +8,7 @@ struct WordListView: View {
     @State private var searchText = ""
     @State private var showAddSheet = false
     @State private var showScanner = false
-    @State private var scannedPrefill: ScannedText?
+    @State private var scannedResult: ScannedText?
     @State private var didHandleTestPrefill = false
 
     private var filteredWords: [Word] {
@@ -62,15 +62,15 @@ struct WordListView: View {
             .sheet(isPresented: $showAddSheet) {
                 AddWordView()
             }
-            .sheet(item: $scannedPrefill) { scanned in
-                AddWordView(initialText: scanned.text)
+            .sheet(item: $scannedResult) { scanned in
+                ScanResultView(scannedText: scanned.text)
             }
             .fullScreenCover(isPresented: $showScanner) {
                 ScannerScreen { text in
                     showScanner = false
                     // Небольшая задержка, чтобы fullScreenCover успел закрыться до открытия sheet.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        scannedPrefill = ScannedText(text: text)
+                        scannedResult = ScannedText(text: text)
                     }
                 }
             }
@@ -80,7 +80,7 @@ struct WordListView: View {
                 if !didHandleTestPrefill,
                    let prefill = ProcessInfo.processInfo.environment["UITEST_PREFILL"] {
                     didHandleTestPrefill = true
-                    scannedPrefill = ScannedText(text: prefill)
+                    scannedResult = ScannedText(text: prefill)
                 }
             }
         }
