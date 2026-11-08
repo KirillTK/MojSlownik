@@ -1,99 +1,53 @@
-# Mój Słownik — архитектура
+# Mój Słownik
 
-Личное iOS-приложение для изучения польского языка с русского. Без бэкенда,
-без авторизации, без синхронизации — все данные локально на устройстве.
-Устанавливается на личный iPhone через Xcode (бесплатный Apple ID, переподпись
-раз в 7 дней) — см. README.md.
+Personal iPhone dictionary and practice app for Russian speakers learning Polish.
+SwiftUI, SwiftData, Swift 5.9, iOS 17+. No backend, accounts or synchronization.
+All vocabulary is local; web translation sends entered/scanned text to external services.
+UI copy is Russian; code, file names and project instructions are English.
 
-## Стек
+## Architecture and reading map
 
-- **SwiftUI** — весь UI, deployment target iOS 17.0.
-- **SwiftData** — локальное хранилище, одна модель `Word`.
-- **XcodeGen** — `MojSlownik.xcodeproj` генерируется из `project.yml`
-  (`xcodegen generate`); сам `.xcodeproj` в git не хранится.
-- Русский язык интерфейса; названия файлов и кода — английские.
+- MojSlownikApp creates ModelContainer(Word); RootTabView hosts Dictionary/Training tabs.
+- Models/Word.swift: russian/polish pair, source language, creation date and SRS state.
+- Services/: language detection, translation, speech, OCR tokenization and SM-2 scheduling.
+- Views/: screens; Theme/Theme.swift: shared colors and cardStyle.
+- Translation: Apple on supported iOS 18+ devices → Google gtx → MyMemory.
+  Translation is editable before saving. Apple sessions require translationTask.
+- OCR requires a physical device; Polish diacritics may be lost.
+- Filter due words in memory with words.filter(\.isDue), not SwiftData #Predicate.
+- Preserve existing stored words when changing the model.
+- Read [docs/architecture.md](docs/architecture.md) for detailed flows and constraints
+  only when needed. Do not preload the whole source tree or all agent instructions.
+- Installation and signing on a personal iPhone: README.md.
 
-## Структура
+## Feature workflow
 
-```
-project.yml                  # конфиг XcodeGen (bundle id, Info.plist, camera permission)
-MojSlownik/
-├── MojSlownikApp.swift      # @main, ModelContainer(for: Word.self)
-├── Models/
-│   └── Word.swift           # @Model: russian, polish, sourceLanguageCode, createdAt
-│                            #   + SRS-поля: easeFactor, intervalDays, repetitions, dueDate
-├── Services/
-│   ├── LanguageDetector.swift    # enum AppLanguage (ru/pl) + детекция по алфавиту:
-│   │                             #   есть кириллица → русский, иначе польский
-│   ├── TranslationService.swift  # протокол TranslationService + фасад Translator, цепочка:
-│   │                             #   iOS 18+ Apple Translation (офлайн, 4-с таймаут) →
-│   │                             #   Google gtx (веб) → MyMemory (веб, запасной)
-│   ├── GoogleWebTranslator.swift # неофициальный translate.googleapis.com client=gtx:
-│   │                             #   без ключа, лучшее качество; основной путь на iOS 17
-│   ├── MyMemoryTranslator.swift  # api.mymemory.translated.net (без ключа; email в de
-│   │                             #   поднимает лимит). Краудсорсные совпадения бывают мусорными,
-│   │                             #   поэтому кандидаты валидируются по алфавиту целевого языка
-│   ├── AppleTranslator.swift     # мост к Translation framework: TranslationSession выдаётся
-│   │                             #   только через .translationTask, поэтому AppleTranslationModel
-│   │                             #   хранит continuation, а AppleTranslationHost (модификатор на
-│   │                             #   RootTabView) исполняет перевод. На iOS 17 — no-op.
-│   ├── SpeechService.swift       # AVSpeechSynthesizer, голоса pl-PL / ru-RU, офлайн
-│   └── SRSEngine.swift           # упрощённый SM-2: оценки again/hard/good/easy двигают
-│                                 #   easeFactor, intervalDays и dueDate
-├── Views/
-│   ├── RootTabView.swift         # TabView: Словарь + Тренировка; здесь висит AppleTranslationHost
-│   ├── WordListView.swift        # @Query-список, поиск, swipe-delete, кнопки «+» и камера;
-│   │                             #   сканер отдаёт текст → экран результата сканирования
-│   ├── AddWordView.swift         # ввод слова, автоопределение языка, автоперевод с debounce
-│   │                             #   600 мс, редактируемый перевод
-│   ├── ScannerView.swift         # ScannerScreen (разрешение камеры, недоступность в симуляторе)
-│   │                             #   + DataScannerViewController (VisionKit): живое распознавание,
-│   │                             #   тап по тексту → ScanResultView: перевод строки, кликабельные
-│   │                             #   слова и облачки; выбранное слово открывает AddWordView
-│   ├── TrainingView.swift        # статистика + вход в карточки и викторину
-│   ├── FlashcardsView.swift      # SRS-сессия: due-слова (или 10 случайных, если due нет),
-│   │                             #   тап = перевернуть, 4 кнопки оценки → SRSEngine
-│   ├── QuizView.swift            # 10 вопросов, 4 варианта, случайное направление, счёт
-│   └── Components/
-│       └── PronounceButton.swift # кнопка озвучки
-└── Theme/
-    └── Theme.swift               # палитра (индиго-акцент #5B5FEF, тёплые нейтральные),
-                                  #   динамические цвета light/dark, модификатор .cardStyle()
-```
+Use `$feature-flow <context>` when requested. Everything after the skill name is
+free-form task context; no ticket numbers or mode flags.
+Skill: .agents/skills/feature-flow/SKILL.md.
+Codex agent definitions: .codex/agents/feature-*.toml. Plans: .codex/plans/.
+Prefer existing services and Theme and the smallest complete change.
+Do not create, update or run E2E/UI automation; preserve existing UI tests and targets.
+Do not commit/push without authorization or discard existing user changes.
 
-## Ключевые решения и ограничения
+## Verification
 
-- **Перевод**: основной путь на iOS 17 — Google gtx (нужен интернет при добавлении
-  слова); эндпоинт неофициальный, при поломке Translator сам падает на MyMemory.
-  Перевод всегда редактируемый перед сохранением. После обновления устройства до iOS 18 Translator
-  автоматически предпочитает офлайн-перевод Apple (нужно один раз скачать
-  языковые пакеты ru/pl; в симуляторе Apple Translation не работает).
-- **Направление**: определяется автоматически — `LanguageDetector` смотрит на
-  алфавит. Слово всегда сохраняется парой (russian, polish).
-- **OCR**: Vision может не поддерживать польский на iOS 17 — тогда распознавание
-  идёт latin-моделью и диакритика (ą, ę, ł…) может теряться; после тапа по
-  строке показываются её перевод и слова для выбора, а выбранное слово можно
-  поправить в AddWordView перед сохранением. Сканер работает только на реальном
-  устройстве.
-- **SwiftData-предикаты**: due-слова фильтруются в памяти (`words.filter(\.isDue)`),
-  а не в `#Predicate` — для личного словаря объёмы крошечные.
-
-## Сборка
+After adding source files or changing project.yml, run `xcodegen generate`.
+The generated .xcodeproj is not tracked. Build with no warnings:
 
 ```sh
-xcodegen generate                        # после изменения project.yml или добавления файлов
 xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownik \
   -destination 'platform=iOS Simulator,name=iPhone 16' build
 ```
 
-Если активный тулчейн — CommandLineTools, добавить `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
+Choose an installed device with `xcrun simctl list devices available` if needed.
+If CommandLineTools is active, set DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer.
+Use focused unit checks for nontrivial logic where practical. Do not run the scheme's
+`xcodebuild test`, which includes UI tests. Documentation-only changes need no app build.
+Manual UI checks for affected areas: add Russian and Polish words, edit/save translations,
+complete flashcards (ratings update dueDate) and quiz. On a physical iPhone, scan a line,
+check its translation, select a word in text and chips, and confirm the scan result
+remains after dismissing AddWordView. Report unavailable checks honestly.
 
-## Проверка изменений
-
-1. Сборка в симуляторе без warnings.
-2. Добавить «привет» → появляется польский перевод; добавить «dziękuję» → русский.
-3. Прогнать сессию флешкарточек (оценки меняют dueDate) и викторину.
-4. Сканер — только на устройстве: навести на польскую или русскую фразу,
-   тапнуть строку, проверить её перевод и выбрать слово как в тексте, так и
-   через облачко; после закрытия AddWordView результат сканирования остаётся
-   доступен для выбора других слов.
+Keep this file concise. Update detailed architecture with code in docs/architecture.md;
+keep workflow procedures in the skill and task history in plans.
