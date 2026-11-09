@@ -18,23 +18,23 @@ struct TrainingView: View {
                 let progress = dailyStudy.progress(for: words, now: now)
                 let answers = dailyStudy.answerTotals(for: words, now: now)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 28) {
-                        FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true)
-                        heading(progress: progress)
-                        reviewProgress(progress, answers: answers)
-                        answerStatistics(answers)
+                    VStack(alignment: .leading, spacing: 20) {
+                        FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true, compact: true)
+                        todayPanel(progress: progress, answers: answers)
+                        modes
                         practiceButton(progress: progress)
-                        libraryAndQuiz
+                        Text("Слов в выбранном наборе: \(words.count)")
+                            .font(.footnote)
+                            .foregroundStyle(Color.subtleText)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-                    .padding(.bottom, 32)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
-            .navigationTitle("Тренировка")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Практика")
             .onAppear { refreshClock() }
             .onChange(of: scenePhase) {
                 if scenePhase == .active { refreshClock() }
@@ -47,85 +47,95 @@ struct TrainingView: View {
         dailyStudy.refresh(now: refreshDate)
     }
 
-    private func heading(progress: DailyStudyStore.Summary) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Сегодня")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Color.subtleText)
-            Text(words.isEmpty ? "Начнём со слова." : progress.remaining == 0 ? "Можно выдохнуть." : "В своём темпе.")
-                .font(.largeTitle.weight(.bold))
-                .fixedSize(horizontal: false, vertical: true)
-            Text(words.isEmpty
-                 ? "Добавьте слова в словарь, чтобы начать тренировку."
-                 : progress.remaining == 0
-                    ? "Сейчас нет слов, требующих повторения."
-                    : "Каждое повторение помогает запомнить больше.")
-                .font(.body)
-                .foregroundStyle(Color.subtleText)
-        }
-    }
-
-    private func reviewProgress(_ progress: DailyStudyStore.Summary, answers: DailyStudyStore.AnswerTotals) -> some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .stroke(Color.appSecondarySurface, lineWidth: 14)
-                Circle()
-                    .trim(from: 0, to: CGFloat(progress.fraction))
-                    .stroke(Color.appAccent, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                if dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: progress.total > 0 && progress.remaining == 0 ? "checkmark" : "leaf")
-                        .font(.largeTitle)
-                        .foregroundStyle(Color.appAccent)
-                } else {
-                    VStack(spacing: 6) {
-                        Text("\(progress.completed) / \(progress.total)")
-                            .font(.title.weight(.bold))
-                            .monospacedDigit()
-                        Text("повторено")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.subtleText)
-                    }
+    private func todayPanel(progress: DailyStudyStore.Summary, answers: DailyStudyStore.AnswerTotals) -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        return VStack(alignment: .leading, spacing: 12) {
+            layout {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Сегодня")
+                        .font(.subheadline.weight(.medium))
+                    Text(words.isEmpty ? "Добавьте первое слово" : progress.total > 0 ? "\(progress.completed) из \(progress.total)" : "Нет повторений")
+                        .font(.title2.weight(.bold))
+                        .monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
+                Text(words.isEmpty ? "Начните со словаря" : progress.remaining > 0 ? "Осталось слов: \(progress.remaining)" : progress.completed > 0 ? "Всё повторено" : "Доступна свободная практика")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.subtleText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(width: 196, height: 196)
-            .padding(8)
-            .accessibilityHidden(true)
-
-            if dynamicTypeSize.isAccessibilitySize {
-                Text("Повторено сегодня: \(progress.completed) из \(progress.total)")
-                    .font(.title3.weight(.semibold))
-                    .multilineTextAlignment(.center)
+            ProgressView(value: progress.fraction)
+                .tint(.appAccent)
+                .accessibilityLabel("Повторено сегодня")
+                .accessibilityValue("\(progress.completed) из \(progress.total). Осталось: \(progress.remaining)")
+            layout {
+                answerBadge(count: answers.correct, title: "Верных", icon: "checkmark", foreground: .appAccent, background: .cardBackground)
+                answerBadge(count: answers.incorrect, title: "Ошибок", icon: "xmark", foreground: .appError, background: .appErrorSurface)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
             }
-            Text(answers.total > 0 && answers.correct == 0
-                 ? "Пока нет верных ответов"
-                 : progress.total == 0 ? "Повторений сегодня ещё не было" : "Повторено сегодня: \(progress.completed)")
-                .font(.subheadline)
-                .foregroundStyle(Color.subtleText)
-            Text(words.isEmpty ? "Добавьте первое слово" : progress.remaining > 0 ? "Осталось повторить: \(progress.remaining)" : progress.completed > 0 ? "Все текущие повторения завершены" : "Можно потренироваться без спешки")
-                .font(.body.weight(.medium))
-                .multilineTextAlignment(.center)
-            Text("Объём обновляется, когда появляются новые слова к повторению.")
+            Text("Ответов: \(answers.total)")
                 .font(.caption)
                 .foregroundStyle(Color.subtleText)
-                .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Повторено сегодня: \(progress.completed) из \(progress.total). Осталось повторить: \(progress.remaining).")
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func answerStatistics(_ answers: DailyStudyStore.AnswerTotals) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Ответов сегодня: \(answers.total)")
-                .font(.subheadline.weight(.medium))
-            Text("Верных: \(answers.correct) · Ошибок: \(answers.incorrect)")
-                .font(.subheadline)
-                .foregroundStyle(Color.subtleText)
+    private func answerBadge(count: Int, title: String, icon: String, foreground: Color, background: Color) -> some View {
+        Label("\(title): \(count)", systemImage: icon)
+            .font(.subheadline.weight(.medium))
+            .monospacedDigit()
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(background, in: Capsule())
+    }
+
+    private var modes: some View {
+        VStack(spacing: 0) {
+            NavigationLink {
+                FlashcardsView(folderID: selectedFolderID)
+            } label: {
+                modeRow(title: "Карточки", subtitle: "Вспомнить перевод", icon: "rectangle.on.rectangle.angled")
+            }
+            .disabled(words.isEmpty)
+            Divider().overlay(Color.appBorder.opacity(0.5))
+            NavigationLink {
+                QuizView(folderID: selectedFolderID)
+            } label: {
+                modeRow(title: "Викторина", subtitle: words.count >= 4 ? "Выбрать правильный ответ" : "Нужно минимум 4 слова", icon: "checklist")
+            }
+            .disabled(words.count < 4)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .buttonStyle(.plain)
+    }
+
+    private func modeRow(title: String, subtitle: String, icon: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(Color.appAccent)
+                .frame(width: 44, height: 44)
+                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.headline).foregroundStyle(Color.appInk)
+                Text(subtitle).font(.subheadline).foregroundStyle(Color.subtleText)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.subtleText)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 14)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     private func practiceButton(progress: DailyStudyStore.Summary) -> some View {
@@ -138,8 +148,7 @@ struct TrainingView: View {
                 .font(.body.weight(.semibold))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, minHeight: 24)
-                .padding(.vertical, 16)
-                .padding(.horizontal, 16)
+                .padding(16)
                 .foregroundStyle(Color.appOnAccent)
                 .background(words.isEmpty ? Color.subtleText : Color.appAccent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
@@ -147,46 +156,12 @@ struct TrainingView: View {
         .disabled(words.isEmpty)
         .accessibilityHint(progress.remaining > 0 ? "Открыть карточки для повторения" : "Потренировать до десяти случайных слов")
     }
-
-    private var libraryAndQuiz: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Label("Слов в выбранном наборе: \(words.count)", systemImage: "book.closed")
-                .font(.subheadline)
-                .foregroundStyle(Color.subtleText)
-            Divider().overlay(Color.appBorder.opacity(0.5))
-            NavigationLink {
-                QuizView(folderID: selectedFolderID)
-            } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "checklist")
-                        .font(.title3)
-                        .foregroundStyle(Color.appAccent)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Викторина")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Color.appInk)
-                        Text(words.count >= 4 ? "Выберите правильный перевод" : "Нужно минимум 4 слова в выбранном наборе")
-                            .font(.subheadline)
-                            .foregroundStyle(Color.subtleText)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.subtleText)
-                        .accessibilityHidden(true)
-                }
-                .frame(minHeight: 44)
-            }
-            .buttonStyle(.plain)
-            .disabled(words.count < 4)
-        }
-    }
 }
 
 #Preview {
+    let resources = AppResources.preview
     TrainingView()
-        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .modelContainer(resources.container)
         .environment(FolderLibraryStore())
-        .environment(DailyStudyStore())
+        .environment(resources.dailyStudy)
 }

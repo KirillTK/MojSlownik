@@ -30,6 +30,8 @@ struct QuizView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBackground)
+        .foregroundStyle(Color.appInk)
+        .tint(Color.appAccent)
         .navigationTitle("Викторина")
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert(title: "Не удалось сохранить ответ", error: $answerError)
@@ -48,65 +50,73 @@ struct QuizView: View {
     }
 
     private func questionView(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 20) {
-            SessionProgress(completed: currentIndex + (selectedAnswer == nil ? 0 : 1), total: questions.count)
+        ScrollView {
+            VStack(spacing: 24) {
+                SessionProgress(completed: currentIndex + (selectedAnswer == nil ? 0 : 1), total: questions.count)
 
-            Spacer()
-
-            VStack(spacing: 12) {
-                Text("Как переводится")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.subtleText)
-                Text(question.prompt)
-                    .font(.system(.title, design: .rounded).weight(.bold))
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.5)
-                if question.promptLanguage == .polish {
-                    PronounceButton(text: question.prompt, language: .polish)
+                VStack(spacing: 16) {
+                    Text("Как переводится")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.subtleText)
+                    Text(question.prompt)
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(Color.appInk)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if question.promptLanguage == .polish {
+                        PronounceButton(text: question.prompt, language: .polish)
+                    }
                 }
-            }
-            .padding(28)
-            .frame(maxWidth: .infinity)
-            .cardStyle(cornerRadius: 24)
+                .padding(24)
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-            Spacer()
-
-            VStack(spacing: 10) {
-                ForEach(question.options, id: \.self) { option in
-                    Button {
-                        select(option, in: question)
-                    } label: {
-                        HStack {
-                            Text(option)
-                                .font(.body.weight(.medium))
-                            Spacer()
-                            if selectedAnswer != nil {
-                                if option == question.correctAnswer {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                } else if option == selectedAnswer {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.red)
+                VStack(spacing: 10) {
+                    ForEach(question.options, id: \.self) { option in
+                        Button {
+                            select(option, in: question)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(option)
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(Color.appInk)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                if selectedAnswer != nil {
+                                    if option == question.correctAnswer {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.appSuccess)
+                                            .accessibilityLabel("Правильный ответ")
+                                    } else if option == selectedAnswer {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(Color.appError)
+                                            .accessibilityLabel("Неверный ответ")
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(optionBackground(option, in: question), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(Color.appBorder.opacity(0.5), lineWidth: 0.5)
+                            }
                         }
-                        .padding(16)
-                        .frame(maxWidth: .infinity)
-                        .background(optionBackground(option, in: question))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .buttonStyle(.plain)
+                        .disabled(selectedAnswer != nil)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(selectedAnswer != nil)
                 }
             }
+            .padding(20)
         }
-        .padding()
     }
 
     private func optionBackground(_ option: String, in question: QuizQuestion) -> Color {
         guard selectedAnswer != nil else { return .cardBackground }
-        if option == question.correctAnswer { return .green.opacity(0.15) }
-        if option == selectedAnswer { return .red.opacity(0.15) }
+        if option == question.correctAnswer { return .appSecondarySurface }
+        if option == selectedAnswer { return .appErrorSurface }
         return .cardBackground
     }
 
@@ -141,33 +151,65 @@ struct QuizView: View {
     }
 
     private var resultView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: score == questions.count ? "trophy.fill" : "flag.checkered")
-                .font(.system(size: 56))
-                .foregroundStyle(score == questions.count ? .yellow : Color.appAccent)
-            Text("\(score) из \(questions.count)")
-                .font(.system(.largeTitle, design: .rounded).weight(.bold))
-            Text(resultCaption)
-                .foregroundStyle(Color.subtleText)
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: score == questions.count ? "trophy.fill" : "flag.checkered")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color.appAccent)
+                    .padding(16)
+                    .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Text("\(score) из \(questions.count)")
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(Color.appInk)
+                    .monospacedDigit()
+                Text(resultCaption)
+                    .font(.body)
+                    .foregroundStyle(Color.subtleText)
+                    .multilineTextAlignment(.center)
 
-            Button {
-                advanceTask?.cancel()
-                questions = []
-                currentIndex = 0
-                score = 0
-                quizStarted = false
-                startQuiz()
-            } label: {
-                Text("Ещё раз")
-                    .font(.body.weight(.semibold))
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 14)
-                    .background(Color.appAccent)
-                    .foregroundStyle(Color.appOnAccent)
-                    .clipShape(Capsule())
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { resultBadges }
+                        .fixedSize(horizontal: true, vertical: false)
+                    VStack(spacing: 10) { resultBadges }
+                }
+
+                Button {
+                    advanceTask?.cancel()
+                    questions = []
+                    currentIndex = 0
+                    score = 0
+                    quizStarted = false
+                    startQuiz()
+                } label: {
+                    Text("Ещё раз")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(Color.appOnAccent)
+                        .background(Color.appAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
             }
-            .padding(.top, 8)
+            .padding(24)
         }
+    }
+
+    private var resultBadges: some View {
+        Group {
+            Label("Верных: \(score)", systemImage: "checkmark")
+                .foregroundStyle(Color.appSuccess)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.appSecondarySurface, in: Capsule())
+            Label("Ошибок: \(questions.count - score)", systemImage: "xmark")
+                .foregroundStyle(Color.appError)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.appErrorSurface, in: Capsule())
+        }
+        .font(.subheadline.weight(.semibold))
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var resultCaption: String {
@@ -218,10 +260,11 @@ struct QuizQuestion {
 }
 
 #Preview {
+    let resources = AppResources.preview
     NavigationStack {
         QuizView()
     }
-    .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+    .modelContainer(resources.container)
         .environment(FolderLibraryStore())
-        .environment(DailyStudyStore())
+        .environment(resources.dailyStudy)
 }

@@ -23,6 +23,13 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 
 ## Data Flows
 
+**Startup:** `AppResources` constructs and retains the `Word`/`WordFolder`
+`ModelContainer` before constructing `DailyStudyStore`. Restoring Codable
+`PersistentIdentifier` values requires those entity types to be registered first;
+SwiftData can terminate the process rather than throw when that precondition fails.
+The app injects that same container into its scene. Previews use ordered in-memory
+resources with separate defaults, never the user's daily activity.
+
 **Adding:** input → `LanguageDetector` → `Translator` → editable translation →
 `Word` → SwiftData → dictionary/training `@Query` updates. Pair fields always
 follow their languages regardless of input direction. These screens use the
@@ -135,9 +142,17 @@ Theme.cardStyle handles shared surfaces instead of a universal card component.
 
 ## Presentation
 
-Theme uses adaptive warm linen surfaces, muted sage actions, dark ink and green
-success colors, with native sans-serif typography and restrained surface decoration. `appOnAccent` supplies contrasting text on solid accent fills in
-both appearances. Controls retain 44-point targets and use Dynamic Type text;
+Lilac Studio uses adaptive warm pearl surfaces, dark ink, violet actions and pale
+lavender accents, with native sans-serif typography, open lists and fine dividers.
+Body text uses ink rather than the accent color. Semantic error/warning surfaces
+keep feedback readable without relying on color alone. `appOnAccent` supplies
+contrasting text on solid accent fills in both appearances.
+Practice uses a compact Today panel with a thin progress bar and icon/text badges
+for correct answers and errors; unique-word progress and answer totals remain
+separate. The page and tab are both named «Практика». No achievements are shown.
+FolderPicker offers a compact selector for browsing and a metadata row for forms,
+with the same folder sheet, creation and reconciliation behavior.
+Controls retain 44-point targets and use Dynamic Type text;
 scan cards switch to a single column at accessibility text sizes. Save and category
 selection are sibling controls. Saved cards remain readable rather than dimmed.
 Flashcards use an explicit reveal button with a separate pronunciation action,

@@ -20,31 +20,41 @@ struct ScannerScreen: View {
             if cameraAuthorized && scannerSupported {
                 DataScannerRepresentable(onPick: onPick)
                     .ignoresSafeArea()
-
-                Text("Наведите камеру на текст и коснитесь строки")
-                    .font(.footnote.weight(.medium))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.top, 12)
             } else {
                 unavailableView
             }
 
-            HStack {
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
-                        .padding(12)
-                        .background(.ultraThinMaterial, in: Circle())
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Сканирование")
+                        .font(.headline)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .background(.regularMaterial, in: Capsule())
+                    Spacer(minLength: 12)
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Закрыть сканер")
                 }
-                .padding()
+                if cameraAuthorized && scannerSupported {
+                    Text("Наведите камеру на текст и коснитесь строки")
+                        .font(.subheadline.weight(.medium))
+                        .multilineTextAlignment(.center)
+                        .padding(14)
+                        .frame(maxWidth: .infinity)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
             }
+            .foregroundStyle(.primary)
+            .padding(20)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background((cameraAuthorized && scannerSupported ? Color.black : Color.appBackground).ignoresSafeArea())
         .task {
             if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
                 cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
@@ -57,12 +67,13 @@ struct ScannerScreen: View {
             Spacer()
             Image(systemName: "camera.on.rectangle")
                 .font(.system(size: 44))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.appAccent)
             Text(cameraAuthorized
                  ? "Сканер недоступен на этом устройстве (в симуляторе нет камеры)."
                  : "Разрешите доступ к камере в Настройках, чтобы сканировать слова.")
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+                .font(.body)
+                .foregroundStyle(Color.subtleText)
                 .padding(.horizontal, 32)
             Spacer()
         }
@@ -104,16 +115,23 @@ struct ScanResultView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(spacing: 0) {
+                        sourceCard
+                        Divider().overlay(Color.appBorder.opacity(0.5))
+                            .padding(.horizontal, 20)
+                        translationCard
+                    }
+                    .cardStyle(cornerRadius: 20)
                     FolderPicker(selectedFolderID: $selectedFolderID)
-                    sourceCard
-                    translationCard
                     wordChips
                 }
-                .padding()
+                .padding(20)
             }
             .background(Color.appBackground)
-            .navigationTitle("Результат сканирования")
+            .foregroundStyle(Color.appInk)
+            .tint(Color.appAccent)
+            .navigationTitle("Из текста")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -137,7 +155,7 @@ struct ScanResultView: View {
     private var sourceCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Оригинал", systemImage: "text.viewfinder")
-                .font(.caption.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.subtleText)
             Text(scannedText)
                 .font(.body)
@@ -159,9 +177,8 @@ struct ScanResultView: View {
                 .accessibilityHint("Выберите слово, чтобы исправить его перед добавлением")
             }
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
     }
 
     private var wordChips: some View {
@@ -170,7 +187,7 @@ struct ScanResultView: View {
                 Text("Слова в словарь")
                     .font(.headline)
                     .foregroundStyle(Color.appInk)
-                Text("Коснитесь слова, чтобы добавить или удалить. Категорию можно изменить.")
+                Text("Нажмите +, чтобы сохранить. Повторное нажатие убирает слово.")
                     .font(.caption)
                     .foregroundStyle(Color.subtleText)
             }
@@ -184,9 +201,6 @@ struct ScanResultView: View {
                     wordChip(word, index: index)
                 }
             }
-            Text("Темы определяются автоматически; незнакомые слова — «Другое».")
-                .font(.caption)
-                .foregroundStyle(Color.subtleText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -213,7 +227,7 @@ struct ScanResultView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(word.lowercased())
-                            .font(.subheadline.weight(.semibold))
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(Color.appInk)
                         Spacer(minLength: 0)
                         Image(systemName: isSaved ? "checkmark.circle.fill" : "plus.circle")
@@ -239,7 +253,7 @@ struct ScanResultView: View {
                     if isSaved {
                         Text(selectedFolderID == nil ? "В словаре · нажмите, чтобы удалить" : "В папке · нажмите, чтобы убрать")
                             .font(.caption)
-                            .foregroundStyle(Color.appSuccess)
+                            .foregroundStyle(Color.subtleText)
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -261,16 +275,17 @@ struct ScanResultView: View {
             if let error = saveErrors[word] {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.appError)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 14))
+        .background(isSaved ? Color.appSecondarySurface : Color.cardBackground,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(isSaved ? Color.appSuccess.opacity(0.4) : Color.appBorder, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(isSaved ? Color.appAccent.opacity(0.3) : Color.appBorder.opacity(0.5), lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
     }
@@ -292,7 +307,7 @@ struct ScanResultView: View {
             .foregroundStyle(Color.appAccent)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 9))
+            .background(Color.cardBackground.opacity(0.65), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
@@ -320,7 +335,7 @@ struct ScanResultView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Перевод")
-                    .font(.footnote.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
                 if isTranslating { ProgressView().controlSize(.small) }
@@ -336,16 +351,16 @@ struct ScanResultView: View {
             }
             if let translationError {
                 Label(translationError, systemImage: "wifi.exclamationmark")
-                    .font(.caption).foregroundStyle(.orange)
+                    .font(.caption).foregroundStyle(Color.appError)
                 Button("Повторить перевод предложения") {
                     self.translationError = nil
                     retryVersion += 1
                 }
+                .frame(minHeight: 44)
             }
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
     }
 
     private func normalize(_ text: String) -> String {

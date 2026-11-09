@@ -7,7 +7,7 @@ struct RootTabView: View {
                 .tabItem { Label("Словарь", systemImage: "book.closed.fill") }
 
             TrainingView()
-                .tabItem { Label("Тренировка", systemImage: "rectangle.on.rectangle.angled") }
+                .tabItem { Label("Практика", systemImage: "rectangle.on.rectangle.angled") }
         }
         .tint(.appAccent)
         .modifier(AppleTranslationHost())
@@ -15,8 +15,9 @@ struct RootTabView: View {
 }
 
 #Preview {
+    let resources = AppResources.preview
     RootTabView()
-        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .modelContainer(resources.container)
         .environment(FolderLibraryStore())
-        .environment(DailyStudyStore())
+        .environment(resources.dailyStudy)
 }

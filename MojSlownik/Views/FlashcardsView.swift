@@ -34,7 +34,9 @@ struct FlashcardsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBackground)
-        .navigationTitle("Флешкарточки")
+        .foregroundStyle(Color.appInk)
+        .tint(Color.appAccent)
+        .navigationTitle("Карточки")
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert(title: "Не удалось сохранить ответ", error: $reviewError)
         .onAppear(perform: startSession)
@@ -52,8 +54,8 @@ struct FlashcardsView: View {
 
     private func sessionView(word: Word) -> some View {
         ScrollView {
-            VStack(spacing: 28) {
-                SessionProgress(completed: reviewedCount, total: sessionWords.count, spacing: 10)
+            VStack(spacing: 24) {
+                SessionProgress(completed: reviewedCount, total: sessionWords.count)
                 card(word: word)
 
                 if isFlipped {
@@ -74,16 +76,19 @@ struct FlashcardsView: View {
         let shownLanguage = isFlipped ? frontLanguage.other : frontLanguage
         let shownText = word.text(in: shownLanguage)
 
-        return VStack(spacing: 20) {
+        return VStack(spacing: 12) {
             Button {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                     isFlipped.toggle()
                 }
             } label: {
-                VStack(spacing: 24) {
+                VStack(spacing: 28) {
                     Text(shownLanguage.displayName)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color.subtleText)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.appAccent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.cardBackground, in: Capsule())
                     Text(shownText)
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(Color.appInk)
@@ -91,9 +96,11 @@ struct FlashcardsView: View {
                         .frame(maxWidth: .infinity)
                     Label(isFlipped ? "Скрыть перевод" : "Показать перевод",
                           systemImage: isFlipped ? "eye.slash" : "eye")
-                        .font(.subheadline.weight(.medium))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.appAccent)
                         .frame(minHeight: 44)
+                        .padding(.horizontal, 14)
+                        .background(Color.cardBackground, in: Capsule())
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, minHeight: 230)
@@ -109,34 +116,47 @@ struct FlashcardsView: View {
                     .padding(.bottom, 20)
             }
         }
-        .cardStyle(cornerRadius: 24)
+        .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func gradeButtons(word: Word) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 10))
-            : AnyLayout(HStackLayout(spacing: 8))
-        return VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Насколько легко вспомнили?")
-                .font(.subheadline)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color.subtleText)
-            layout {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
+                                     count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 10) {
                 ForEach(ReviewGrade.allCases, id: \.self) { grade in
                     Button {
                         apply(grade, to: word)
                     } label: {
                         Text(grade.title)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.body.weight(.semibold))
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 4)
-                            .background(grade.color.opacity(0.12))
-                            .foregroundStyle(grade.color)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(.vertical, 6)
+                            .foregroundStyle(gradeTint(grade))
+                            .background(gradeSurface(grade), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    private func gradeTint(_ grade: ReviewGrade) -> Color {
+        switch grade {
+        case .again: .appError
+        case .hard: .appWarning
+        case .good, .easy: .appAccent
+        }
+    }
+
+    private func gradeSurface(_ grade: ReviewGrade) -> Color {
+        switch grade {
+        case .again: .appErrorSurface
+        case .hard: .appWarningSurface
+        case .good, .easy: .appSecondarySurface
         }
     }
 
@@ -161,16 +181,22 @@ struct FlashcardsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 64))
+                    .font(.system(size: 40))
                     .foregroundStyle(Color.appSuccess)
+                    .padding(16)
+                    .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 Text("Тренировка завершена")
                     .font(.title.weight(.bold))
                     .multilineTextAlignment(.center)
                 Text("Повторено слов: \(Set(sessionWords.map(\.persistentModelID)).count)")
                     .font(.title3.weight(.medium))
-                Text("Всего ответов: \(reviewedCount)")
+                Label("Всего ответов: \(reviewedCount)", systemImage: "checklist")
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.subtleText)
-                Button("К тренировкам") { dismiss() }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.cardBackground, in: Capsule())
+                Button("К практике") { dismiss() }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.appAccent)
                     .foregroundStyle(Color.appOnAccent)
@@ -191,10 +217,11 @@ struct FlashcardsView: View {
 }
 
 #Preview {
+    let resources = AppResources.preview
     NavigationStack {
         FlashcardsView()
     }
-    .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+    .modelContainer(resources.container)
     .environment(FolderLibraryStore())
-    .environment(DailyStudyStore())
+    .environment(resources.dailyStudy)
 }

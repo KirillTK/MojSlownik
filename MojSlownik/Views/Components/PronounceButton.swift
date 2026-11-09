@@ -13,7 +13,7 @@ struct PronounceButton: View {
                 .foregroundStyle(Color.appAccent)
                 .frame(minWidth: 44, minHeight: 44)
                 .background(Color.appSecondarySurface)
-                .clipShape(Circle())
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Произнести: \(text)")

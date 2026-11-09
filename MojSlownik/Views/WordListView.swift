@@ -28,9 +28,7 @@ struct WordListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
+                categoryFilters
                 Group {
                 if words.isEmpty {
                     ContentUnavailableView {
@@ -40,7 +38,6 @@ struct WordListView: View {
                     }
                 } else {
                     VStack(spacing: 0) {
-                        categoryFilters
                         List {
                             if filteredWords.isEmpty {
                                 ContentUnavailableView {
@@ -59,7 +56,7 @@ struct WordListView: View {
                             ForEach(filteredWords) { word in
                                 WordRow(word: word)
                                     .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets(top: 12, leading: 24, bottom: 12, trailing: 24))
+                                    .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
                                     .listRowSeparatorTint(Color.appBorder.opacity(0.5))
                             }
                             .onDelete(perform: deleteWords)
@@ -67,33 +64,36 @@ struct WordListView: View {
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                     }
-                    .searchable(text: $searchText, prompt: "Поиск слова")
+                    .searchable(text: $searchText, prompt: "Найти слово")
                 }
             }
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
             .navigationTitle("Словарь")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     if selectedFolderID != nil {
                         Button("Удалить папку", systemImage: "folder.badge.minus") { showDeleteFolder = true }
                     }
                 }
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         showScanner = true
                     } label: {
                         Image(systemName: "camera.viewfinder")
+                            .frame(minWidth: 44, minHeight: 44)
+                            .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     }
                     .accessibilityLabel("Сканировать текст")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showAddSheet = true
                     } label: {
                         Image(systemName: "plus")
                             .font(.title3)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     }
                     .accessibilityLabel("Добавить слово")
                 }
@@ -138,7 +138,13 @@ struct WordListView: View {
     private var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                categoryFilter(nil, title: "Все слова", count: FolderStore.words(words, in: selectedFolderID).count)
+                FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true, compact: true)
+                Rectangle()
+                    .fill(Color.appBorder)
+                    .frame(width: 1, height: 24)
+                    .padding(.horizontal, 4)
+                    .accessibilityHidden(true)
+                categoryFilter(nil, title: "Все темы", count: FolderStore.words(words, in: selectedFolderID).count)
                 ForEach(WordCategory.allCases) { category in
                     let count = FolderStore.words(words, in: selectedFolderID).filter { $0.category == category }.count
                     if count > 0 || selectedCategory == category {
@@ -147,9 +153,9 @@ struct WordListView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+            .padding(.bottom, 8)
         }
-        .accessibilityLabel("Фильтр по категории")
+        .accessibilityLabel("Папка и фильтр по теме")
     }
 
     private func categoryFilter(_ category: WordCategory?, title: String, count: Int) -> some View {
@@ -167,7 +173,7 @@ struct WordListView: View {
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
             .foregroundStyle(isSelected ? Color.appOnAccent : Color.appInk)
-            .background(isSelected ? Color.appAccent : Color.appSecondarySurface.opacity(0.55), in: Capsule())
+            .background(isSelected ? Color.appAccent : Color.cardBackground, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(title), слов: \(count)")
@@ -190,36 +196,62 @@ struct ScannedText: Identifiable {
 
 private struct WordRow: View {
     let word: Word
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var modelContext
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @State private var folderError: String?
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(word.polish)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.appInk)
-                Text(word.russian)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.subtleText)
-                CategoryMenu(selection: Binding(
-                    get: { word.category },
-                    set: { word.category = $0 }
-                )) {
-                    HStack(spacing: 5) {
-                        Text(word.category.rawValue)
-                        Image(systemName: "chevron.down")
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.subtleText)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+        ViewThatFits(in: .horizontal) {
+            if !dynamicTypeSize.isAccessibilitySize {
+                HStack(spacing: 12) {
+                    wordText.fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 0)
+                    wordActions.fixedSize(horizontal: true, vertical: false)
                 }
-                .accessibilityLabel("Категория слова \(word.polish): \(word.category.rawValue)")
-                .accessibilityHint("Выбрать другую категорию")
             }
+            VStack(alignment: .leading, spacing: 8) {
+                wordText
+                wordActions.frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+        .padding(.vertical, 2)
+        .errorAlert(title: "Не удалось изменить папку", error: $folderError)
+    }
+
+    private var wordText: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(word.polish)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.appInk)
+            Text(word.russian)
+                .font(.subheadline)
+                .foregroundStyle(Color.subtleText)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var wordActions: some View {
+        HStack(spacing: 8) {
+            CategoryMenu(selection: Binding(
+                get: { word.category },
+                set: { word.category = $0 }
+            )) {
+                HStack(spacing: 5) {
+                    Text(word.category.rawValue)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .fixedSize()
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.appAccent)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Категория слова \(word.polish): \(word.category.rawValue)")
+            .accessibilityHint("Выбрать другую категорию")
             if !folderLibrary.options.isEmpty {
                 Menu {
                     ForEach(folderLibrary.options) { folder in
@@ -237,13 +269,12 @@ private struct WordRow: View {
                     Image(systemName: word.folderIDs.isEmpty ? "folder.badge.plus" : "folder.fill")
                         .frame(minWidth: 44, minHeight: 44)
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 .accessibilityLabel("Папки слова \(word.polish)")
             }
-            Spacer(minLength: 0)
             PronounceButton(text: word.polish, language: .polish)
+                .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.vertical, 2)
-        .errorAlert(title: "Не удалось изменить папку", error: $folderError)
     }
 }
 

@@ -29,19 +29,28 @@ struct AddWordView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    inputCard
-                    translationCard
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(spacing: 0) {
+                        inputCard
+                        Divider().overlay(Color.appBorder.opacity(0.5))
+                            .padding(.horizontal, 20)
+                        translationCard
+                    }
+                    .cardStyle(cornerRadius: 20)
 
-                    VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Размещение")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.subtleText)
                         FolderPicker(selectedFolderID: $selectedFolderID)
                         categoryPicker
                     }
-                    .padding(.top, 8)
                 }
-                .padding()
+                .padding(20)
             }
             .background(Color.appBackground)
+            .foregroundStyle(Color.appInk)
+            .tint(Color.appAccent)
             .navigationTitle("Новое слово")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -83,15 +92,19 @@ struct AddWordView: View {
                 Text(category.rawValue).tag(Optional(category))
             }
         }
-        .padding(16)
-        .cardStyle()
+        .font(.subheadline)
+        .tint(Color.appAccent)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
+        .cardStyle(cornerRadius: 14)
     }
 
     private var inputCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Слово")
-                    .font(.footnote.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
                 Text("\(detectedLanguage.flag) \(detectedLanguage.displayName)")
@@ -104,7 +117,9 @@ struct AddWordView: View {
                     .opacity(sourceText.isEmpty ? 0 : 1)
             }
             TextField("Введите слово…", text: $sourceText, axis: .vertical)
-                .font(.title3.weight(.medium))
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(Color.appInk)
+                .frame(minHeight: 44)
                 .focused($sourceFieldFocused)
                 .autocorrectionDisabled()
                 .accessibilityIdentifier("sourceField")
@@ -112,16 +127,15 @@ struct AddWordView: View {
                     scheduleTranslation()
                 }
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
     }
 
     private var translationCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Перевод — \(detectedLanguage.other.flag) \(detectedLanguage.other.displayName)")
-                    .font(.footnote.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
                 if isTranslating {
@@ -132,13 +146,15 @@ struct AddWordView: View {
 
             TextField("Перевод появится автоматически…", text: $translatedText, axis: .vertical)
                 .font(.title3.weight(.medium))
+                .foregroundStyle(Color.appInk)
+                .frame(minHeight: 44)
                 .autocorrectionDisabled()
                 .accessibilityIdentifier("translationField")
 
             if let translationError {
                 Label(translationError, systemImage: "wifi.exclamationmark")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appError)
             }
 
             if !translatedText.isEmpty {
@@ -151,9 +167,8 @@ struct AddWordView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
     }
 
     private func scheduleTranslation() {

@@ -259,6 +259,76 @@ final class DailyStudyStoreTests: XCTestCase {
         }
     }
 
+    func testAppBootstrapReopensDictionaryBeforeRestoringSavedDailyIdentifiers() throws {
+        try withDefaults { defaults in
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let configuration = ModelConfiguration(url: directory.appendingPathComponent("dictionary.store"),
+                                                   cloudKitDatabase: .none)
+            let folderID = try autoreleasepool {
+                try seedStartupActivity(configuration: configuration, defaults: defaults)
+            }
+
+            try autoreleasepool {
+                // Exercise the same bootstrap as the app, not a preconstructed test container.
+                let resources = try AppResources(configuration: configuration, defaults: defaults,
+                                                 calendar: calendar, now: now)
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder"])
+                let context = resources.container.mainContext
+                let words = try context.fetch(FetchDescriptor<Word>())
+                let folders = try context.fetch(FetchDescriptor<WordFolder>())
+                XCTAssertEqual(words.count, 2)
+                XCTAssertEqual(folders.map(\.id), [folderID])
+                XCTAssertEqual(folders.first?.name, "Урок 1")
+                let completed = try XCTUnwrap(words.first { $0.polish == "woda" })
+                XCTAssertEqual(completed.russian, "вода")
+                XCTAssertEqual(completed.folderIDs, [folderID])
+                XCTAssertEqual(completed.repetitions, 1)
+                XCTAssertEqual(completed.intervalDays, 1)
+                XCTAssertEqual(completed.easeFactor, 2.5)
+                XCTAssertEqual(completed.dueDate, now.addingTimeInterval(86_400))
+                let pending = try XCTUnwrap(words.first { $0.polish == "kawa" })
+                XCTAssertEqual(pending.repetitions, 0)
+                XCTAssertEqual(pending.dueDate, now.addingTimeInterval(600))
+                XCTAssertEqual(resources.dailyStudy.progress(for: words, now: now), .init(completed: 1, remaining: 1))
+                XCTAssertEqual(resources.dailyStudy.answerTotals(for: words, now: now), .init(correct: 1, incorrect: 1))
+                XCTAssertEqual(resources.dailyStudy.reviewWords(for: words, now: now).map(\.polish), ["kawa"])
+            }
+        }
+    }
+
+    func testAppBootstrapRegistersBothModelsWithEmptyOrUnreadableDailyActivity() throws {
+        try withDefaults { defaults in
+            for activity in [nil, Data("invalid".utf8)] as [Data?] {
+                defaults.set(activity, forKey: "dailyStudyActivity.v1")
+                let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
+                                                 defaults: defaults, calendar: calendar, now: now)
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder"])
+                XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<Word>()).isEmpty)
+                XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<WordFolder>()).isEmpty)
+                XCTAssertEqual(resources.dailyStudy.progress(for: [], now: now).total, 0)
+            }
+        }
+    }
+
+    private func seedStartupActivity(configuration: ModelConfiguration, defaults: UserDefaults) throws -> UUID {
+        let resources = try AppResources(configuration: configuration, defaults: defaults,
+                                         calendar: calendar, now: now)
+        let context = resources.container.mainContext
+        let folder = WordFolder(name: "Урок 1")
+        context.insert(folder)
+        let completed = Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .polish, createdAt: now)
+        completed.folderIDs = [folder.id]
+        let pending = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, createdAt: now)
+        context.insert(completed)
+        context.insert(pending)
+        try context.save()
+        try resources.dailyStudy.review(.good, to: completed, context: context, now: now)
+        try resources.dailyStudy.review(.again, to: pending, context: context, now: now)
+        return folder.id
+    }
+
     private func makeWords(_ count: Int) throws -> (ModelContainer, [Word]) {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Word.self, WordFolder.self, configurations: configuration)
