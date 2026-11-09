@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct FlashcardsView: View {
+    var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Query private var allWords: [Word]
 
@@ -35,22 +36,18 @@ struct FlashcardsView: View {
     }
 
     private func startSession() {
-        guard sessionWords.isEmpty, !allWords.isEmpty else { return }
-        let due = allWords.filter(\.isDue).shuffled()
+        let words = FolderStore.words(allWords, in: folderID)
+        guard sessionWords.isEmpty, !words.isEmpty else { return }
+        let due = words.filter(\.isDue).shuffled()
         // Если повторять нечего — даём потренировать 10 случайных слов.
-        sessionWords = due.isEmpty ? Array(allWords.shuffled().prefix(10)) : due
+        sessionWords = due.isEmpty ? Array(words.shuffled().prefix(10)) : due
         sessionStarted = true
     }
 
     private func sessionView(word: Word) -> some View {
         VStack(spacing: 24) {
-            ProgressView(value: Double(reviewedCount), total: Double(sessionWords.count))
-                .tint(.appAccent)
+            SessionProgress(completed: reviewedCount, total: sessionWords.count, spacing: 24)
                 .padding(.horizontal)
-
-            Text("\(reviewedCount + 1) из \(sessionWords.count)")
-                .font(.caption)
-                .foregroundStyle(Color.subtleText)
 
             Spacer()
 
@@ -162,5 +159,6 @@ struct FlashcardsView: View {
     NavigationStack {
         FlashcardsView()
     }
-    .modelContainer(for: Word.self, inMemory: true)
+    .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .environment(FolderLibraryStore())
 }

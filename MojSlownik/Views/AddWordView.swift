@@ -6,13 +6,21 @@ struct AddWordView: View {
     @Environment(\.modelContext) private var modelContext
 
     var initialText: String = ""
+    @State private var selectedFolderID: UUID?
+    @State private var saveError: String?
 
+    @State private var selectedCategory: WordCategory?
     @State private var sourceText = ""
     @State private var translatedText = ""
     @State private var isTranslating = false
     @State private var translationError: String?
     @State private var translationTask: Task<Void, Never>?
     @FocusState private var sourceFieldFocused: Bool
+
+    init(initialText: String = "", initialFolderID: UUID? = nil) {
+        self.initialText = initialText
+        _selectedFolderID = State(initialValue: initialFolderID)
+    }
 
     private var detectedLanguage: AppLanguage {
         LanguageDetector.detect(sourceText)
@@ -22,9 +30,11 @@ struct AddWordView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    FolderPicker(selectedFolderID: $selectedFolderID)
                     inputCard
 
                     translationCard
+                    categoryPicker
                 }
                 .padding()
             }
@@ -42,6 +52,8 @@ struct AddWordView: View {
                                   || translatedText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .errorAlert(title: "Не удалось сохранить слово", error: $saveError)
+            .onDisappear { translationTask?.cancel() }
             .onAppear {
                 if sourceText.isEmpty {
                     sourceText = initialText
@@ -52,6 +64,24 @@ struct AddWordView: View {
                 sourceFieldFocused = true
             }
         }
+    }
+
+    private var automaticCategory: WordCategory {
+        WordCategory.detect(
+            russian: detectedLanguage == .russian ? sourceText : translatedText,
+            polish: detectedLanguage == .polish ? sourceText : translatedText
+        )
+    }
+
+    private var categoryPicker: some View {
+        Picker("Категория", selection: $selectedCategory) {
+            Text("Автоматически: \(automaticCategory.rawValue)").tag(WordCategory?.none)
+            ForEach(WordCategory.allCases) { category in
+                Text(category.rawValue).tag(Optional(category))
+            }
+        }
+        .padding(16)
+        .cardStyle()
     }
 
     private var inputCard: some View {
@@ -142,6 +172,7 @@ struct AddWordView: View {
                 try await Task.sleep(for: .milliseconds(600)) // debounce после окончания ввода
                 await MainActor.run { isTranslating = true }
                 let result = try await Translator.translate(text, from: source, to: source.other)
+                try Task.checkCancellation()
                 await MainActor.run {
                     translatedText = result
                     isTranslating = false
@@ -160,19 +191,16 @@ struct AddWordView: View {
     private func save() {
         let text = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let language = LanguageDetector.detect(text)
-
-        let word = Word(
-            russian: language == .russian ? text : translation,
-            polish: language == .polish ? text : translation,
-            sourceLanguage: language
-        )
-        modelContext.insert(word)
-        dismiss()
+        do {
+            try ScanWordStore.add(source: text, translation: translation, category: selectedCategory,
+                                  folderID: selectedFolderID, container: modelContext.container)
+            dismiss()
+        } catch { saveError = error.localizedDescription }
     }
 }
 
 #Preview {
     AddWordView()
-        .modelContainer(for: Word.self, inMemory: true)
+        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .environment(FolderLibraryStore())
 }

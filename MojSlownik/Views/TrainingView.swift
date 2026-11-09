@@ -2,7 +2,10 @@ import SwiftUI
 import SwiftData
 
 struct TrainingView: View {
-    @Query private var words: [Word]
+    @Query private var allWords: [Word]
+    @State private var selectedFolderID: UUID?
+
+    private var words: [Word] { FolderStore.words(allWords, in: selectedFolderID) }
 
     private var dueCount: Int {
         words.filter(\.isDue).count
@@ -12,10 +15,11 @@ struct TrainingView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true)
                     statsCard
 
                     NavigationLink {
-                        FlashcardsView()
+                        FlashcardsView(folderID: selectedFolderID)
                     } label: {
                         TrainingModeCard(
                             icon: "rectangle.portrait.on.rectangle.portrait.angled",
@@ -30,7 +34,7 @@ struct TrainingView: View {
                     .disabled(words.isEmpty)
 
                     NavigationLink {
-                        QuizView()
+                        QuizView(folderID: selectedFolderID)
                     } label: {
                         TrainingModeCard(
                             icon: "checklist",
@@ -114,7 +118,7 @@ private struct TrainingModeCard: View {
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
                     .background(Color.appAccent)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appOnAccent)
                     .clipShape(Capsule())
             }
 
@@ -129,5 +133,6 @@ private struct TrainingModeCard: View {
 
 #Preview {
     TrainingView()
-        .modelContainer(for: Word.self, inMemory: true)
+        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .environment(FolderLibraryStore())
 }

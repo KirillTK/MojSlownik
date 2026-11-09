@@ -43,8 +43,9 @@ Models inherit the parent; do not use Claude model names or tools.
    support and existing SwiftData records. Resolve contradictions with real code
    before continuing rather than blindly implementing an invalid plan.
 7. Do not create, update or run E2E, Playwright or XCUITest. Preserve existing
-   MojSlownikUITests and its target. Use focused unit checks for nontrivial logic
-   where practical; do not introduce a new testing stack for this workflow.
+   MojSlownikUITests and its target. Add committed XCTest unit tests for new or changed nontrivial logic and
+   regression tests for bug fixes. Run them using the isolated MojSlownikUnitTests
+   scheme; do not substitute temporary assertions or build-only checks.
 
 ## Verification and review
 
@@ -52,7 +53,8 @@ Models inherit the parent; do not use Claude model names or tools.
    Choose an installed iPhone simulator with xcrun simctl list devices available;
    run xcodebuild build using the project and scheme in AGENTS.md.
    Use DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer if needed.
-   Do not run the scheme's xcodebuild test: it includes UI tests.
+   Run xcodebuild test with scheme MojSlownikUnitTests only; never run the
+   application scheme's tests, which include UI tests.
 9. Run `feature-quality-reviewer` always; `feature-ui-reviewer` for SwiftUI;
    `feature-data-reviewer` for Word, SRS, persistence or translation data flows.
    Independent reviews may run concurrently within host limits. Include tracked

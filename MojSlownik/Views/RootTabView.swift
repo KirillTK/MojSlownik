@@ -16,5 +16,6 @@ struct RootTabView: View {
 
 #Preview {
     RootTabView()
-        .modelContainer(for: Word.self, inMemory: true)
+        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .environment(FolderLibraryStore())
 }

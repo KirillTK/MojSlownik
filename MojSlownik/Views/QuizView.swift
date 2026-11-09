@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct QuizView: View {
+    var folderID: UUID? = nil
     @Query private var allWords: [Word]
 
     @State private var questions: [QuizQuestion] = []
@@ -32,19 +33,15 @@ struct QuizView: View {
     }
 
     private func startQuiz() {
-        guard questions.isEmpty, allWords.count >= 4 else { return }
-        questions = QuizQuestion.generate(from: allWords, count: 10)
+        let words = FolderStore.words(allWords, in: folderID)
+        guard questions.isEmpty, words.count >= 4 else { return }
+        questions = QuizQuestion.generate(from: words, count: 10)
         quizStarted = true
     }
 
     private func questionView(_ question: QuizQuestion) -> some View {
         VStack(spacing: 20) {
-            ProgressView(value: Double(currentIndex), total: Double(questions.count))
-                .tint(.appAccent)
-
-            Text("\(currentIndex + 1) из \(questions.count)")
-                .font(.caption)
-                .foregroundStyle(Color.subtleText)
+            SessionProgress(completed: currentIndex, total: questions.count)
 
             Spacer()
 
@@ -138,7 +135,7 @@ struct QuizView: View {
                     .padding(.horizontal, 32)
                     .padding(.vertical, 14)
                     .background(Color.appAccent)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appOnAccent)
                     .clipShape(Capsule())
             }
             .padding(.top, 8)
@@ -194,5 +191,6 @@ struct QuizQuestion {
     NavigationStack {
         QuizView()
     }
-    .modelContainer(for: Word.self, inMemory: true)
+    .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
+        .environment(FolderLibraryStore())
 }

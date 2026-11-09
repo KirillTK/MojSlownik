@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import VisionKit
 import AVFoundation
 
@@ -69,31 +70,45 @@ struct ScannerScreen: View {
     }
 }
 
-/// Результат сканирования: контекстный перевод строки и выбор слова для добавления.
+/// Scan results keep context visible while translated words can be saved in one tap.
 struct ScanResultView: View {
     let scannedText: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Query private var savedWords: [Word]
     @State private var translatedText = ""
     @State private var isTranslating = false
     @State private var translationError: String?
     @State private var selectedWord: SelectedWord?
-
-    private var tokens: [ScannedTextTokenizer.Token] {
-        ScannedTextTokenizer.tokens(in: scannedText)
-    }
+    @State private var translations: [String: String] = [:]
+    @State private var wordErrors: [String: String] = [:]
+    @State private var saveErrors: [String: String] = [:]
+    @State private var retryVersion = 0
+    @State private var categoryOverrides: [String: WordCategory] = [:]
+    @State private var selectedFolderID: UUID?
+    @State private var savedOverrides: [String: Bool] = [:]
 
     private var words: [String] {
-        ScannedTextTokenizer.words(in: scannedText)
+        var seen = Set<String>()
+        return ScannedTextTokenizer.words(in: scannedText).filter {
+            seen.insert(normalize($0)).inserted
+        }
+    }
+
+    private var translationRequestID: String {
+        "\(scannedText)-\(retryVersion)-\(selectedWord?.id.uuidString ?? "")"
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    FolderPicker(selectedFolderID: $selectedFolderID)
                     sourceCard
-                    wordChips
                     translationCard
+                    wordChips
                 }
                 .padding()
             }
@@ -105,43 +120,43 @@ struct ScanResultView: View {
                     Button("Готово") { dismiss() }
                 }
             }
-            .sheet(item: $selectedWord) { selection in
-                AddWordView(initialText: selection.text)
+            .sheet(item: $selectedWord, onDismiss: {
+                savedOverrides.removeAll()
+                categoryOverrides.removeAll()
+            }) { selection in
+                AddWordView(initialText: selection.text, initialFolderID: selectedFolderID)
             }
-            .task(id: scannedText) {
-                await translateSentence()
+            .onChange(of: selectedFolderID) { savedOverrides.removeAll() }
+            .task(id: translationRequestID) {
+                guard selectedWord == nil else { return }
+                await translateContent()
             }
         }
     }
 
     private var sourceCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Распознанный текст")
-                .font(.footnote.weight(.medium))
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Оригинал", systemImage: "text.viewfinder")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.subtleText)
-
-            FlowLayout(spacing: 4) {
-                ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
-                    switch token {
-                    case let .word(word) where word.count > 1:
-                        Button { select(word) } label: {
-                            Text(word)
-                                .font(.title3.weight(.medium))
-                                .foregroundStyle(Color.appAccent)
-                                .underline()
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("scanInlineWord-\(index)")
-                        .accessibilityLabel("Добавить слово \(word)")
-                    case let .word(word):
-                        Text(word)
-                            .font(.title3.weight(.medium))
-                    case let .text(word):
-                        Text(word)
-                            .font(.title3.weight(.medium))
+            Text(scannedText)
+                .font(.body)
+                .foregroundStyle(Color.appInk)
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .accessibilityIdentifier("scanOriginalText")
+            if !words.isEmpty {
+                Menu {
+                    ForEach(words, id: \.self) { word in
+                        Button(word) { selectedWord = SelectedWord(text: word) }
                     }
-            }
-            .accessibilityIdentifier("scanOriginalText")
+                } label: {
+                    Label("Исправить слово", systemImage: "pencil")
+                        .font(.subheadline.weight(.medium))
+                        .frame(minHeight: 44)
+                }
+                .accessibilityHint("Выберите слово, чтобы исправить его перед добавлением")
             }
         }
         .padding(16)
@@ -150,34 +165,161 @@ struct ScanResultView: View {
     }
 
     private var wordChips: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Выберите слово для добавления")
-                .font(.footnote.weight(.medium))
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Слова в словарь")
+                    .font(.headline)
+                    .foregroundStyle(Color.appInk)
+                Text("Коснитесь слова, чтобы добавить или удалить. Категорию можно изменить.")
+                    .font(.caption)
+                    .foregroundStyle(Color.subtleText)
+            }
+            if words.isEmpty {
+                Text("Не удалось выделить слова. Попробуйте отсканировать другую строку.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.subtleText)
+            }
+            LazyVGrid(columns: chipColumns, alignment: .leading, spacing: 10) {
+                ForEach(Array(words.enumerated()), id: \.offset) { index, word in
+                    wordChip(word, index: index)
+                }
+            }
+            Text("Темы определяются автоматически; незнакомые слова — «Другое».")
+                .font(.caption)
                 .foregroundStyle(Color.subtleText)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Array(words.enumerated()), id: \.offset) { index, word in
-                        Button { select(word) } label: {
-                            Text(word)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.appAccent.opacity(0.12))
-                                .foregroundStyle(Color.appAccent)
-                                .clipShape(Capsule())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var chipColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.adaptive(minimum: 150), spacing: 10, alignment: .top)]
+    }
+
+    private func wordChip(_ word: String, index: Int) -> some View {
+        let translation = translations[word]
+        let existing = existingWord(word)
+        let isSaved = savedOverrides[word] ?? isIncluded(existing)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                if wordErrors[word] != nil {
+                    wordErrors[word] = nil
+                    retryVersion += 1
+                } else {
+                    toggleSaved(word)
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(word.lowercased())
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.appInk)
+                        Spacer(minLength: 0)
+                        Image(systemName: isSaved ? "checkmark.circle.fill" : "plus.circle")
+                            .foregroundStyle(isSaved ? Color.appSuccess : Color.appAccent)
+                            .accessibilityHidden(true)
+                    }
+                    if let translation {
+                        Text(translation.lowercased())
+                            .font(.subheadline)
+                            .foregroundStyle(Color.subtleText)
+                    } else if let error = wordErrors[word] {
+                        Text(error).font(.caption).foregroundStyle(Color.subtleText)
+                        Label("Повторить", systemImage: "arrow.clockwise")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.appAccent)
+                    } else {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.mini)
+                            Text("Переводим…").font(.caption)
                         }
-                        .accessibilityIdentifier("scanWordChip-\(word)-\(index)")
+                        .foregroundStyle(Color.subtleText)
+                    }
+                    if isSaved {
+                        Text(selectedFolderID == nil ? "В словаре · нажмите, чтобы удалить" : "В папке · нажмите, чтобы убрать")
+                            .font(.caption)
+                            .foregroundStyle(Color.appSuccess)
                     }
                 }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(translation == nil && wordErrors[word] == nil)
+            .accessibilityIdentifier("scanWordChip-\(word)-\(index)")
+            .accessibilityLabel("\(word), \(translation ?? wordErrors[word] ?? "Перевод загружается")")
+            .accessibilityHint(isSaved ? (selectedFolderID == nil ? "Удалить из словаря" : "Убрать из папки") : wordErrors[word] != nil
+                ? "Повторить перевод" : translation == nil
+                ? "Дождитесь перевода" : "Добавить в словарь без открытия формы")
+            if let translation {
+                categoryMenu(word, translation: translation, existing: existing)
+            }
+            if let error = saveErrors[word] {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(isSaved ? Color.appSuccess.opacity(0.4) : Color.appBorder, lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func categoryMenu(_ word: String, translation: String, existing: Word?) -> some View {
+        let current = categoryOverrides[word] ?? existing?.category ?? category(word, translation: translation)
+        return CategoryMenu(selection: Binding(
+            get: { current },
+            set: { changeCategory($0, for: word, existing: existing) }
+        )) {
+            HStack(spacing: 5) {
+                Text(current.rawValue)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.appAccent)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 9))
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .accessibilityLabel("Категория слова \(word): \(current.rawValue)")
+        .accessibilityHint("Открыть выбор категории")
+    }
+
+    private func changeCategory(_ category: WordCategory, for word: String, existing: Word?) {
+        let isSaved = savedOverrides[word] ?? isIncluded(existing)
+        guard isSaved, let translation = translations[word] else {
+            categoryOverrides[word] = category
+            return
+        }
+        do {
+            try ScanWordStore.changeCategory(category, source: word, translation: translation,
+                                             container: modelContext.container)
+            categoryOverrides[word] = category
+            saveErrors[word] = nil
+        } catch {
+            saveErrors[word] = "Не удалось изменить категорию. Попробуйте ещё раз."
+        }
     }
 
     private var translationCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Перевод предложения")
+                Text("Перевод")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
@@ -185,16 +327,20 @@ struct ScanResultView: View {
             }
             if !translatedText.isEmpty {
                 Text(translatedText)
-                    .font(.title3.weight(.medium))
+                    .font(.body)
+                    .foregroundStyle(Color.appInk)
+                    .lineSpacing(4)
                     .accessibilityIdentifier("scanTranslationText")
             } else if isTranslating {
-                Text("Переводим…")
-                    .foregroundStyle(Color.subtleText)
+                Text("Переводим…").foregroundStyle(Color.subtleText)
             }
             if let translationError {
                 Label(translationError, systemImage: "wifi.exclamationmark")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                    .font(.caption).foregroundStyle(.orange)
+                Button("Повторить перевод предложения") {
+                    self.translationError = nil
+                    retryVersion += 1
+                }
             }
         }
         .padding(16)
@@ -202,66 +348,94 @@ struct ScanResultView: View {
         .cardStyle()
     }
 
-    private func select(_ word: String) {
-        selectedWord = SelectedWord(text: word)
+    private func normalize(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .precomposedStringWithCanonicalMapping.lowercased()
     }
 
-    private func translateSentence() async {
-        let text = scannedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        isTranslating = true
-        translationError = nil
-        translatedText = ""
-        do {
-            let language = LanguageDetector.detect(text)
-            translatedText = try await Translator.translate(text, from: language, to: language.other)
-        } catch is CancellationError {
-            // Экран закрыли до завершения запроса.
-        } catch {
-            translationError = error.localizedDescription
+    private func category(_ word: String, translation: String) -> WordCategory {
+        if let selected = categoryOverrides[word] { return selected }
+        let language = LanguageDetector.detect(word)
+        return WordCategory.detect(
+            russian: language == .russian ? word : translation,
+            polish: language == .polish ? word : translation
+        )
+    }
+
+    private func existingWord(_ word: String) -> Word? {
+        guard let translation = translations[word] else { return nil }
+        let language = LanguageDetector.detect(word)
+        let matches = savedWords.filter {
+            $0.matches(source: word, translation: translation, language: language)
         }
-        isTranslating = false
+        if let selectedFolderID,
+           let member = matches.first(where: { $0.folderIDs.contains(selectedFolderID) }) { return member }
+        return matches.first
+    }
+
+    private func isIncluded(_ word: Word?) -> Bool {
+        guard let word else { return false }
+        return selectedFolderID.map { word.folderIDs.contains($0) } ?? true
+    }
+
+    private func toggleSaved(_ text: String) {
+        guard let translation = translations[text] else { return }
+        let selectedCategory = categoryOverrides[text] ?? existingWord(text)?.category
+            ?? category(text, translation: translation)
+        do {
+            savedOverrides[text] = try ScanWordStore.toggle(
+                source: text, translation: translation, category: selectedCategory,
+                folderID: selectedFolderID, container: modelContext.container
+            )
+            categoryOverrides[text] = selectedCategory
+            saveErrors[text] = nil
+        } catch {
+            saveErrors[text] = "Не удалось изменить словарь. Нажмите на карточку ещё раз."
+        }
+    }
+
+    @MainActor
+    private func translateContent() async {
+        // AppleTranslationModel supports one pending request, so translate sequentially.
+        let text = scannedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty && translatedText.isEmpty && translationError == nil {
+            isTranslating = true
+            do {
+                let language = LanguageDetector.detect(text)
+                let result = try await Translator.translate(text, from: language, to: language.other)
+                try Task.checkCancellation()
+                translatedText = result
+            } catch is CancellationError {
+                isTranslating = false
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                translationError = error.localizedDescription
+            }
+            isTranslating = false
+        }
+        for word in words where translations[word] == nil && wordErrors[word] == nil {
+            guard !Task.isCancelled else { return }
+            do {
+                let language = LanguageDetector.detect(word)
+                let result = try await Translator.translate(word, from: language, to: language.other)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                try Task.checkCancellation()
+                guard !result.isEmpty else { throw TranslationError.emptyResult }
+                translations[word] = result
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                wordErrors[word] = error.localizedDescription
+            }
+        }
     }
 }
 
 private struct SelectedWord: Identifiable {
     let id = UUID()
     let text: String
-}
-
-private struct FlowLayout: Layout {
-    var spacing: CGFloat = 0
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        layout(proposal: proposal, subviews: subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for placement in layout(proposal: proposal, subviews: subviews).placements {
-            placement.subview.place(at: CGPoint(x: bounds.minX + placement.origin.x, y: bounds.minY + placement.origin.y), proposal: .unspecified)
-        }
-    }
-
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, placements: [(subview: LayoutSubview, origin: CGPoint)]) {
-        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var placements: [(subview: LayoutSubview, origin: CGPoint)] = []
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0 && x + size.width > maxWidth {
-                x = 0
-                y += lineHeight + spacing
-                lineHeight = 0
-            }
-            placements.append((subview, CGPoint(x: x, y: y)))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
-        return (CGSize(width: proposal.width ?? x, height: y + lineHeight), placements)
-    }
 }
 
 private struct DataScannerRepresentable: UIViewControllerRepresentable {

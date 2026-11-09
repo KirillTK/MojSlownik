@@ -7,14 +7,20 @@ UI copy is Russian; code, file names and project instructions are English.
 
 ## Architecture and reading map
 
-- MojSlownikApp creates ModelContainer(Word); RootTabView hosts Dictionary/Training tabs.
-- Models/Word.swift: russian/polish pair, source language, creation date and SRS state.
-- Services/: language detection, translation, speech, OCR tokenization and SM-2 scheduling.
-- Views/: screens; Theme/Theme.swift: shared colors and cardStyle.
+- MojSlownikApp registers Word and WordFolder; RootTabView hosts Dictionary/Training tabs.
+- Models/Word.swift: russian/polish pair, source language, folder UUID memberships, creation date and shared SRS state.
+- Stores/: shared observable application state; FolderLibraryStore owns the folder catalog.
+- Services/: persistence operations, language detection, translation, speech, OCR tokenization and SM-2 scheduling.
+- Views/: screens; Views/Components/: reusable controls (FolderPicker, CategoryMenu,
+  PronounceButton, SessionProgress, errorAlert). Keep persistence actions in stores/services.
+- Theme/Theme.swift: shared colors and cardStyle.
 - Translation: Apple on supported iOS 18+ devices → Google gtx → MyMemory.
   Translation is editable before saving. Apple sessions require translationTask.
 - OCR requires a physical device; Polish diacritics may be lost.
 - Filter due words in memory with words.filter(\.isDue), not SwiftData #Predicate.
+- Stores/FolderLibraryStore.swift is injected once at the app root via environment.
+  All folder lists use that instance; keep only destination selection/presentation state local to views.
+- WordFolder stores custom study folders; removing membership/folders preserves vocabulary.
 - Preserve existing stored words when changing the model.
 - Read [docs/architecture.md](docs/architecture.md) for detailed flows and constraints
   only when needed. Do not preload the whole source tree or all agent instructions.
@@ -42,8 +48,11 @@ xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownik \
 
 Choose an installed device with `xcrun simctl list devices available` if needed.
 If CommandLineTools is active, set DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer.
-Use focused unit checks for nontrivial logic where practical. Do not run the scheme's
-`xcodebuild test`, which includes UI tests. Documentation-only changes need no app build.
+Add and run committed unit tests for new or changed nontrivial logic, including
+regression tests for bug fixes. Build-only validation or temporary assertions are not
+substitutes for repository tests. Use the isolated `MojSlownikUnitTests` scheme:
+`xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikUnitTests -destination 'platform=iOS Simulator,name=iPhone 16' test`.
+Never run the application's UI-test scheme or E2E tests. Documentation-only changes need no app build.
 Manual UI checks for affected areas: add Russian and Polish words, edit/save translations,
 complete flashcards (ratings update dueDate) and quiz. On a physical iPhone, scan a line,
 check its translation, select a word in text and chips, and confirm the scan result

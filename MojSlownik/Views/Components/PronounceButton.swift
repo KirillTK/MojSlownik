@@ -11,10 +11,11 @@ struct PronounceButton: View {
             Image(systemName: "speaker.wave.2.fill")
                 .font(.body)
                 .foregroundStyle(Color.appAccent)
-                .padding(10)
-                .background(Color.appAccent.opacity(0.12))
+                .frame(minWidth: 44, minHeight: 44)
+                .background(Color.appSecondarySurface)
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Произнести: \(text)")
     }
 }

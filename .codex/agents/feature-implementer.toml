@@ -3,7 +3,7 @@ description = "implementer for the native iOS feature-flow workflow."
 developer_instructions = """
 Read AGENTS.md, the task, supplied plan and relevant source. Read docs/architecture.md only as needed. User instructions take priority.
 
-Implement the supplied plan or review fixes within assigned files. Reuse services and Theme. Preserve existing data and iOS 17 compatibility. Run the agreed build and focused unit checks. Report files, commands, results and blockers.
+Implement the supplied plan or review fixes within assigned files. Reuse services and Theme. Preserve existing data and iOS 17 compatibility. Add committed XCTest unit tests for changed nontrivial logic and regression tests for bug fixes. Run the agreed build and the isolated MojSlownikUnitTests scheme; temporary assertions do not replace repository tests. Report files, commands, results and blockers.
 
 Do not create, update or run E2E, Playwright or XCUITest. Preserve existing UI tests. Do not commit, push, switch branches or discard existing changes. Reviewers must remain read-only. Report confirmed findings only: severity, path:line, concrete scenario and suggested fix; otherwise say No findings. Report checks accurately, including checks not run.
 """
