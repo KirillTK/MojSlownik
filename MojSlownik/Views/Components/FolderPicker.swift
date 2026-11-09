@@ -12,6 +12,8 @@ struct FolderPicker: View {
     @State private var showCreateFolder = false
     @State private var folderName = ""
     @State private var creationError: String?
+    @State private var pendingDeletion: FolderLibraryStore.Option?
+    @State private var deletionError: String?
 
     private var emptyTitle: String { allowsAll ? "Все папки" : "Без папки" }
 
@@ -72,6 +74,14 @@ struct FolderPicker: View {
                     optionRow(id: nil, name: emptyTitle)
                     ForEach(library.options) { option in
                         optionRow(id: option.id, name: option.name)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    pendingDeletion = option
+                                } label: {
+                                    Label("Удалить", systemImage: "trash")
+                                }
+                                .tint(.red)
+                            }
                     }
                 }
                 Section {
@@ -97,6 +107,19 @@ struct FolderPicker: View {
                     Button("Готово") { showFolders = false }
                 }
             }
+            .confirmationDialog(
+                "Удалить папку «\(pendingDeletion?.name ?? "")»? Слова останутся в словаре.",
+                isPresented: Binding(
+                    get: { pendingDeletion != nil },
+                    set: { if !$0 { pendingDeletion = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: pendingDeletion
+            ) { folder in
+                Button("Удалить папку", role: .destructive) { deleteFolder(folder) }
+                Button("Отмена", role: .cancel) { pendingDeletion = nil }
+            }
+            .errorAlert(title: "Не удалось удалить папку", error: $deletionError)
             .navigationDestination(isPresented: $showCreateFolder) {
                 Form {
                     Section("Название папки") {
@@ -160,6 +183,14 @@ struct FolderPicker: View {
         if let selectedFolderID, !library.options.contains(where: { $0.id == selectedFolderID }) {
             self.selectedFolderID = nil
         }
+    }
+
+    private func deleteFolder(_ folder: FolderLibraryStore.Option) {
+        pendingDeletion = nil
+        do {
+            try library.delete(id: folder.id, context: modelContext)
+            reconcileSelection()
+        } catch { deletionError = error.localizedDescription }
     }
 
     private func createFolder() {

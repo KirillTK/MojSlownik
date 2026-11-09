@@ -51,6 +51,21 @@ enum ScanWordStore {
         return isIncluded
     }
 
+    static func delete(wordID: PersistentIdentifier, container: ModelContainer) throws {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        let words = try context.fetch(FetchDescriptor<Word>())
+        guard let word = words.first(where: { $0.persistentModelID == wordID }) else {
+            throw FolderStore.StoreError.missingWord
+        }
+        context.delete(word)
+        do { try context.save() }
+        catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     static func add(source: String, translation: String, category: WordCategory? = nil,
                     folderID: UUID? = nil, container: ModelContainer) throws {
         let context = ModelContext(container)

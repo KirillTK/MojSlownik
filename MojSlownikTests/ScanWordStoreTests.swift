@@ -108,8 +108,80 @@ final class ScanWordStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testDeleteTargetsExactRecordAndPreservesDuplicatesFoldersAndProgress() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let firstFolder = WordFolder(name: "Урок 1")
+        let secondFolder = WordFolder(name: "Урок 2")
+        context.insert(firstFolder)
+        context.insert(secondFolder)
+        let target = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let duplicate = Word(russian: "вода", polish: "woda", sourceLanguage: .russian, category: .food)
+        let other = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
+        let dueDate = Date(timeIntervalSince1970: 1_700_000_000)
+        for word in [target, duplicate, other] {
+            word.folderIDs = [firstFolder.id, secondFolder.id]
+            word.repetitions = 7
+            word.intervalDays = 14
+            word.easeFactor = 2.8
+            word.dueDate = dueDate
+            context.insert(word)
+        }
+        try context.save()
+        let targetID = target.persistentModelID
+        let survivorIDs = Set([duplicate.persistentModelID, other.persistentModelID])
+
+        try ScanWordStore.delete(wordID: targetID, container: container)
+
+        let freshContext = ModelContext(container)
+        let remaining = try freshContext.fetch(FetchDescriptor<Word>())
+        XCTAssertEqual(Set(remaining.map(\.persistentModelID)), survivorIDs)
+        XCTAssertFalse(remaining.contains { $0.persistentModelID == targetID })
+        XCTAssertEqual(remaining.filter { $0.polish == "woda" }.count, 1)
+        for word in remaining {
+            XCTAssertEqual(word.folderIDs, [firstFolder.id, secondFolder.id])
+            XCTAssertEqual(word.repetitions, 7)
+            XCTAssertEqual(word.intervalDays, 14)
+            XCTAssertEqual(word.easeFactor, 2.8)
+            XCTAssertEqual(word.dueDate, dueDate)
+        }
+        XCTAssertEqual(remaining.first { $0.persistentModelID == duplicate.persistentModelID }?.category, .food)
+        XCTAssertEqual(Set(try freshContext.fetch(FetchDescriptor<WordFolder>()).map(\.id)),
+                       Set([firstFolder.id, secondFolder.id]))
+    }
+
+    @MainActor
+    func testDeleteAndMissingRecordDoNotSaveOrRollBackUnrelatedPendingEdits() throws {
+        let container = try makeContainer()
+        let editingContext = ModelContext(container)
+        editingContext.autosaveEnabled = false
+        let target = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let other = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, category: .food)
+        editingContext.insert(target)
+        editingContext.insert(other)
+        try editingContext.save()
+        let targetID = target.persistentModelID
+        other.category = .travel
+        let unsaved = Word(russian: "дом", polish: "dom", sourceLanguage: .polish)
+        editingContext.insert(unsaved)
+
+        try ScanWordStore.delete(wordID: targetID, container: container)
+        XCTAssertThrowsError(try ScanWordStore.delete(wordID: targetID, container: container)) { error in
+            XCTAssertEqual(error.localizedDescription, "Слово больше не существует")
+        }
+
+        XCTAssertTrue(editingContext.hasChanges)
+        XCTAssertEqual(other.category, .travel)
+        XCTAssertEqual(unsaved.polish, "dom")
+        let persisted = try words(in: container)
+        XCTAssertEqual(persisted.count, 1)
+        XCTAssertEqual(persisted.first?.polish, "kawa")
+        XCTAssertEqual(persisted.first?.category, .food)
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        try ModelContainer(for: Word.self, WordFolder.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor

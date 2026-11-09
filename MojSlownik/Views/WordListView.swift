@@ -8,6 +8,7 @@ struct WordListView: View {
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @State private var selectedFolderID: UUID?
     @State private var showDeleteFolder = false
+    @State private var deletionError: String?
     @State private var folderError: String?
     @State private var selectedCategory: WordCategory?
     @State private var searchText = ""
@@ -58,8 +59,16 @@ struct WordListView: View {
                                     .listRowBackground(Color.clear)
                                     .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
                                     .listRowSeparatorTint(Color.appBorder.opacity(0.5))
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        let wordID = word.persistentModelID
+                                        Button(role: .destructive) {
+                                            deleteWord(id: wordID)
+                                        } label: {
+                                            Label("Удалить", systemImage: "trash")
+                                        }
+                                        .tint(.red)
+                                    }
                             }
-                            .onDelete(perform: deleteWords)
                         }
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
@@ -71,7 +80,7 @@ struct WordListView: View {
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
             .navigationTitle("Словарь")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if selectedFolderID != nil {
@@ -98,7 +107,7 @@ struct WordListView: View {
                     .accessibilityLabel("Добавить слово")
                 }
             }
-            .confirmationDialog("Удалить папку? Слова останутся в словаре.", isPresented: $showDeleteFolder, titleVisibility: .visible) {
+            .confirmationDialog("Удалить папку «\(folderLibrary.options.first { $0.id == selectedFolderID }?.name ?? "")»? Слова останутся в словаре.", isPresented: $showDeleteFolder, titleVisibility: .visible) {
                 Button("Удалить папку", role: .destructive) {
                     guard let id = selectedFolderID else { return }
                     do {
@@ -108,6 +117,7 @@ struct WordListView: View {
                 }
             }
             .errorAlert(title: "Не удалось изменить папку", error: $folderError)
+            .errorAlert(title: "Не удалось удалить слово", error: $deletionError)
             .sheet(isPresented: $showAddSheet) {
                 AddWordView(initialFolderID: selectedFolderID)
             }
@@ -180,12 +190,10 @@ struct WordListView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func deleteWords(at offsets: IndexSet) {
-        // Снимок до удаления: filteredWords пересчитывается после каждого delete.
-        let wordsToDelete = offsets.map { filteredWords[$0] }
-        for word in wordsToDelete {
-            modelContext.delete(word)
-        }
+    private func deleteWord(id: PersistentIdentifier) {
+        do {
+            try ScanWordStore.delete(wordID: id, container: modelContext.container)
+        } catch { deletionError = error.localizedDescription }
     }
 }
 

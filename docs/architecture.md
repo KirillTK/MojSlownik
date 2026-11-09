@@ -30,6 +30,13 @@ SwiftData can terminate the process rather than throw when that precondition fai
 The app injects that same container into its scene. Previews use ordered in-memory
 resources with separate defaults, never the user's daily activity.
 
+**Deletion:** dictionary rows expose a red «Удалить» swipe action, which removes
+the exact word record globally through `ScanWordStore.delete` in an isolated,
+explicitly saved context. Errors remain at screen level. Custom folder rows in
+the shared picker expose the same action followed by a named confirmation;
+`FolderLibraryStore.delete` refreshes the catalog and clears invalid selections.
+Removing a folder preserves vocabulary, SRS and other folder memberships.
+
 **Adding:** input → `LanguageDetector` → `Translator` → editable translation →
 `Word` → SwiftData → dictionary/training `@Query` updates. Pair fields always
 follow their languages regardless of input direction. These screens use the
