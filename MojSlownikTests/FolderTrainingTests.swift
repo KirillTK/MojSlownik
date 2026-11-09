@@ -16,6 +16,10 @@ final class FolderTrainingTests: XCTestCase {
         let questions = QuizQuestion.generate(from: scoped, count: 10)
         XCTAssertEqual(questions.count, 4)
         for question in questions {
+            let sourceWord = members.first { $0.persistentModelID == question.wordID }
+            XCTAssertNotNil(sourceWord)
+            XCTAssertEqual(sourceWord?.text(in: question.promptLanguage), question.prompt)
+            XCTAssertEqual(sourceWord?.text(in: question.promptLanguage.other), question.correctAnswer)
             XCTAssertTrue(members.map { $0.text(in: question.promptLanguage) }.contains(question.prompt))
             let allowedAnswers = Set(members.map { $0.text(in: question.promptLanguage.other) })
             XCTAssertTrue(Set(question.options).isSubset(of: allowedAnswers))

@@ -30,11 +30,14 @@ struct AddWordView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    FolderPicker(selectedFolderID: $selectedFolderID)
                     inputCard
-
                     translationCard
-                    categoryPicker
+
+                    VStack(spacing: 12) {
+                        FolderPicker(selectedFolderID: $selectedFolderID)
+                        categoryPicker
+                    }
+                    .padding(.top, 8)
                 }
                 .padding()
             }

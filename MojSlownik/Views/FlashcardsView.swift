@@ -4,6 +4,10 @@ import SwiftData
 struct FlashcardsView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(DailyStudyStore.self) private var dailyStudy
     @Query private var allWords: [Word]
 
     @State private var sessionWords: [Word] = []
@@ -11,7 +15,7 @@ struct FlashcardsView: View {
     @State private var isFlipped = false
     @State private var reviewedCount = 0
     @State private var sessionStarted = false
-    // Направление карточки: true = показываем русское, вспоминаем польское.
+    @State private var reviewError: String?
     @State private var frontIsRussian = Bool.random()
 
     private var currentWord: Word? {
@@ -19,7 +23,7 @@ struct FlashcardsView: View {
     }
 
     var body: some View {
-        VStack {
+        Group {
             if let word = currentWord {
                 sessionView(word: word)
             } else if sessionStarted {
@@ -32,47 +36,37 @@ struct FlashcardsView: View {
         .background(Color.appBackground)
         .navigationTitle("Флешкарточки")
         .navigationBarTitleDisplayMode(.inline)
+        .errorAlert(title: "Не удалось сохранить ответ", error: $reviewError)
         .onAppear(perform: startSession)
     }
 
     private func startSession() {
         let words = FolderStore.words(allWords, in: folderID)
         guard sessionWords.isEmpty, !words.isEmpty else { return }
-        let due = words.filter(\.isDue).shuffled()
-        // Если повторять нечего — даём потренировать 10 случайных слов.
+        dailyStudy.refresh()
+        let due = dailyStudy.reviewWords(for: words).shuffled()
+        // Free practice stays available even after today's repetitions are complete.
         sessionWords = due.isEmpty ? Array(words.shuffled().prefix(10)) : due
         sessionStarted = true
     }
 
     private func sessionView(word: Word) -> some View {
-        VStack(spacing: 24) {
-            SessionProgress(completed: reviewedCount, total: sessionWords.count, spacing: 24)
-                .padding(.horizontal)
+        ScrollView {
+            VStack(spacing: 28) {
+                SessionProgress(completed: reviewedCount, total: sessionWords.count, spacing: 10)
+                card(word: word)
 
-            Spacer()
-
-            card(word: word)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(duration: 0.45)) {
-                        isFlipped.toggle()
-                    }
+                if isFlipped {
+                    gradeButtons(word: word)
+                } else {
+                    Text("Вспомните перевод, затем откройте ответ.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.subtleText)
+                        .multilineTextAlignment(.center)
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("flashcard")
-
-            Spacer()
-
-            if isFlipped {
-                gradeButtons(word: word)
-            } else {
-                Text("Коснитесь карточки, чтобы увидеть перевод")
-                    .font(.footnote)
-                    .foregroundStyle(Color.subtleText)
-                    .padding(.bottom, 24)
             }
+            .padding(20)
         }
-        .padding()
     }
 
     private func card(word: Word) -> some View {
@@ -80,69 +74,110 @@ struct FlashcardsView: View {
         let shownLanguage = isFlipped ? frontLanguage.other : frontLanguage
         let shownText = word.text(in: shownLanguage)
 
-        return VStack(spacing: 16) {
-            Text("\(shownLanguage.flag) \(shownLanguage.displayName)")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.subtleText)
-
-            Text(shownText)
-                .font(.system(.largeTitle, design: .rounded).weight(.bold))
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.5)
+        return VStack(spacing: 20) {
+            Button {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                    isFlipped.toggle()
+                }
+            } label: {
+                VStack(spacing: 24) {
+                    Text(shownLanguage.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.subtleText)
+                    Text(shownText)
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(Color.appInk)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    Label(isFlipped ? "Скрыть перевод" : "Показать перевод",
+                          systemImage: isFlipped ? "eye.slash" : "eye")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.appAccent)
+                        .frame(minHeight: 44)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, minHeight: 230)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("flashcard")
+            .accessibilityHint(isFlipped ? "Вернуться к исходному слову" : "Открыть ответ")
 
             if shownLanguage == .polish {
+                // Keep pronunciation separate from the reveal button.
                 PronounceButton(text: shownText, language: .polish)
+                    .padding(.bottom, 20)
             }
         }
-        .padding(32)
-        .frame(maxWidth: .infinity, minHeight: 260)
-        .cardStyle(cornerRadius: 28)
-        .rotation3DEffect(.degrees(isFlipped ? 360 : 0), axis: (x: 0, y: 1, z: 0))
-        .padding(.horizontal, 8)
+        .cardStyle(cornerRadius: 24)
     }
 
     private func gradeButtons(word: Word) -> some View {
-        HStack(spacing: 10) {
-            ForEach(ReviewGrade.allCases, id: \.self) { grade in
-                Button {
-                    apply(grade, to: word)
-                } label: {
-                    Text(grade.title)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(grade.color.opacity(0.14))
-                        .foregroundStyle(grade.color)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 8))
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Насколько легко вспомнили?")
+                .font(.subheadline)
+                .foregroundStyle(Color.subtleText)
+            layout {
+                ForEach(ReviewGrade.allCases, id: \.self) { grade in
+                    Button {
+                        apply(grade, to: word)
+                    } label: {
+                        Text(grade.title)
+                            .font(.subheadline.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.vertical, 4)
+                            .background(grade.color.opacity(0.12))
+                            .foregroundStyle(grade.color)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.bottom, 12)
     }
 
     private func apply(_ grade: ReviewGrade, to word: Word) {
-        SRSEngine.apply(grade, to: word)
-        // «Не помню» — карточка вернётся ещё раз в конце этой же сессии.
+        do {
+            try dailyStudy.review(grade, to: word, context: modelContext)
+        } catch {
+            reviewError = error.localizedDescription
+            return
+        }
         if grade == .again {
             sessionWords.append(word)
         }
         reviewedCount += 1
-        withAnimation(.easeInOut(duration: 0.25)) {
-            isFlipped = false
-            currentIndex += 1
-            frontIsRussian = Bool.random()
-        }
+        // Change the word without a flip that could obscure the next prompt.
+        isFlipped = false
+        currentIndex += 1
+        frontIsRussian = Bool.random()
     }
 
     private var completedView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.green)
-            Text("Готово!")
-                .font(.title.weight(.bold))
-            Text("Повторено слов: \(reviewedCount)")
-                .foregroundStyle(Color.subtleText)
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(Color.appSuccess)
+                Text("Тренировка завершена")
+                    .font(.title.weight(.bold))
+                    .multilineTextAlignment(.center)
+                Text("Повторено слов: \(Set(sessionWords.map(\.persistentModelID)).count)")
+                    .font(.title3.weight(.medium))
+                Text("Всего ответов: \(reviewedCount)")
+                    .foregroundStyle(Color.subtleText)
+                Button("К тренировкам") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.appAccent)
+                    .foregroundStyle(Color.appOnAccent)
+                    .controlSize(.large)
+                    .padding(.top, 8)
+            }
+            .padding(24)
         }
     }
 
@@ -160,5 +195,6 @@ struct FlashcardsView: View {
         FlashcardsView()
     }
     .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
-        .environment(FolderLibraryStore())
+    .environment(FolderLibraryStore())
+    .environment(DailyStudyStore())
 }

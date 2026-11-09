@@ -18,4 +18,5 @@ struct RootTabView: View {
     RootTabView()
         .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
         .environment(FolderLibraryStore())
+        .environment(DailyStudyStore())
 }

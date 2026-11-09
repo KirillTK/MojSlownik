@@ -3,6 +3,7 @@ import SwiftData
 
 struct QuizView: View {
     var folderID: UUID? = nil
+    @Environment(DailyStudyStore.self) private var dailyStudy
     @Query private var allWords: [Word]
 
     @State private var questions: [QuizQuestion] = []
@@ -10,6 +11,8 @@ struct QuizView: View {
     @State private var score = 0
     @State private var selectedAnswer: String?
     @State private var quizStarted = false
+    @State private var answerError: String?
+    @State private var advanceTask: Task<Void, Never>?
 
     private var currentQuestion: QuizQuestion? {
         questions.indices.contains(currentIndex) ? questions[currentIndex] : nil
@@ -29,7 +32,12 @@ struct QuizView: View {
         .background(Color.appBackground)
         .navigationTitle("Викторина")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: startQuiz)
+        .errorAlert(title: "Не удалось сохранить ответ", error: $answerError)
+        .onAppear {
+            startQuiz()
+            if selectedAnswer != nil { scheduleAdvance() }
+        }
+        .onDisappear { advanceTask?.cancel() }
     }
 
     private func startQuiz() {
@@ -41,7 +49,7 @@ struct QuizView: View {
 
     private func questionView(_ question: QuizQuestion) -> some View {
         VStack(spacing: 20) {
-            SessionProgress(completed: currentIndex, total: questions.count)
+            SessionProgress(completed: currentIndex + (selectedAnswer == nil ? 0 : 1), total: questions.count)
 
             Spacer()
 
@@ -103,11 +111,30 @@ struct QuizView: View {
     }
 
     private func select(_ option: String, in question: QuizQuestion) {
+        guard selectedAnswer == nil else { return }
+        let isCorrect = option == question.correctAnswer
+        do {
+            try dailyStudy.recordQuizAnswer(wordID: question.wordID, isCorrect: isCorrect)
+        } catch {
+            answerError = error.localizedDescription
+            return
+        }
         selectedAnswer = option
-        if option == question.correctAnswer {
+        if isCorrect {
             score += 1
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+        scheduleAdvance()
+    }
+
+    private func scheduleAdvance() {
+        advanceTask?.cancel()
+        advanceTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(900))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
             selectedAnswer = nil
             currentIndex += 1
         }
@@ -124,6 +151,7 @@ struct QuizView: View {
                 .foregroundStyle(Color.subtleText)
 
             Button {
+                advanceTask?.cancel()
                 questions = []
                 currentIndex = 0
                 score = 0
@@ -154,6 +182,7 @@ struct QuizView: View {
 }
 
 struct QuizQuestion {
+    let wordID: PersistentIdentifier
     let prompt: String
     let promptLanguage: AppLanguage
     let correctAnswer: String
@@ -178,6 +207,7 @@ struct QuizQuestion {
             }
             guard !distractors.isEmpty else { return nil }
             return QuizQuestion(
+                wordID: word.persistentModelID,
                 prompt: word.text(in: promptLanguage),
                 promptLanguage: promptLanguage,
                 correctAnswer: correct,
@@ -193,4 +223,5 @@ struct QuizQuestion {
     }
     .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
         .environment(FolderLibraryStore())
+        .environment(DailyStudyStore())
 }

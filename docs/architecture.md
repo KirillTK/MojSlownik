@@ -10,14 +10,14 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 
 | Area | Files and responsibilities |
 | --- | --- |
-| Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder` and `RootTabView`. |
+| Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder and daily-study stores, and presents `RootTabView`. |
 | Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs, root `AppleTranslationHost`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation. |
 | Adding words | `Views/AddWordView.swift`: language detection, 600 ms translation debounce, manual editing, automatic/manual category selection, insertion through `modelContext`. |
 | Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit bridge, line translation, compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. `Services/ScannedTextTokenizer.swift` separates words and punctuation. |
-| Practice | `Views/TrainingView.swift`: statistics and entry points to `FlashcardsView`/`QuizView`; `Services/SRSEngine.swift`: scheduling. |
+| Practice | `Views/TrainingView.swift`: daily progress and entry points to `FlashcardsView`/`QuizView`; `Stores/DailyStudyStore.swift`: local daily activity; `Services/SRSEngine.swift`: scheduling. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
 | Build | Root `project.yml`: XcodeGen, application and `MojSlownikUITests`, iOS 17.0, Swift 5.9. |
 
@@ -50,8 +50,43 @@ Categories can be changed through a chevron menu inside each scan card (includin
 saved words), in the add form, or through the dictionary row's category menu.
 A horizontal category/count strip filters the dictionary alongside text search.
 
-**Practice:** session snapshot → flip card → rating → mutate SRS fields on the
-same `Word`. Quiz questions and score live in view state and do not change SRS.
+**Practice:** scoped session snapshot → reveal answer → rating → apply SRS and
+explicitly save the same `Word` → record daily activity. `DailyStudyStore.review`
+restores only that word's prior SRS fields if saving fails; the screen reports the
+failure and does not advance. Each quiz question carries its source word's stable
+identifier. Selecting an answer first persists daily activity, then updates local
+feedback and score; Back retains all accepted answers even in an unfinished quiz.
+The 0.9-second transition is cancellable when leaving the screen. Quiz questions,
+position and score remain session state; quiz answers do not change SRS fields.
+
+**Daily progress:** the app-scoped observable `DailyStudyStore` stores the local day
+and unique completed/pending `PersistentIdentifier` collections, today's quiz successes,
+and answer events as Codable data in UserDefaults. Successful flashcard and quiz
+answers add unique daily completion. A quiz success exempts that word from today's
+remaining practice without altering its SRS due date; the exemption ends at local
+midnight. A later wrong quiz answer or "Не помню" removes all completion/exemption
+and keeps the word pending. A later success clears pending; a flashcard success
+returns the word to ordinary SRS-based due handling. The flashcard session also
+appends "Не помню" words for another attempt during its ten-minute SRS delay.
+The training ring counts existing words in the selected folder: completed today
+versus currently due (unless successfully quizzed today) or pending. Pending always
+wins; due status still overrides flashcard-only completion. Daily answer/correct/error
+statistics count every answer from either mode, independently of unique-word completion.
+Both counters use the current existing folder scope. New optional fields decode
+existing v1 completion and pending state without inventing historical answer counts.
+Persisted ID collections use equality-based arrays, retaining the old Set JSON
+format: decoded SwiftData IDs can compare equal to live model IDs while producing
+different hashes, so hashed membership is unsuitable for matching restored activity.
+New due words can increase the total; this is current review workload, not a fixed
+daily goal or a percentage of language knowledge. Deleting vocabulary or changing
+folder memberships changes the live scope without changing stored vocabulary.
+An empty workload has zero progress, while a nonempty completed workload is full.
+Daily activity resets on the local calendar day; progress reads are pure and
+ignore stale days, while appearance/foreground/review events refresh persisted
+state. Training recomputes time-based status periodically. Free practice of up to
+ten random scoped words remains available when none are due or pending.
+Session progress counts answers (including retry attempts); the completion screen
+separately reports unique words and total answers. No achievements are implemented.
 
 ## Study Folders
 
@@ -100,11 +135,15 @@ Theme.cardStyle handles shared surfaces instead of a universal card component.
 
 ## Presentation
 
-Theme uses adaptive cream/paper surfaces, terracotta actions, warm ink and olive
-success colors. `appOnAccent` supplies contrasting text on solid accent fills in
+Theme uses adaptive warm linen surfaces, muted sage actions, dark ink and green
+success colors, with native sans-serif typography and restrained surface decoration. `appOnAccent` supplies contrasting text on solid accent fills in
 both appearances. Controls retain 44-point targets and use Dynamic Type text;
 scan cards switch to a single column at accessibility text sizes. Save and category
 selection are sibling controls. Saved cards remain readable rather than dimmed.
+Flashcards use an explicit reveal button with a separate pronunciation action,
+subtle motion respecting Reduce Motion, and vertically stacked ratings at
+accessibility text sizes. Add Word places input and editable translation before
+secondary folder/category metadata.
 
 ## Non-obvious Constraints
 

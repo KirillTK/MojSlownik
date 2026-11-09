@@ -46,17 +46,25 @@ struct WordListView: View {
                                 ContentUnavailableView {
                                     Label("Нет подходящих слов", systemImage: "magnifyingglass")
                                 } description: {
-                                    Text("Попробуйте другую категорию или измените запрос.")
+                                    Text("Проверьте выбранную папку, категорию и поисковый запрос.")
+                                } actions: {
+                                    Button("Показать все слова") {
+                                        selectedFolderID = nil
+                                        selectedCategory = nil
+                                        searchText = ""
+                                    }
                                 }
                                 .listRowBackground(Color.clear)
                             }
                             ForEach(filteredWords) { word in
                                 WordRow(word: word)
-                                    .listRowBackground(Color.cardBackground)
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets(top: 12, leading: 24, bottom: 12, trailing: 24))
+                                    .listRowSeparatorTint(Color.appBorder.opacity(0.5))
                             }
                             .onDelete(perform: deleteWords)
                         }
-                        .listStyle(.insetGrouped)
+                        .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                     }
                     .searchable(text: $searchText, prompt: "Поиск слова")
@@ -65,7 +73,7 @@ struct WordListView: View {
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
-            .navigationTitle("Mój Słownik")
+            .navigationTitle("Словарь")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if selectedFolderID != nil {
@@ -84,7 +92,7 @@ struct WordListView: View {
                     Button {
                         showAddSheet = true
                     } label: {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus")
                             .font(.title3)
                     }
                     .accessibilityLabel("Добавить слово")
@@ -159,10 +167,7 @@ struct WordListView: View {
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
             .foregroundStyle(isSelected ? Color.appOnAccent : Color.appInk)
-            .background(isSelected ? Color.appAccent : Color.cardBackground, in: Capsule())
-            .overlay {
-                Capsule().strokeBorder(isSelected ? Color.appAccent : Color.appBorder, lineWidth: 1)
-            }
+            .background(isSelected ? Color.appAccent : Color.appSecondarySurface.opacity(0.55), in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(title), слов: \(count)")
@@ -193,7 +198,8 @@ private struct WordRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(word.polish)
-                    .font(.body.weight(.semibold))
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.appInk)
                 Text(word.russian)
                     .font(.subheadline)
                     .foregroundStyle(Color.subtleText)
@@ -207,10 +213,7 @@ private struct WordRow: View {
                             .font(.caption2.weight(.semibold))
                     }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.appAccent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.appSecondarySurface, in: Capsule())
+                    .foregroundStyle(Color.subtleText)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
@@ -239,7 +242,7 @@ private struct WordRow: View {
             Spacer(minLength: 0)
             PronounceButton(text: word.polish, language: .polish)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
         .errorAlert(title: "Не удалось изменить папку", error: $folderError)
     }
 }

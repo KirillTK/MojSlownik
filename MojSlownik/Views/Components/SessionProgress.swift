@@ -6,12 +6,15 @@ struct SessionProgress: View {
     var spacing: CGFloat = 20
 
     var body: some View {
-        VStack(spacing: spacing) {
-            ProgressView(value: Double(completed), total: Double(total))
-                .tint(.appAccent)
-            Text("\(completed + 1) из \(total)")
-                .font(.caption)
+        VStack(alignment: .leading, spacing: spacing) {
+            Text("Ответов: \(completed) из \(total)")
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color.subtleText)
+                .monospacedDigit()
+            ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                .tint(.appAccent)
+                .accessibilityLabel("Прогресс тренировки")
+                .accessibilityValue("Ответов: \(completed) из \(total)")
         }
     }
 }
