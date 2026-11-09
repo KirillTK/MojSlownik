@@ -90,13 +90,26 @@ struct FolderPicker: View {
                     Button("Готово") { showFolders = false }
                 }
             }
-            .alert("Новая папка", isPresented: $showCreateFolder) {
-                TextField("Например, Урок 1", text: $folderName)
-                Button("Отмена", role: .cancel) { }
-                Button("Создать") { createFolder() }
-                    .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            } message: {
-                Text("Слова можно добавлять в несколько папок.")
+            .navigationDestination(isPresented: $showCreateFolder) {
+                Form {
+                    Section("Название папки") {
+                        TextField("Например, Урок 1", text: $folderName)
+                            .textInputAutocapitalization(.sentences)
+                            .submitLabel(.done)
+                            .onSubmit { if !folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { createFolder() } }
+                    }
+                    if let creationError {
+                        Section { errorLabel(creationError) }
+                    }
+                }
+                .navigationTitle("Новая папка")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Создать") { createFolder() }
+                            .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
             }
         }
         .tint(Color.appAccent)
@@ -144,6 +157,7 @@ struct FolderPicker: View {
         do {
             selectedFolderID = try library.create(name: folderName, context: modelContext)
             creationError = nil
+            showCreateFolder = false
             showFolders = false
         } catch { creationError = error.localizedDescription }
     }

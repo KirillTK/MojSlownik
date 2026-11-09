@@ -67,7 +67,9 @@ remains persistent storage. Membership/deletion operations use isolated contexts
 creation uses the observed context. Names collapse whitespace and compare using
 canonical Unicode and lowercase to reject duplicates.
 
-Folder selection uses a dedicated sheet with a direct list and checkmarks. The
+Folder selection uses a dedicated sheet with a direct list and checkmarks.
+Creation opens a SwiftUI Form destination (not a native alert TextField); failures
+remain visible next to the entered name, and success selects the folder and closes the sheet. The
 catalog is loaded explicitly when opening a selector; it does not rely on a nested
 native Menu/Picker or on a per-view Query snapshot. Only the destination selection
 and presentation state stay local to each screen, preserving the no-folder default
