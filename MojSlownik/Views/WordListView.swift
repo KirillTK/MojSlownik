@@ -210,17 +210,17 @@ private struct WordRow: View {
     @State private var folderError: String?
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            if !dynamicTypeSize.isAccessibilitySize {
-                HStack(spacing: 12) {
-                    wordText.fixedSize(horizontal: true, vertical: false)
-                    Spacer(minLength: 0)
-                    wordActions.fixedSize(horizontal: true, vertical: false)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    wordText
+                    wordActions.frame(maxWidth: .infinity, alignment: .trailing)
                 }
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                wordText
-                wordActions.frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                HStack(spacing: 12) {
+                    wordText.frame(maxWidth: .infinity, alignment: .leading)
+                    wordActions.frame(width: 180)
+                }
             }
         }
         .padding(.vertical, 2)
@@ -255,7 +255,7 @@ private struct WordRow: View {
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Color.appAccent)
-                .frame(minWidth: 44, minHeight: 44)
+                .frame(minWidth: 44, maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
             }
             .accessibilityLabel("Категория слова \(word.polish): \(word.category.rawValue)")

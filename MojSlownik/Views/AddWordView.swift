@@ -120,18 +120,19 @@ struct AddWordView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
-                Text("\(detectedLanguage.flag) \(detectedLanguage.displayName)")
+                Text("\((speech.isBusy ? AppLanguage.polish : detectedLanguage).flag) \((speech.isBusy ? AppLanguage.polish : detectedLanguage).displayName)")
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(Color.appAccent.opacity(0.12))
                     .foregroundStyle(Color.appAccent)
                     .clipShape(Capsule())
-                    .opacity(draft.sourceText.isEmpty ? 0 : 1)
+                    .opacity(draft.sourceText.isEmpty && speech.draft.isEmpty ? 0 : 1)
             }
             HStack(alignment: .top) {
                 TextField("Введите слово…", text: Binding(
-                    get: { draft.sourceText }, set: { draft.setSource($0) }
+                    get: { speech.isBusy && !speech.draft.isEmpty ? speech.draft : draft.sourceText },
+                    set: { draft.setSource($0) }
                 ), axis: .vertical)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(Color.appInk)
@@ -216,7 +217,6 @@ struct AddWordView: View {
                     Button("Отменить запись") { speech.cancel() }
                         .frame(minHeight: 44)
                 }
-                if !speech.draft.isEmpty { Text(speech.draft) }
             }
             if let error = speech.errorMessage {
                 Label(error, systemImage: "mic.slash")
