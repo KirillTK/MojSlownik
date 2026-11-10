@@ -24,6 +24,10 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Камера нужна для сканирования слов и их добавления в словарь.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофон нужен, чтобы диктовать польские слова для добавления в словарь.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Распознавание нужно для ввода польских слов голосом. Речь может обрабатываться на серверах Apple.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

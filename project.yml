@@ -26,6 +26,8 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSCameraUsageDescription: Камера нужна для сканирования слов и их добавления в словарь.
+        NSMicrophoneUsageDescription: Микрофон нужен, чтобы диктовать польские слова для добавления в словарь.
+        NSSpeechRecognitionUsageDescription: Распознавание нужно для ввода польских слов голосом. Речь может обрабатываться на серверах Apple.
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

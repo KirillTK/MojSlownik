@@ -14,7 +14,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs, root `AppleTranslationHost`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation. |
-| Adding words | `Views/AddWordView.swift`: language detection, 600 ms translation debounce, manual editing, automatic/manual category selection, insertion through `modelContext`. |
+| Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
 | Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit bridge, line translation, compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. `Services/ScannedTextTokenizer.swift` separates words and punctuation. |
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to `FlashcardsView`/`QuizView`; `Stores/DailyStudyStore.swift`: local daily activity; `Services/SRSEngine.swift`: scheduling. |
@@ -41,6 +41,19 @@ Removing a folder preserves vocabulary, SRS and other folder memberships.
 `Word` → SwiftData → dictionary/training `@Query` updates. Pair fields always
 follow their languages regardless of input direction. These screens use the
 SwiftData context and autosaving, without a repository layer or explicit `save()`.
+
+**Voice input:** Add Word starts `SpeechRecognitionService` only from its
+microphone button. Native Speech/AVAudioEngine recognition uses Polish (`pl-PL`)
+and requests microphone/speech permissions at first use. Partial transcripts stay
+in an ephemeral draft; final or explicitly stopped recognition commits once to
+the editable source. `AddWordDraft` owns debounced translation and revision guards;
+identical dictated text also restarts a cancelled translation. Cancellation and
+failure preserve the typed pair and resume a missing translation when appropriate.
+Dismissal/background cancels capture; permission-dialog inactivity does not.
+Capture resources and stale callbacks are invalidated at every terminal state;
+Stop has a bounded finalization wait. Pronunciation reapplies playback audio
+configuration after capture. Audio may be processed by Apple; committed text
+uses the existing translation providers. No audio or transcript history is stored.
 
 **Scanning:** tap a recognized line → dismiss camera → present `ScanResultView`
 after 0.4 seconds → translate the line, then each unique word sequentially.
