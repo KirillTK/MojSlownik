@@ -20,8 +20,16 @@ ticket numbers, mode flags or a special plan-path argument.
    Do not store secrets or real user data in plans.
 3. Delegate planning to `feature-planner`, then use `feature-plan-reviewer`
    against real source, at most two passes. Scale plan detail to task complexity.
-4. Ask only material unresolved questions. Existing authorization is sufficient;
-   do not repeat approval requests or ask about E2E/browser testing.
+4. Resolve only material unanswered questions before finalizing the plan.
+5. Present the reviewed plan to the user before implementation. Summarize the
+   goal, acceptance criteria, files, approach, verification, risks and unresolved
+   decisions. Link the plan file. Ask the user to approve or request changes.
+6. Stop after presenting the plan. Do not delegate implementation, edit app or
+   test files, run builds/tests, or otherwise execute the plan until the user
+   explicitly approves it. The `$feature-flow` invocation itself is not approval.
+   If the user requests changes, revise and review the plan, show the updated
+   version, and wait for approval again. If the user declines, stop without
+   implementation. Do not ask about E2E/browser testing.
 
 ## Delegation
 
@@ -36,33 +44,33 @@ Models inherit the parent; do not use Claude model names or tools.
 
 ## Implementation
 
-5. Inspect git status and record the starting HEAD. Preserve existing changes;
+7. After approval, inspect git status and record the starting HEAD. Preserve existing changes;
    never stash, reset, discard or switch over unfinished work. No automatic fetch,
    commit, push or PR: these require user authorization.
-6. `feature-implementer` implements model/services before SwiftUI. Preserve iOS 17
+8. `feature-implementer` implements model/services before SwiftUI. Preserve iOS 17
    support and existing SwiftData records. Resolve contradictions with real code
    before continuing rather than blindly implementing an invalid plan.
-7. Do not create, update or run E2E, Playwright or XCUITest. Preserve existing
+9. Do not create, update or run E2E, Playwright or XCUITest. Preserve existing
    MojSlownikUITests and its target. Add committed XCTest unit tests for new or changed nontrivial logic and
    regression tests for bug fixes. Run them using the isolated MojSlownikUnitTests
    scheme; do not substitute temporary assertions or build-only checks.
 
 ## Verification and review
 
-8. Run xcodegen generate after adding source files or changing project.yml.
+10. Run xcodegen generate after adding source files or changing project.yml.
    Choose an installed iPhone simulator with xcrun simctl list devices available;
    run xcodebuild build using the project and scheme in AGENTS.md.
    Use DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer if needed.
    Run xcodebuild test with scheme MojSlownikUnitTests only; never run the
    application scheme's tests, which include UI tests.
-9. Run `feature-quality-reviewer` always; `feature-ui-reviewer` for SwiftUI;
+11. Run `feature-quality-reviewer` always; `feature-ui-reviewer` for SwiftUI;
    `feature-data-reviewer` for Word, SRS, persistence or translation data flows.
    Independent reviews may run concurrently within host limits. Include tracked
    diffs and new files, and distinguish pre-existing changes from this task.
-10. Merge confirmed findings with severity, path:line, failing scenario and fix.
+12. Merge confirmed findings with severity, path:line, failing scenario and fix.
     Delegate fixes to the implementer; at most two rounds.
     Rerun affected checks; report unresolved issues instead of claiming success.
-11. Provide a manual checklist for affected UI: ru/pl input, editable translation,
+13. Provide a manual checklist for affected UI: ru/pl input, editable translation,
     save, flashcards and quiz. OCR needs a physical iPhone: line translation,
     word/chip selection and preserved scan result after dismissing AddWordView.
     Never claim manual checks were performed unless actually performed.
