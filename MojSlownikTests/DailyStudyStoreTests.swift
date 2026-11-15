@@ -32,6 +32,7 @@ final class DailyStudyStoreTests: XCTestCase {
             let wordID = words[0].persistentModelID
             let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
             try store.review(.good, to: words[0], context: context, now: now)
+            XCTAssertEqual(words[0].knowledgeTier, 2)
             try store.record(wordID: wordID, grade: .good, now: now)
             XCTAssertEqual(store.progress(for: words, now: now), .init(completed: 1, remaining: 1))
             XCTAssertEqual(store.progress(for: words, now: now).fraction, 0.5)
@@ -42,6 +43,41 @@ final class DailyStudyStoreTests: XCTestCase {
             XCTAssertTrue(freshWords.contains { $0.persistentModelID == wordID })
             XCTAssertEqual(reloaded.progress(for: freshWords, now: now), .init(completed: 1, remaining: 1))
             XCTAssertEqual(freshWords.first { $0.persistentModelID == wordID }?.repetitions, 1)
+            XCTAssertEqual(freshWords.first { $0.persistentModelID == wordID }?.knowledgeTier, 2)
+        }
+    }
+
+    func testPracticeAnswerPersistsConfidenceAndSoftMissesWithoutChangingSRS() throws {
+        try withDefaults { defaults in
+            let (container, words) = try makeWords(1)
+            let word = words[0]
+            let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
+            word.knowledgeTier = 3
+            let originalEase = word.easeFactor
+            let originalInterval = word.intervalDays
+            let originalRepetitions = word.repetitions
+            let originalDueDate = word.dueDate
+
+            try store.recordPracticeAnswer(word: word,
+                                          answer: .typed(expected: "słowo", submitted: "słowx"),
+                                          context: container.mainContext, now: now)
+
+            XCTAssertEqual(word.consecutiveSoftMisses, 1)
+            XCTAssertEqual(word.knowledgeTier, 3)
+            XCTAssertEqual(word.easeFactor, originalEase)
+            XCTAssertEqual(word.intervalDays, originalInterval)
+            XCTAssertEqual(word.repetitions, originalRepetitions)
+            XCTAssertEqual(word.dueDate, originalDueDate)
+            XCTAssertEqual(store.answerTotals(for: words, now: now), .init(correct: 0, incorrect: 1))
+
+            let reloadedContext = ModelContext(container)
+            let reloadedWord = try XCTUnwrap(reloadedContext.fetch(FetchDescriptor<Word>()).first)
+            XCTAssertEqual(reloadedWord.consecutiveSoftMisses, 1)
+            try store.recordPracticeAnswer(word: reloadedWord,
+                                          answer: .typed(expected: "słowo", submitted: "słowx"),
+                                          context: reloadedContext, now: now)
+            XCTAssertEqual(reloadedWord.consecutiveSoftMisses, 0)
+            XCTAssertEqual(reloadedWord.knowledgeTier, 2)
         }
     }
 

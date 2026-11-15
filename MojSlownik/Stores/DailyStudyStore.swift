@@ -97,6 +97,25 @@ final class DailyStudyStore {
         defaults.set(data, forKey: Self.storageKey)
     }
 
+    @discardableResult
+    func recordPracticeAnswer(word: Word, answer: KnowledgeAnswer, context: ModelContext,
+                              isQuiz: Bool = false, now: Date = .now) throws -> KnowledgeProgressService.Assessment {
+        let isCorrect = KnowledgeProgressService.isCorrect(answer)
+        let next = nextActivity(wordID: word.persistentModelID, isCorrect: isCorrect, isQuiz: isQuiz, now: now)
+        let data = try JSONEncoder().encode(next)
+        let previous = (word.knowledgeTier, word.consecutiveSoftMisses)
+        let assessment = KnowledgeProgressService.apply(answer, to: word)
+        do {
+            try context.save()
+        } catch {
+            (word.knowledgeTier, word.consecutiveSoftMisses) = previous
+            throw error
+        }
+        activity = next
+        defaults.set(data, forKey: Self.storageKey)
+        return assessment
+    }
+
     func record(wordID: PersistentIdentifier, grade: ReviewGrade, now: Date = .now) throws {
         let next = nextActivity(wordID: wordID, isCorrect: grade != .again, isQuiz: false, now: now)
         let data = try JSONEncoder().encode(next)
@@ -110,11 +129,14 @@ final class DailyStudyStore {
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: grade != .again, isQuiz: false, now: now)
         let data = try JSONEncoder().encode(next)
         let previous = (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue)
+        let previousKnowledge = (word.knowledgeTier, word.consecutiveSoftMisses)
+        KnowledgeProgressService.setTier(from: grade, on: word)
         SRSEngine.apply(grade, to: word, now: now)
         do {
             try context.save()
         } catch {
             (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue) = previous
+            (word.knowledgeTier, word.consecutiveSoftMisses) = previousKnowledge
             throw error
         }
         activity = next

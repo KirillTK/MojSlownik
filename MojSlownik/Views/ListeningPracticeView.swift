@@ -3,6 +3,7 @@ import SwiftData
 
 struct ListeningPracticeView: View {
     var folderID: UUID? = nil
+    @Environment(\.modelContext) private var modelContext
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Query private var allWords: [Word]
 
@@ -235,9 +236,17 @@ struct ListeningPracticeView: View {
     private func submit(_ answer: String, for question: ListeningQuestion) {
         guard submittedAnswer == nil else { return }
         answerFocused = false
-        let isCorrect = ListeningQuestion.matches(answer, correctAnswer: question.correctAnswer)
+        guard let word = allWords.first(where: { $0.persistentModelID == question.wordID }) else {
+            answerError = "Слово больше не найдено в словаре."
+            return
+        }
+        let knowledgeAnswer: KnowledgeAnswer = question.mode == .choices
+            ? .choice(isCorrect: answer == question.correctAnswer)
+            : .typed(expected: question.correctAnswer, submitted: answer)
+        let isCorrect = KnowledgeProgressService.isCorrect(knowledgeAnswer)
         do {
-            try dailyStudy.recordQuizAnswer(wordID: question.wordID, isCorrect: isCorrect)
+            try dailyStudy.recordPracticeAnswer(word: word, answer: knowledgeAnswer,
+                                                context: modelContext, isQuiz: true)
         } catch {
             answerError = error.localizedDescription
             return

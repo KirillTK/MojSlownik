@@ -36,17 +36,11 @@ struct ListeningQuestion {
     }
 
     static func mode(for word: Word) -> ListeningAnswerMode {
-        if let rawValue = word.lastReviewGradeRawValue,
-           let grade = ReviewGrade(rawValue: rawValue) {
-            switch grade {
-            case .again, .hard: return .choices
-            case .good: return .translation
-            case .easy: return .dictation
-            }
+        return switch KnowledgeProgressService.tier(for: word) {
+        case 0...1: .choices
+        case 2: .translation
+        default: .dictation
         }
-
-        if word.repetitions == 0 || word.easeFactor < 2.5 { return .choices }
-        return word.easeFactor > 2.5 ? .dictation : .translation
     }
 
     static func matches(_ answer: String, correctAnswer: String) -> Bool {

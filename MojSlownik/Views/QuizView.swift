@@ -3,6 +3,7 @@ import SwiftData
 
 struct QuizView: View {
     var folderID: UUID? = nil
+    @Environment(\.modelContext) private var modelContext
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Query private var allWords: [Word]
 
@@ -123,8 +124,13 @@ struct QuizView: View {
     private func select(_ option: String, in question: QuizQuestion) {
         guard selectedAnswer == nil else { return }
         let isCorrect = option == question.correctAnswer
+        guard let word = allWords.first(where: { $0.persistentModelID == question.wordID }) else {
+            answerError = "Слово больше не найдено в словаре."
+            return
+        }
         do {
-            try dailyStudy.recordQuizAnswer(wordID: question.wordID, isCorrect: isCorrect)
+            try dailyStudy.recordPracticeAnswer(word: word, answer: .choice(isCorrect: isCorrect),
+                                                context: modelContext, isQuiz: true)
         } catch {
             answerError = error.localizedDescription
             return

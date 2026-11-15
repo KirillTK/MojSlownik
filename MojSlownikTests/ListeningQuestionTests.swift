@@ -17,6 +17,18 @@ final class ListeningQuestionTests: XCTestCase {
         XCTAssertEqual(ListeningQuestion.mode(for: word), .dictation)
     }
 
+    func testConfidenceTierSelectsListeningFormatAcrossAllLevels() {
+        let word = makeWord("дом", "dom")
+        for tier in 0...1 {
+            word.knowledgeTier = tier
+            XCTAssertEqual(ListeningQuestion.mode(for: word), .choices)
+        }
+        word.knowledgeTier = 2
+        XCTAssertEqual(ListeningQuestion.mode(for: word), .translation)
+        word.knowledgeTier = 3
+        XCTAssertEqual(ListeningQuestion.mode(for: word), .dictation)
+    }
+
     func testLegacyWordsUseTheirExistingSRSState() {
         let newWord = makeWord("дом", "dom")
         XCTAssertEqual(ListeningQuestion.mode(for: newWord), .choices)
