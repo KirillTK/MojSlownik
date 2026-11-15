@@ -111,6 +111,13 @@ struct TrainingView: View {
                 modeRow(title: "Викторина", subtitle: words.count >= 4 ? "Выбрать правильный ответ" : "Нужно минимум 4 слова", icon: "checklist")
             }
             .disabled(words.count < 4)
+            Divider().overlay(Color.appBorder.opacity(0.5))
+            NavigationLink {
+                ListeningPracticeView(folderID: selectedFolderID)
+            } label: {
+                modeRow(title: "На слух", subtitle: "Слушать и писать по-польски", icon: "ear")
+            }
+            .disabled(words.isEmpty)
         }
         .buttonStyle(.plain)
     }

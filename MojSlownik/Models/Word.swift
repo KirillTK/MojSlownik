@@ -15,6 +15,7 @@ final class Word {
     var intervalDays: Double
     var repetitions: Int
     var dueDate: Date
+    var lastReviewGradeRawValue: String? = nil
 
     init(russian: String, polish: String, sourceLanguage: AppLanguage, createdAt: Date = .now, category: WordCategory? = nil) {
         self.russian = russian.lowercased()

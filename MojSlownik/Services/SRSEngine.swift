@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum ReviewGrade: CaseIterable {
+enum ReviewGrade: String, CaseIterable {
     case again, hard, good, easy
 
     var title: String {
@@ -26,6 +26,7 @@ enum ReviewGrade: CaseIterable {
 /// Упрощённый SM-2 (как в Anki): каждый ответ двигает интервал и дату следующего показа.
 enum SRSEngine {
     static func apply(_ grade: ReviewGrade, to word: Word, now: Date = .now) {
+        word.lastReviewGradeRawValue = grade.rawValue
         switch grade {
         case .again:
             word.repetitions = 0

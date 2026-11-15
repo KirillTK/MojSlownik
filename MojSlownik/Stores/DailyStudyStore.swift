@@ -109,12 +109,12 @@ final class DailyStudyStore {
         // Encoding is prepared first so a serialization failure cannot leave a half-recorded review.
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: grade != .again, isQuiz: false, now: now)
         let data = try JSONEncoder().encode(next)
-        let previous = (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate)
+        let previous = (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue)
         SRSEngine.apply(grade, to: word, now: now)
         do {
             try context.save()
         } catch {
-            (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate) = previous
+            (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue) = previous
             throw error
         }
         activity = next

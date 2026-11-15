@@ -12,12 +12,12 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | --- | --- |
 | Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder and daily-study stores, and presents `RootTabView`. |
 | Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs, root `AppleTranslationHost`. |
-| Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date and SRS state; alongside the `WordFolder` model for custom study packs. |
+| Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
 | Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit bridge, line translation, compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. `Services/ScannedTextTokenizer.swift` separates words and punctuation. |
-| Practice | `Views/TrainingView.swift`: daily progress and entry points to `FlashcardsView`/`QuizView`; `Stores/DailyStudyStore.swift`: local daily activity; `Services/SRSEngine.swift`: scheduling. |
+| Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by the last card grade; `Stores/DailyStudyStore.swift`: local daily activity; `Services/SRSEngine.swift`: scheduling and last card grade. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
 | Build | Root `project.yml`: XcodeGen, application and `MojSlownikUITests`, iOS 17.0, Swift 5.9. |
 
@@ -78,7 +78,12 @@ saved words), in the add form, or through the dictionary row's category menu.
 A horizontal category/count strip filters the dictionary alongside text search.
 
 **Practice:** scoped session snapshot → reveal answer → rating → apply SRS and
-explicitly save the same `Word` → record daily activity. `DailyStudyStore.review`
+explicitly save the same `Word` → record daily activity. The saved card grade
+selects the listening practice format: Again/Hard plays a Polish word for
+four-choice recognition, Good asks for Polish spelling from a Russian prompt,
+and Easy plays the Polish word and asks for its spelling. Existing records
+without a saved grade use their SRS state as an initial tier. Listening answers count in daily statistics but
+do not alter SRS or the saved card grade. `DailyStudyStore.review`
 restores only that word's prior SRS fields if saving fails; the screen reports the
 failure and does not advance. Each quiz question carries its source word's stable
 identifier. Selecting an answer first persists daily activity, then updates local
