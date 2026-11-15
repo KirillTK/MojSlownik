@@ -42,6 +42,10 @@ extension Color {
         dark: UIColor(red: 0.349, green: 0.306, blue: 0.408, alpha: 1)
     )
     static let appSuccess = appAccent
+    static let appMastery = Color(
+        light: UIColor(red: 0.176, green: 0.494, blue: 0.337, alpha: 1),
+        dark: UIColor(red: 0.545, green: 0.827, blue: 0.659, alpha: 1)
+    )
     static let appError = Color(
         light: UIColor(red: 0.608, green: 0.180, blue: 0.275, alpha: 1),
         dark: UIColor(red: 0.984, green: 0.659, blue: 0.710, alpha: 1)

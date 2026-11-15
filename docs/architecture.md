@@ -13,7 +13,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder and daily-study stores, and presents `RootTabView`. |
 | Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs, root `AppleTranslationHost`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
-| Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation. |
+| Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
 | Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit bridge, line translation, compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. `Services/ScannedTextTokenizer.swift` separates words and punctuation. |

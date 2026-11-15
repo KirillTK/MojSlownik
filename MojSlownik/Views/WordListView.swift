@@ -229,6 +229,10 @@ private struct WordRow: View {
 
     private var wordText: some View {
         VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Spacer(minLength: 0)
+                KnowledgeTierBadge(word: word, level: KnowledgeProgressService.tier(for: word))
+            }
             Text(word.polish)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color.appInk)

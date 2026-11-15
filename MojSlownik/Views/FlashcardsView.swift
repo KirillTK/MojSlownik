@@ -77,6 +77,15 @@ struct FlashcardsView: View {
         let shownText = word.text(in: shownLanguage)
 
         return VStack(spacing: 12) {
+            HStack {
+                Spacer(minLength: 0)
+                KnowledgeTierBadge(word: word,
+                                  level: KnowledgeProgressService.tier(for: word),
+                                  hidesWordInAccessibilityLabel: shownLanguage == .russian)
+            }
+            .padding(.top, 24)
+            .padding(.horizontal, 24)
+
             Button {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                     isFlipped.toggle()

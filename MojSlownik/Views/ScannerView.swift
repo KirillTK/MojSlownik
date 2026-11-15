@@ -216,6 +216,15 @@ struct ScanResultView: View {
         let existing = existingWord(word)
         let isSaved = savedOverrides[word] ?? isIncluded(existing)
         return VStack(alignment: .leading, spacing: 0) {
+            if let existing {
+                HStack {
+                    Spacer(minLength: 0)
+                    KnowledgeTierBadge(word: existing, level: KnowledgeProgressService.tier(for: existing))
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 2)
+            }
             Button {
                 if wordErrors[word] != nil {
                     wordErrors[word] = nil

@@ -56,6 +56,14 @@ struct QuizView: View {
                 SessionProgress(completed: currentIndex + (selectedAnswer == nil ? 0 : 1), total: questions.count)
 
                 VStack(spacing: 16) {
+                    if let word = allWords.first(where: { $0.persistentModelID == question.wordID }) {
+                        HStack {
+                            Spacer(minLength: 0)
+                            KnowledgeTierBadge(word: word,
+                                              level: KnowledgeProgressService.tier(for: word),
+                                              hidesWordInAccessibilityLabel: question.promptLanguage == .russian)
+                        }
+                    }
                     Text("Как переводится")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(Color.subtleText)
