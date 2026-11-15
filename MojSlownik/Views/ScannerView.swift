@@ -2,14 +2,32 @@ import SwiftUI
 import SwiftData
 import VisionKit
 import AVFoundation
+import UIKit
 
 /// Экран сканера: живая камера, распознанный текст подсвечивается,
 /// тап по строке → экран результата с переводом и выбором отдельных слов.
 struct ScannerScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var onPick: (String) -> Void
 
     @State private var cameraAuthorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+    @State private var recognizedLines: [ScannedTextLine] = []
+    @State private var frozenLines: [ScannedTextLine] = []
+    @State private var frozenBlocks: [ScannedTextBlock] = []
+    @State private var capturedPhoto: UIImage?
+    @State private var captureRequestID = 0
+    @State private var isCapturingPhoto = false
+    @State private var captureError: String?
+    @State private var selectedBlockIDs = Set<String>()
+
+    private var activeLines: [ScannedTextLine] {
+        capturedPhoto == nil ? recognizedLines : frozenLines
+    }
+
+    private var selectedBlockText: String {
+        ScannedTextBlockBuilder.selectedText(from: frozenBlocks, IDs: selectedBlockIDs)
+    }
 
     private var scannerSupported: Bool {
         DataScannerViewController.isSupported && DataScannerViewController.isAvailable
@@ -17,8 +35,37 @@ struct ScannerScreen: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            if cameraAuthorized && scannerSupported {
-                DataScannerRepresentable(onPick: onPick)
+            if let capturedPhoto {
+                GeometryReader { geometry in
+                    ZStack(alignment: .topLeading) {
+                        Image(uiImage: capturedPhoto)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                            .accessibilityHidden(true)
+                        FrozenBlockOverlay(blocks: frozenBlocks, selectedIDs: selectedBlockIDs) { blockID in
+                            selectedBlockIDs = ScannedTextBlockBuilder.toggled(blockID, in: selectedBlockIDs)
+                        }
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .ignoresSafeArea()
+            } else if cameraAuthorized && scannerSupported {
+                DataScannerRepresentable(
+                    onPick: onPick,
+                    onRecognized: { recognizedLines = $0 },
+                    captureRequestID: captureRequestID,
+                    onCapturePhoto: { capturedPhoto = $0 },
+                    onCapturedLines: {
+                        frozenLines = $0
+                        frozenBlocks = ScannedTextBlockBuilder.build(from: $0)
+                        selectedBlockIDs.removeAll()
+                    },
+                    onCaptureFinished: { isCapturingPhoto = false },
+                    onCaptureFailed: { captureError = $0 }
+                )
                     .ignoresSafeArea()
             } else {
                 unavailableView
@@ -43,10 +90,11 @@ struct ScannerScreen: View {
                     .accessibilityLabel("Закрыть сканер")
                 }
                 if cameraAuthorized && scannerSupported {
-                    Text("Наведите камеру на текст и коснитесь строки")
-                        .font(.subheadline.weight(.medium))
+                    Text(instructionText)
+                        .font(.caption.weight(.medium))
                         .multilineTextAlignment(.center)
-                        .padding(14)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
@@ -54,12 +102,106 @@ struct ScannerScreen: View {
             .foregroundStyle(.primary)
             .padding(20)
         }
+        .overlay(alignment: .bottom) {
+            if cameraAuthorized && scannerSupported { scannerControlBar }
+        }
         .background((cameraAuthorized && scannerSupported ? Color.black : Color.appBackground).ignoresSafeArea())
+        .errorAlert(title: "Не удалось обработать кадр", error: $captureError)
         .task {
             if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
                 cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
             }
         }
+    }
+
+    private var instructionText: String {
+        guard capturedPhoto != nil else { return "Коснитесь строки или зафиксируйте кадр" }
+        if isCapturingPhoto { return "Распознаём текст на кадре…" }
+        if frozenLines.isEmpty { return "Текст не распознан. Снимите кадр заново." }
+        return "Нажимайте на блоки, чтобы выбрать текст"
+    }
+
+    private var scannerControlBar: some View {
+        VStack(spacing: 6) {
+            if capturedPhoto != nil {
+                if isCapturingPhoto {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Распознаём текст на кадре…")
+                            .font(.caption.weight(.medium))
+                    }
+                    .frame(minHeight: 44)
+                } else {
+                    HStack(spacing: 10) {
+                        Text("Выбрано: \(selectedBlockIDs.count)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.appInk)
+                        Button {
+                            if !selectedBlockText.isEmpty { onPick(selectedBlockText) }
+                        } label: {
+                            Label("Перевести выбранное", systemImage: "text.magnifyingglass")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(minHeight: 44)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.appAccent)
+                        .foregroundStyle(Color.appOnAccent)
+                        .disabled(selectedBlockIDs.isEmpty)
+                        .accessibilityHint("Перевести выбранные текстовые блоки по порядку чтения")
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                compactControl(
+                    title: "Всё",
+                    accessibilityTitle: "Перевести весь текст",
+                    symbol: "text.viewfinder",
+                    enabled: !ScannedTextSelection.text(from: activeLines).isEmpty
+                ) {
+                    let text = ScannedTextSelection.text(from: activeLines)
+                    if !text.isEmpty { onPick(text) }
+                }
+                compactControl(
+                    title: isCapturingPhoto ? "Снимок…" : (capturedPhoto == nil ? "Стоп-кадр" : "Переснять"),
+                    accessibilityTitle: capturedPhoto == nil ? "Зафиксировать кадр" : "Снять заново",
+                    symbol: capturedPhoto == nil ? "camera" : "camera.rotate",
+                    enabled: !isCapturingPhoto && (capturedPhoto != nil || cameraAuthorized && scannerSupported)
+                ) {
+                    if capturedPhoto != nil {
+                        capturedPhoto = nil
+                        frozenLines = []
+                        frozenBlocks = []
+                        selectedBlockIDs.removeAll()
+                        recognizedLines = []
+                    } else {
+                        isCapturingPhoto = true
+                        captureRequestID += 1
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.bottom, 12)
+    }
+
+    private func compactControl(title: String, accessibilityTitle: String, symbol: String,
+                                enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(dynamicTypeSize.isAccessibilitySize ? "" : title, systemImage: symbol)
+                .font(.subheadline.weight(.medium))
+                .frame(minWidth: 44, minHeight: 44)
+                .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 64 : .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.regularMaterial, in: Capsule())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
+        .accessibilityLabel(accessibilityTitle)
     }
 
     private var unavailableView: some View {
@@ -462,8 +604,62 @@ private struct SelectedWord: Identifiable {
     let text: String
 }
 
+private struct FrozenBlockOverlay: View {
+    let blocks: [ScannedTextBlock]
+    let selectedIDs: Set<String>
+    let onToggle: (String) -> Void
+
+    var body: some View {
+        GeometryReader { _ in
+            ZStack {
+                ForEach(blocks) { block in
+                    let selected = selectedIDs.contains(block.id)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(selected ? Color.appAccent.opacity(0.22) : Color.white.opacity(0.04))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(selected ? Color.appAccent : Color.white.opacity(0.85), lineWidth: selected ? 3 : 1.5)
+                        }
+                        .frame(width: block.bounds.width, height: block.bounds.height)
+                        .overlay(alignment: .topTrailing) {
+                            if selected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.appAccent)
+                                    .background(.white, in: Circle())
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                        .position(x: block.bounds.midX, y: block.bounds.midY)
+                        .allowsHitTesting(false)
+
+                    Button {
+                        onToggle(block.id)
+                    } label: {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .frame(width: max(44, block.bounds.width), height: max(44, block.bounds.height))
+                    }
+                    .buttonStyle(.plain)
+                    .position(x: block.bounds.midX, y: block.bounds.midY)
+                    .accessibilityLabel(block.text)
+                    .accessibilityValue(selected ? "Выбрано" : "Не выбрано")
+                    .accessibilityHint("Нажмите, чтобы изменить выбор блока")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
 private struct DataScannerRepresentable: UIViewControllerRepresentable {
     var onPick: (String) -> Void
+    var onRecognized: ([ScannedTextLine]) -> Void
+    var captureRequestID: Int
+    var onCapturePhoto: (UIImage) -> Void
+    var onCapturedLines: ([ScannedTextLine]) -> Void
+    var onCaptureFinished: () -> Void
+    var onCaptureFailed: (String) -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         // Польский и русский; если системе языки неизвестны, Vision использует базовый набор.
@@ -485,8 +681,14 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: DataScannerViewController, context: Context) {
-        if !controller.isScanning {
-            try? controller.startScanning()
+        if captureRequestID > context.coordinator.lastCaptureRequestID {
+            context.coordinator.lastCaptureRequestID = captureRequestID
+            context.coordinator.capturePhoto(from: controller)
+        } else if !context.coordinator.isCapturingPhoto {
+            context.coordinator.isFrozen = false
+            if !controller.isScanning {
+                try? controller.startScanning()
+            }
         }
     }
 
@@ -495,18 +697,87 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
+        Coordinator(onPick: onPick, onRecognized: onRecognized, captureRequestID: captureRequestID,
+                    onCapturePhoto: onCapturePhoto, onCapturedLines: onCapturedLines,
+                    onCaptureFinished: onCaptureFinished, onCaptureFailed: onCaptureFailed)
     }
 
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         let onPick: (String) -> Void
+        let onRecognized: ([ScannedTextLine]) -> Void
+        let onCapturePhoto: (UIImage) -> Void
+        let onCapturedLines: ([ScannedTextLine]) -> Void
+        let onCaptureFinished: () -> Void
+        let onCaptureFailed: (String) -> Void
+        private var recognizedLines: [ScannedTextLine] = []
+        fileprivate var lastCaptureRequestID: Int
+        fileprivate var isCapturingPhoto = false
+        fileprivate var isFrozen = false
 
-        init(onPick: @escaping (String) -> Void) {
+        init(onPick: @escaping (String) -> Void, onRecognized: @escaping ([ScannedTextLine]) -> Void,
+             captureRequestID: Int, onCapturePhoto: @escaping (UIImage) -> Void,
+             onCapturedLines: @escaping ([ScannedTextLine]) -> Void,
+             onCaptureFinished: @escaping () -> Void, onCaptureFailed: @escaping (String) -> Void) {
             self.onPick = onPick
+            self.onRecognized = onRecognized
+            self.lastCaptureRequestID = captureRequestID
+            self.onCapturePhoto = onCapturePhoto
+            self.onCapturedLines = onCapturedLines
+            self.onCaptureFinished = onCaptureFinished
+            self.onCaptureFailed = onCaptureFailed
+        }
+
+        func capturePhoto(from scanner: DataScannerViewController) {
+            guard !isCapturingPhoto else { return }
+            isCapturingPhoto = true
+            let viewportSize = scanner.view.bounds.size
+            Task { @MainActor in
+                defer {
+                    isCapturingPhoto = false
+                    onCaptureFinished()
+                }
+                do {
+                    let photo = try await scanner.capturePhoto()
+                    isFrozen = true
+                    scanner.stopScanning()
+                    onCapturePhoto(photo)
+                    let lines = try await ScannedImageTextRecognizer.recognize(image: photo, viewportSize: viewportSize)
+                    onCapturedLines(lines)
+                } catch {
+                    onCaptureFailed(error.localizedDescription)
+                }
+            }
+        }
+
+        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+            publishTextItems(allItems)
+        }
+
+        func dataScanner(_ dataScanner: DataScannerViewController, didUpdate updatedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+            publishTextItems(allItems)
+        }
+
+        func dataScanner(_ dataScanner: DataScannerViewController, didRemove removedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+            publishTextItems(allItems)
+        }
+
+        private func publishTextItems(_ items: [RecognizedItem]) {
+            guard !isFrozen else { return }
+            recognizedLines = items.compactMap { item in
+                guard case .text(let text) = item else { return nil }
+                let corners = [text.bounds.topLeft, text.bounds.topRight, text.bounds.bottomLeft, text.bounds.bottomRight]
+                let xs = corners.map(\.x)
+                let ys = corners.map(\.y)
+                let bounds = CGRect(x: xs.min() ?? 0, y: ys.min() ?? 0,
+                                    width: (xs.max() ?? 0) - (xs.min() ?? 0),
+                                    height: (ys.max() ?? 0) - (ys.min() ?? 0))
+                return ScannedTextLine(id: item.id, text: text.transcript, bounds: bounds)
+            }
+            onRecognized(recognizedLines)
         }
 
         func dataScanner(_ dataScanner: DataScannerViewController, didTapOn item: RecognizedItem) {
-            if case .text(let text) = item {
+            if case .text(let text) = item, recognizedLines.contains(where: { $0.id == item.id }) {
                 onPick(text.transcript)
             }
         }
