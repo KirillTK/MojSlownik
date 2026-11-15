@@ -32,6 +32,42 @@ final class FolderStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testMembershipChangesUpdateObservedContextAndPersistImmediately() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let folder = try FolderStore.create(name: "Урок 1", context: context)
+        let word = try insertWord(in: container)
+        let observedWord = try XCTUnwrap(context.fetch(FetchDescriptor<Word>()).first)
+
+        try FolderStore.setMembership(wordID: observedWord.persistentModelID, folderID: folder.id,
+                                      included: true, context: context)
+
+        XCTAssertEqual(observedWord.folderIDs, [folder.id])
+        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<Word>()).first?.folderIDs, [folder.id])
+        XCTAssertEqual(word.persistentModelID, observedWord.persistentModelID)
+    }
+
+    @MainActor
+    func testRemoveFromAllFoldersPreservesWordAndStudyProgress() throws {
+        let container = try makeContainer()
+        let first = try FolderStore.create(name: "Урок 1", container: container)
+        let second = try FolderStore.create(name: "Урок 2", container: container)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: first.id, included: true, container: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: second.id, included: true, container: container)
+        let context = ModelContext(container)
+        let observedWord = try XCTUnwrap(context.fetch(FetchDescriptor<Word>()).first)
+
+        try FolderStore.removeFromAllFolders(wordID: observedWord.persistentModelID, context: context)
+
+        XCTAssertTrue(observedWord.folderIDs.isEmpty)
+        let saved = try XCTUnwrap(ModelContext(container).fetch(FetchDescriptor<Word>()).first)
+        XCTAssertTrue(saved.folderIDs.isEmpty)
+        XCTAssertEqual(saved.polish, "woda")
+        assertProgress(saved)
+    }
+
+    @MainActor
     func testDeletingFolderPreservesVocabularyOtherMembershipAndSRS() throws {
         let container = try makeContainer()
         let first = try FolderStore.create(name: "Урок 1", container: container)

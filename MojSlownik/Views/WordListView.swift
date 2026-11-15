@@ -262,12 +262,21 @@ private struct WordRow: View {
             .accessibilityHint("Выбрать другую категорию")
             if !folderLibrary.options.isEmpty {
                 Menu {
+                    if !word.folderIDs.isEmpty {
+                        Button(role: .destructive) {
+                            do {
+                                try FolderStore.removeFromAllFolders(wordID: word.persistentModelID, context: modelContext)
+                            } catch { folderError = error.localizedDescription }
+                        } label: {
+                            Label("Убрать из всех папок", systemImage: "folder.badge.minus")
+                        }
+                    }
                     ForEach(folderLibrary.options) { folder in
                         let included = word.folderIDs.contains(folder.id)
                         Button {
                             do {
                                 try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
-                                                              included: !included, container: modelContext.container)
+                                                              included: !included, context: modelContext)
                             } catch { folderError = error.localizedDescription }
                         } label: {
                             Label(folder.name, systemImage: included ? "checkmark" : "folder")

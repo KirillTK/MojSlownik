@@ -64,14 +64,30 @@ enum FolderStore {
                               included: Bool, container: ModelContainer) throws {
         let context = ModelContext(container)
         context.autosaveEnabled = false
+        try setMembership(wordID: wordID, folderID: folderID, included: included, context: context)
+    }
+
+    static func setMembership(wordID: PersistentIdentifier, folderID: UUID,
+                              included: Bool, context: ModelContext) throws {
         try requireFolder(folderID, in: context)
         let words = try context.fetch(FetchDescriptor<Word>())
         guard let word = words.first(where: { $0.persistentModelID == wordID }) else {
             throw StoreError.missingWord
         }
+        let previousFolderIDs = word.folderIDs
         word.folderIDs.removeAll { $0 == folderID }
         if included { word.folderIDs.append(folderID) }
-        try save(context)
+        try saveMembership(context, word: word, previousFolderIDs: previousFolderIDs)
+    }
+
+    static func removeFromAllFolders(wordID: PersistentIdentifier, context: ModelContext) throws {
+        let words = try context.fetch(FetchDescriptor<Word>())
+        guard let word = words.first(where: { $0.persistentModelID == wordID }) else {
+            throw StoreError.missingWord
+        }
+        let previousFolderIDs = word.folderIDs
+        word.folderIDs.removeAll()
+        try saveMembership(context, word: word, previousFolderIDs: previousFolderIDs)
     }
 
     static func words(_ words: [Word], in folderID: UUID?) -> [Word] {
@@ -89,6 +105,15 @@ enum FolderStore {
         do { try context.save() }
         catch {
             context.rollback()
+            throw error
+        }
+    }
+
+    private static func saveMembership(_ context: ModelContext, word: Word,
+                                       previousFolderIDs: [UUID]) throws {
+        do { try context.save() }
+        catch {
+            word.folderIDs = previousFolderIDs
             throw error
         }
     }
