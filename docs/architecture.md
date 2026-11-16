@@ -62,9 +62,13 @@ removes its SRS progress; re-adding starts a new record. `Services/ScanWordStore
 uses a fresh context for each operation, normalizes pair lookup with `Word.matches`,
 and rolls back only that operation on failure. It does not save or roll back unrelated
 pending edits in the screen context.
-The source is a plain paragraph preserving punctuation. An explicit word-correction
-menu opens `AddWordView(initialText:)`; scan translation pauses
-while that sheet is open and resumes on dismissal. Closing either screen cancels its
+The source is an editable multiline field preserving punctuation. On first display,
+OCR line-wrap hyphenation is joined only for an ASCII or soft hyphen directly between
+letters across LF/CRLF; compound hyphens and dash punctuation remain untouched.
+Edits debounce a new sequential translation and invalidate older requests by revision,
+so late results cannot replace the current text or loading state. An explicit
+word-correction menu opens `AddWordView(initialText:)`; scan translation pauses while
+that sheet is open and resumes on dismissal. Closing either screen cancels its
 translation work. Translation failures can be retried.
 
 **Categories:** `Services/WordCategory.swift` assigns one of seven topics using

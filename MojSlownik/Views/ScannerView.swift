@@ -231,28 +231,21 @@ struct ScanResultView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var savedWords: [Word]
-    @State private var translatedText = ""
-    @State private var isTranslating = false
-    @State private var translationError: String?
+    @State private var draft: ScanResultDraft
     @State private var selectedWord: SelectedWord?
-    @State private var translations: [String: String] = [:]
-    @State private var wordErrors: [String: String] = [:]
     @State private var saveErrors: [String: String] = [:]
-    @State private var retryVersion = 0
     @State private var categoryOverrides: [String: WordCategory] = [:]
     @State private var selectedFolderID: UUID?
     @State private var savedOverrides: [String: Bool] = [:]
 
-    private var words: [String] {
-        var seen = Set<String>()
-        return ScannedTextTokenizer.words(in: scannedText).filter {
-            seen.insert(normalize($0)).inserted
-        }
+    init(scannedText: String) {
+        self.scannedText = scannedText
+        _draft = State(initialValue: ScanResultDraft(
+            sourceText: ScannedTextTokenizer.joiningLineBreakHyphenation(in: scannedText)
+        ))
     }
 
-    private var translationRequestID: String {
-        "\(scannedText)-\(retryVersion)-\(selectedWord?.id.uuidString ?? "")"
-    }
+    private var words: [String] { draft.words }
 
     var body: some View {
         NavigationStack {
@@ -283,13 +276,26 @@ struct ScanResultView: View {
             .sheet(item: $selectedWord, onDismiss: {
                 savedOverrides.removeAll()
                 categoryOverrides.removeAll()
+                draft.startTranslationIfNeeded()
             }) { selection in
                 AddWordView(initialText: selection.text, initialFolderID: selectedFolderID)
             }
             .onChange(of: selectedFolderID) { savedOverrides.removeAll() }
-            .task(id: translationRequestID) {
-                guard selectedWord == nil else { return }
-                await translateContent()
+            .onChange(of: draft.sourceText) {
+                savedOverrides.removeAll()
+                categoryOverrides.removeAll()
+                saveErrors.removeAll()
+            }
+            .onChange(of: selectedWord) {
+                if selectedWord != nil {
+                    draft.cancelTranslation()
+                }
+            }
+            .task {
+                draft.startTranslationIfNeeded()
+            }
+            .onDisappear {
+                draft.cancelTranslation()
             }
         }
     }
@@ -299,13 +305,19 @@ struct ScanResultView: View {
             Label("Оригинал", systemImage: "text.viewfinder")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.subtleText)
-            Text(scannedText)
+            TextEditor(text: Binding(
+                get: { draft.sourceText },
+                set: { draft.setSource($0) }
+            ))
                 .font(.body)
                 .foregroundStyle(Color.appInk)
-                .lineSpacing(4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+                .frame(minHeight: 120, alignment: .topLeading)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .accessibilityIdentifier("scanOriginalText")
+                .accessibilityLabel("Оригинал распознавания")
+                .accessibilityHint("Исправьте распознанный текст перед переводом")
             if !words.isEmpty {
                 Menu {
                     ForEach(words, id: \.self) { word in
@@ -354,7 +366,7 @@ struct ScanResultView: View {
     }
 
     private func wordChip(_ word: String, index: Int) -> some View {
-        let translation = translations[word]
+        let translation = draft.translations[word]
         let existing = existingWord(word)
         let isSaved = savedOverrides[word] ?? isIncluded(existing)
         return VStack(alignment: .leading, spacing: 0) {
@@ -368,9 +380,8 @@ struct ScanResultView: View {
                 .padding(.bottom, 2)
             }
             Button {
-                if wordErrors[word] != nil {
-                    wordErrors[word] = nil
-                    retryVersion += 1
+                if draft.wordErrors[word] != nil {
+                    draft.retryWord(word)
                 } else {
                     toggleSaved(word)
                 }
@@ -389,7 +400,7 @@ struct ScanResultView: View {
                         Text(translation.lowercased())
                             .font(.subheadline)
                             .foregroundStyle(Color.subtleText)
-                    } else if let error = wordErrors[word] {
+                    } else if let error = draft.wordErrors[word] {
                         Text(error).font(.caption).foregroundStyle(Color.subtleText)
                         Label("Повторить", systemImage: "arrow.clockwise")
                             .font(.caption.weight(.medium))
@@ -414,10 +425,10 @@ struct ScanResultView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(translation == nil && wordErrors[word] == nil)
+            .disabled(translation == nil && draft.wordErrors[word] == nil)
             .accessibilityIdentifier("scanWordChip-\(word)-\(index)")
-            .accessibilityLabel("\(word), \(translation ?? wordErrors[word] ?? "Перевод загружается")")
-            .accessibilityHint(isSaved ? (selectedFolderID == nil ? "Удалить из словаря" : "Убрать из папки") : wordErrors[word] != nil
+            .accessibilityLabel("\(word), \(translation ?? draft.wordErrors[word] ?? "Перевод загружается")")
+            .accessibilityHint(isSaved ? (selectedFolderID == nil ? "Удалить из словаря" : "Убрать из папки") : draft.wordErrors[word] != nil
                 ? "Повторить перевод" : translation == nil
                 ? "Дождитесь перевода" : "Добавить в словарь без открытия формы")
             if let translation {
@@ -468,7 +479,7 @@ struct ScanResultView: View {
 
     private func changeCategory(_ category: WordCategory, for word: String, existing: Word?) {
         let isSaved = savedOverrides[word] ?? isIncluded(existing)
-        guard isSaved, let translation = translations[word] else {
+        guard isSaved, let translation = draft.translations[word] else {
             categoryOverrides[word] = category
             return
         }
@@ -489,34 +500,28 @@ struct ScanResultView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
-                if isTranslating { ProgressView().controlSize(.small) }
+                if draft.isTranslating { ProgressView().controlSize(.small) }
             }
-            if !translatedText.isEmpty {
-                Text(translatedText)
+            if !draft.translatedText.isEmpty {
+                Text(draft.translatedText)
                     .font(.body)
                     .foregroundStyle(Color.appInk)
                     .lineSpacing(4)
                     .accessibilityIdentifier("scanTranslationText")
-            } else if isTranslating {
+            } else if draft.isTranslating {
                 Text("Переводим…").foregroundStyle(Color.subtleText)
             }
-            if let translationError {
+            if let translationError = draft.translationError {
                 Label(translationError, systemImage: "wifi.exclamationmark")
                     .font(.caption).foregroundStyle(Color.appError)
                 Button("Повторить перевод предложения") {
-                    self.translationError = nil
-                    retryVersion += 1
+                    draft.retryContent()
                 }
                 .frame(minHeight: 44)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func normalize(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .precomposedStringWithCanonicalMapping.lowercased()
     }
 
     private func category(_ word: String, translation: String) -> WordCategory {
@@ -529,7 +534,7 @@ struct ScanResultView: View {
     }
 
     private func existingWord(_ word: String) -> Word? {
-        guard let translation = translations[word] else { return nil }
+        guard let translation = draft.translations[word] else { return nil }
         let language = LanguageDetector.detect(word)
         let matches = savedWords.filter {
             $0.matches(source: word, translation: translation, language: language)
@@ -545,7 +550,7 @@ struct ScanResultView: View {
     }
 
     private func toggleSaved(_ text: String) {
-        guard let translation = translations[text] else { return }
+        guard let translation = draft.translations[text] else { return }
         let selectedCategory = categoryOverrides[text] ?? existingWord(text)?.category
             ?? category(text, translation: translation)
         do {
@@ -560,46 +565,9 @@ struct ScanResultView: View {
         }
     }
 
-    @MainActor
-    private func translateContent() async {
-        // AppleTranslationModel supports one pending request, so translate sequentially.
-        let text = scannedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty && translatedText.isEmpty && translationError == nil {
-            isTranslating = true
-            do {
-                let language = LanguageDetector.detect(text)
-                let result = try await Translator.translate(text, from: language, to: language.other)
-                try Task.checkCancellation()
-                translatedText = result
-            } catch is CancellationError {
-                isTranslating = false
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                translationError = error.localizedDescription
-            }
-            isTranslating = false
-        }
-        for word in words where translations[word] == nil && wordErrors[word] == nil {
-            guard !Task.isCancelled else { return }
-            do {
-                let language = LanguageDetector.detect(word)
-                let result = try await Translator.translate(word, from: language, to: language.other)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                try Task.checkCancellation()
-                guard !result.isEmpty else { throw TranslationError.emptyResult }
-                translations[word] = result
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                wordErrors[word] = error.localizedDescription
-            }
-        }
-    }
 }
 
-private struct SelectedWord: Identifiable {
+private struct SelectedWord: Identifiable, Equatable {
     let id = UUID()
     let text: String
 }

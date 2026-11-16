@@ -232,8 +232,64 @@ enum ScannedTextTokenizer {
         }
     }
 
+    /// Joins only explicit end-of-line hyphenation produced by OCR.
+    /// Regular compound-word hyphens and dash punctuation remain untouched.
+    static func joiningLineBreakHyphenation(in text: String) -> String {
+        var result = ""
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            let character = text[index]
+            guard isLetter(character) else {
+                result.append(character)
+                index = text.index(after: index)
+                continue
+            }
+
+            let hyphenIndex = text.index(after: index)
+            guard hyphenIndex < text.endIndex,
+                  isLineBreakHyphen(text[hyphenIndex]) else {
+                result.append(character)
+                index = hyphenIndex
+                continue
+            }
+
+            var nextLetterIndex = text.index(after: hyphenIndex)
+            guard nextLetterIndex < text.endIndex else {
+                result.append(character)
+                index = hyphenIndex
+                continue
+            }
+            // Swift treats CRLF as one Character, so LF and CRLF are both single separators.
+            guard text[nextLetterIndex] == "\n" || text[nextLetterIndex] == "\r\n" else {
+                result.append(character)
+                index = hyphenIndex
+                continue
+            }
+            nextLetterIndex = text.index(after: nextLetterIndex)
+
+            guard nextLetterIndex < text.endIndex, isLetter(text[nextLetterIndex]) else {
+                result.append(character)
+                index = hyphenIndex
+                continue
+            }
+
+            result.append(character)
+            index = nextLetterIndex
+        }
+        return result
+    }
+
     private static func append(_ value: String, isWord: Bool, to tokens: inout [Token]) {
         guard !value.isEmpty else { return }
         tokens.append(isWord ? .word(value) : .text(value))
+    }
+
+    private static func isLetter(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy(CharacterSet.letters.contains)
+    }
+
+    private static func isLineBreakHyphen(_ character: Character) -> Bool {
+        character == "-" || character == "\u{00AD}"
     }
 }
