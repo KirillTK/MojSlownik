@@ -6,6 +6,7 @@ import SwiftData
 struct MojSlownikApp: App {
     @State private var folders = FolderLibraryStore()
     @State private var dailyStudy: DailyStudyStore
+    @State private var achievements: AchievementStore
     private let container: ModelContainer
 
     init() {
@@ -13,6 +14,7 @@ struct MojSlownikApp: App {
             let resources = try AppResources()
             container = resources.container
             _dailyStudy = State(initialValue: resources.dailyStudy)
+            _achievements = State(initialValue: resources.achievements)
         } catch {
             fatalError("Unable to open the dictionary: \(error)")
         }
@@ -23,6 +25,7 @@ struct MojSlownikApp: App {
             RootTabView()
                 .environment(folders)
                 .environment(dailyStudy)
+                .environment(achievements)
         }
         .modelContainer(container)
     }
@@ -32,6 +35,7 @@ struct MojSlownikApp: App {
 struct AppResources {
     let container: ModelContainer
     let dailyStudy: DailyStudyStore
+    let achievements: AchievementStore
 
     init(configuration: ModelConfiguration? = nil, defaults: UserDefaults = .standard,
          calendar: Calendar = .autoupdatingCurrent, now: Date = .now) throws {
@@ -42,6 +46,7 @@ struct AppResources {
         }
         // PersistentIdentifier decoding requires Word's schema to be registered first.
         dailyStudy = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
+        achievements = AchievementStore(defaults: defaults, calendar: calendar)
     }
 
     static let preview: AppResources = {

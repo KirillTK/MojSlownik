@@ -5,6 +5,7 @@ struct ListeningPracticeView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(DailyStudyStore.self) private var dailyStudy
+    @Environment(AchievementStore.self) private var achievements
     @Query private var allWords: [Word]
 
     @State private var questions: [ListeningQuestion] = []
@@ -262,6 +263,7 @@ struct ListeningPracticeView: View {
         submittedAnswer = answer
         answerIsCorrect = isCorrect
         if isCorrect { score += 1 }
+        achievements.record(.answer(mode: .listening, isCorrect: isCorrect))
         if isCorrect { scheduleAdvance() }
     }
 
@@ -373,4 +375,5 @@ struct ListeningPracticeView: View {
     .modelContainer(resources.container)
     .environment(FolderLibraryStore())
     .environment(resources.dailyStudy)
+    .environment(resources.achievements)
 }

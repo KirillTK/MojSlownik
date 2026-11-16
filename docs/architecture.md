@@ -10,14 +10,15 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 
 | Area | Files and responsibilities |
 | --- | --- |
-| Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder and daily-study stores, and presents `RootTabView`. |
-| Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs, root `AppleTranslationHost`. |
+| Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder, daily-study and achievement stores, and presents `RootTabView`. |
+| Navigation | `Views/RootTabView.swift`: Dictionary, Training and Achievements tabs, root `AppleTranslationHost`, `AchievementTracker` and `achievementBanner()`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
 | Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
+| Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue; `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
 | Build | Root `project.yml`: XcodeGen, application and `MojSlownikUITests`, iOS 17.0, Swift 5.9. |
 
@@ -126,7 +127,30 @@ ignore stale days, while appearance/foreground/review events refresh persisted
 state. Training recomputes time-based status periodically. Free practice of up to
 ten random scoped words remains available when none are due or pending.
 Session progress counts answers (including retry attempts); the completion screen
-separately reports unique words and total answers. No achievements are implemented.
+separately reports unique words and total answers.
+
+## Achievements
+
+Data flows one way: sources -> `AchievementMetrics` -> `AchievementEvaluator` ->
+`AchievementStore` (unlocks) -> UI. Metrics are named integers (`AchievementMetric`).
+Derived metrics (`AchievementMetrics.vocabulary`) are recomputed from Word/WordFolder
+records and are retroactive; recorded metrics come from `AchievementLedger`
+(lifetime answers, listening, perfect quizzes, streaks), updated by
+`AchievementStore.record` after each accepted flashcard, quiz or listening answer.
+Both persist nothing but `achievements.v1` in UserDefaults (unlock dates, ledger,
+`didInitialSync`). Unlocks are permanent: falling metrics or deleted words never
+revoke them, and removed catalog entries are ignored, not deleted. IDs are never reused.
+The first sync after install/upgrade unlocks satisfied derived achievements silently;
+later unlocks queue banners. `AchievementTracker` (root) syncs from `@Query` data and
+scene phase. The store owns banner state (queue, one dismiss timer, announce-once), so
+`.achievementBanner()` can be applied on the root, `AddWordView` and `ScanResultView`;
+any new sheet that can save words needs the modifier too.
+
+To add: an achievement on an existing metric is one `AchievementDefinition` line in
+`AchievementCatalog.all`; a derived metric is a new `AchievementMetric` case plus its
+computation in `AchievementMetrics.vocabulary`; a recorded metric also needs a ledger
+field (decoded with a default), an `AchievementEvent` and a call site; a new criterion
+kind needs an `AchievementCriterion` case, an evaluator branch and a test.
 
 ## Study Folders
 
@@ -177,7 +201,7 @@ quiz distractors. Empty folders never fall back to global vocabulary.
 ## Reusable Views
 
 `Views/Components/` contains FolderPicker, CategoryMenu, PronounceButton,
-SessionProgress and the errorAlert modifier. CategoryMenu shares available choices
+SessionProgress, AchievementBadge, the achievementBanner() modifier and the errorAlert modifier. CategoryMenu shares available choices
 and selected-state behavior while callers supply their label and persistence action.
 SessionProgress shares practice-session progress rendering. errorAlert shares optional
 error presentation and dismissal. Screens retain navigation, session state and content;
@@ -192,7 +216,7 @@ keep feedback readable without relying on color alone. `appOnAccent` supplies
 contrasting text on solid accent fills in both appearances.
 Practice uses a compact Today panel with a thin progress bar and icon/text badges
 for correct answers and errors; unique-word progress and answer totals remain
-separate. The page and tab are both named «Практика». No achievements are shown.
+separate. The page and tab are both named «Практика».
 FolderPicker offers a compact selector for browsing and a metadata row for forms,
 with the same folder sheet, creation and reconciliation behavior.
 Controls retain 44-point targets and use Dynamic Type text;
