@@ -303,4 +303,5 @@ private struct WordRow: View {
     WordListView()
         .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
         .environment(FolderLibraryStore())
+        .environment(AppResources.preview.achievements)
 }

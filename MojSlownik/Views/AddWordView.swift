@@ -90,6 +90,7 @@ struct AddWordView: View {
                 sourceFieldFocused = true
             }
         }
+        .achievementBanner()
     }
 
     private var automaticCategory: WordCategory {
@@ -296,4 +297,5 @@ struct AddWordView: View {
     AddWordView()
         .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
         .environment(FolderLibraryStore())
+        .environment(AppResources.preview.achievements)
 }

@@ -298,6 +298,7 @@ struct ScanResultView: View {
                 draft.cancelTranslation()
             }
         }
+        .achievementBanner()
     }
 
     private var sourceCard: some View {

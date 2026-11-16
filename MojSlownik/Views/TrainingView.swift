@@ -3,6 +3,7 @@ import SwiftData
 
 struct TrainingView: View {
     @Environment(DailyStudyStore.self) private var dailyStudy
+    @Environment(AchievementStore.self) private var achievements
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var allWords: [Word]
@@ -118,6 +119,14 @@ struct TrainingView: View {
                 modeRow(title: "На слух", subtitle: "Слушать и писать по-польски", icon: "ear")
             }
             .disabled(words.isEmpty)
+            Divider().overlay(Color.appBorder.opacity(0.5))
+            NavigationLink {
+                AchievementsView()
+            } label: {
+                modeRow(title: "Достижения",
+                        subtitle: "\(achievements.unlockedCount) из \(achievements.catalog.count) · \(achievements.totalPoints) очков",
+                        icon: "trophy")
+            }
         }
         .buttonStyle(.plain)
     }
@@ -171,4 +180,5 @@ struct TrainingView: View {
         .modelContainer(resources.container)
         .environment(FolderLibraryStore())
         .environment(resources.dailyStudy)
+        .environment(resources.achievements)
 }

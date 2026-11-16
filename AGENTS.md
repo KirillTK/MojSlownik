@@ -14,6 +14,8 @@ UI copy is Russian; code, file names and project instructions are English.
 - Removing folders or folder memberships never deletes words.
 - SwiftData: never lose stored words. New properties must be optional or have defaults;
   do not rename or remove persisted properties without a migration.
+- Achievements: catalog/evaluator in Services/Achievements.swift, state in
+  Stores/AchievementStore.swift (see docs/architecture.md).
 - Filter due words in memory with words.filter(\.isDue), not SwiftData #Predicate.
 - Apple translation sessions exist only through a view's translationTask.
 - OCR and camera behavior need a physical device.
