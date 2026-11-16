@@ -23,8 +23,8 @@ final class AppleTranslationModel: ObservableObject {
                 pending?.continuation.resume(throwing: CancellationError())
                 pending = (text, continuation)
 
-                let sourceLanguage = Locale.Language(identifier: source.rawValue)
-                let targetLanguage = Locale.Language(identifier: target.rawValue)
+                let sourceLanguage = Locale.Language(identifier: source.translationLanguage.appleIdentifier)
+                let targetLanguage = Locale.Language(identifier: target.translationLanguage.appleIdentifier)
                 if configuration?.source == sourceLanguage, configuration?.target == targetLanguage {
                     configuration?.invalidate()
                 } else {

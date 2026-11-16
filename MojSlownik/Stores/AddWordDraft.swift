@@ -8,19 +8,45 @@ final class AddWordDraft {
     var translatedText = ""
     private(set) var isTranslating = false
     private(set) var translationError: String?
+    private(set) var alternatives: [TranslationAlternative] = []
+    private(set) var primaryTranslation: String?
+    private var awaitingAlternatives = false
     private var task: Task<Void, Never>?
     private var revision = 0
     private var suspended = false
     private var needsResume = false
     private let debounce: Duration
     private let translate: (String, AppLanguage) async throws -> String
+    private let alternativesFetch: (String, TranslationPair) async -> [[TranslationAlternative]]
 
     init(debounce: Duration = .milliseconds(600),
          translate: @escaping (String, AppLanguage) async throws -> String = { text, source in
              try await Translator.translate(text, from: source, to: source.other)
+         },
+         alternatives: @escaping (String, TranslationPair) async -> [[TranslationAlternative]] = {
+             await TranslationAlternativesService.fetch($0, pair: $1)
          }) {
         self.debounce = debounce
         self.translate = translate
+        self.alternativesFetch = alternatives
+    }
+
+    /// Primary translation (if any) followed by merged alternatives; empty without alternatives.
+    var translationOptions: [TranslationAlternative] {
+        guard !alternatives.isEmpty else { return [] }
+        var options: [TranslationAlternative] = []
+        if let primaryTranslation {
+            options.append(TranslationAlternative(text: primaryTranslation, partOfSpeech: nil))
+        }
+        return options + alternatives
+    }
+
+    func isSelected(_ option: TranslationAlternative) -> Bool {
+        TranslationAlternatives.normalized(option.text) == TranslationAlternatives.normalized(translatedText)
+    }
+
+    func select(_ option: TranslationAlternative) {
+        translatedText = option.text
     }
 
     func setSource(_ text: String) {
@@ -29,9 +55,9 @@ final class AddWordDraft {
     }
 
     func beginDictation() {
-        needsResume = translatedText.isEmpty
+        needsResume = translatedText.isEmpty && alternatives.isEmpty
         suspended = true
-        cancelTranslation()
+        if !awaitingAlternatives { cancelTask() }
     }
 
     func commitDictation(_ text: String) {
@@ -53,11 +79,18 @@ final class AddWordDraft {
         scheduleTranslation()
     }
 
-    func cancelTranslation() {
+    private func cancelTask() {
         revision += 1
         task?.cancel()
         task = nil
         isTranslating = false
+        awaitingAlternatives = false
+    }
+
+    func cancelTranslation() {
+        cancelTask()
+        alternatives = []
+        primaryTranslation = nil
     }
 
     private func scheduleTranslation() {
@@ -71,19 +104,32 @@ final class AddWordDraft {
         task = Task {
             do {
                 try await Task.sleep(for: debounce)
-                guard !Task.isCancelled, revision == requestRevision else { return }
-                isTranslating = true
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, revision == requestRevision else { return }
+            isTranslating = true
+            let pair = source.translationPair
+            let fetch = alternativesFetch
+            async let groups: [[TranslationAlternative]] = TranslationAlternatives.shouldFetch(text)
+                ? await fetch(text, pair) : []
+            do {
                 let result = try await translate(text, source)
                 guard !Task.isCancelled, revision == requestRevision else { return }
                 translatedText = result
-                isTranslating = false
-                task = nil
+                primaryTranslation = result
             } catch {
                 guard !Task.isCancelled, revision == requestRevision else { return }
-                isTranslating = false
                 translationError = error.localizedDescription
-                task = nil
             }
+            isTranslating = false
+            awaitingAlternatives = true
+            let fetched = await groups
+            guard !Task.isCancelled, revision == requestRevision else { return }
+            alternatives = TranslationAlternatives.merge(
+                primary: primaryTranslation, groups: fetched, sourceText: text, pair: pair)
+            awaitingAlternatives = false
+            task = nil
         }
     }
 }

@@ -5,6 +5,7 @@ struct AddWordView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var initialText: String = ""
     @State private var selectedFolderID: UUID?
@@ -192,6 +193,10 @@ struct AddWordView: View {
                     .foregroundStyle(Color.appError)
             }
 
+            if !draft.translationOptions.isEmpty {
+                alternativesRow
+            }
+
             if !draft.translatedText.isEmpty {
                 HStack {
                     Spacer()
@@ -205,6 +210,54 @@ struct AddWordView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var alternativesRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Варианты")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.subtleText)
+                .accessibilityAddTraits(.isHeader)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(draft.translationOptions, id: \.self) { alternativeChip($0) }
+                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(draft.translationOptions, id: \.self) { alternativeChip($0) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func alternativeChip(_ option: TranslationAlternative) -> some View {
+        let selected = draft.isSelected(option)
+        return Button {
+            draft.select(option)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.text)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(selected ? Color.appOnAccent : Color.appInk)
+                    .lineLimit(2)
+                if let pos = option.partOfSpeech {
+                    Text(pos)
+                        .font(.caption2)
+                        .foregroundStyle(selected ? Color.appOnAccent : Color.subtleText)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 260, minHeight: 44, alignment: .leading)
+            .background(selected ? Color.appAccent : Color.appSecondarySurface,
+                        in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .disabled(speech.isBusy)
+        .accessibilityLabel(option.text + (option.partOfSpeech.map { ", \($0)" } ?? ""))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var voiceStatus: some View {
@@ -222,7 +275,7 @@ struct AddWordView: View {
                 Label(error, systemImage: "mic.slash")
                     .foregroundStyle(Color.appError)
             }
-            Text("Речь может обрабатываться на серверах Apple. Распознанный текст отправляется сервису перевода.")
+            Text("Речь может обрабатываться на серверах Apple. Введённый и распознанный текст отправляется сервисам перевода (Google, MyMemory).")
                 .foregroundStyle(Color.subtleText)
         }
         .font(.caption)

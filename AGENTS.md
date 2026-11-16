@@ -15,6 +15,7 @@ UI copy is Russian; code, file names and project instructions are English.
   PronounceButton, SessionProgress, errorAlert). Keep persistence actions in stores/services.
 - Theme/Theme.swift: shared colors and cardStyle.
 - Translation: Apple on supported iOS 18+ devices → Google gtx → MyMemory.
+  Short entries (≤4 words/60 chars) also go to Google and MyMemory for alternative chips.
   Translation is editable before saving. Apple sessions require translationTask.
 - OCR requires a physical device; Polish diacritics may be lost.
 - Filter due words in memory with words.filter(\.isDue), not SwiftData #Predicate.
