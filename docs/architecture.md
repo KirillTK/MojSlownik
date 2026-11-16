@@ -62,9 +62,13 @@ removes its SRS progress; re-adding starts a new record. `Services/ScanWordStore
 uses a fresh context for each operation, normalizes pair lookup with `Word.matches`,
 and rolls back only that operation on failure. It does not save or roll back unrelated
 pending edits in the screen context.
-The source is a plain paragraph preserving punctuation. An explicit word-correction
-menu opens `AddWordView(initialText:)`; scan translation pauses
-while that sheet is open and resumes on dismissal. Closing either screen cancels its
+The source is an editable multiline field preserving punctuation. On first display,
+OCR line-wrap hyphenation is joined only for an ASCII or soft hyphen directly between
+letters across LF/CRLF; compound hyphens and dash punctuation remain untouched.
+Edits debounce a new sequential translation and invalidate older requests by revision,
+so late results cannot replace the current text or loading state. An explicit
+word-correction menu opens `AddWordView(initialText:)`; scan translation pauses while
+that sheet is open and resumes on dismissal. Closing either screen cancels its
 translation work. Translation failures can be retried.
 
 **Categories:** `Services/WordCategory.swift` assigns one of seven topics using
@@ -126,7 +130,11 @@ separately reports unique words and total answers. No achievements are implement
 
 ## Study Folders
 
-`Models/WordFolder.swift` stores a UUID, display name and creation date.
+`Models/WordFolder.swift` stores a UUID, display name, creation date and persisted
+display order. Existing folders whose additive ordering value is equal retain a
+deterministic legacy order by creation date and UUID; the first explicit reorder
+replaces that fallback with contiguous saved positions. New folders append after
+the current order, and deletion keeps the relative order of the remaining folders.
 `Word.folderIDs` is an additive array defaulting to empty: one vocabulary entry can
 belong to multiple folders, sharing its SRS progress. Categories remain independent.
 `Services/FolderStore.swift` validates folder names, prevents case-equivalent duplicates,
@@ -146,6 +154,12 @@ native Menu/Picker or on a per-view Query snapshot. Only the destination selecti
 and presentation state stay local to each screen, preserving the no-folder default
 for a new scan. Removing a folder clears invalid local selections through the shared
 catalog update.
+
+The same self-contained `FolderPicker` sheet exposes `Править`: users can drag
+folders into a new order, rename one in a prefilled form, or request deletion with
+the existing named confirmation. Selection remains a one-tap checkmark action
+outside edit mode; persistence and shared-catalog refresh remain in
+`FolderStore`/`FolderLibraryStore`, not in individual screens.
 
 `FolderPicker` is reused in dictionary, add, scan and training screens. It can create
 and select a folder. AddWordView initializes its destination once through SwiftUI State, preserving

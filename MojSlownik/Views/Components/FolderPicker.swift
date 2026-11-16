@@ -12,8 +12,13 @@ struct FolderPicker: View {
     @State private var showCreateFolder = false
     @State private var folderName = ""
     @State private var creationError: String?
+    @State private var isEditingFolders = false
+    @State private var folderToRename: FolderLibraryStore.Option?
+    @State private var renameName = ""
+    @State private var renameError: String?
     @State private var pendingDeletion: FolderLibraryStore.Option?
     @State private var deletionError: String?
+    @State private var managementError: String?
 
     private var emptyTitle: String { allowsAll ? "Все папки" : "Без папки" }
 
@@ -65,33 +70,45 @@ struct FolderPicker: View {
         .sheet(isPresented: $showFolders) { folderSheet }
         .onAppear { refresh() }
         .onChange(of: library.options.map(\.id)) { reconcileSelection() }
+        .onChange(of: showFolders) {
+            if !showFolders { resetFolderManagementState() }
+        }
     }
 
     private var folderSheet: some View {
         NavigationStack {
             List {
                 Section {
-                    optionRow(id: nil, name: emptyTitle)
-                    ForEach(library.options) { option in
-                        optionRow(id: option.id, name: option.name)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    pendingDeletion = option
-                                } label: {
-                                    Label("Удалить", systemImage: "trash")
-                                }
-                                .tint(.red)
-                            }
+                    if !isEditingFolders {
+                        optionRow(id: nil, name: emptyTitle)
                     }
+                    ForEach(library.options) { option in
+                        if isEditingFolders {
+                            managementRow(option)
+                        } else {
+                            optionRow(id: option.id, name: option.name)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button {
+                                        pendingDeletion = option
+                                    } label: {
+                                        Label("Удалить", systemImage: "trash")
+                                    }
+                                    .tint(.red)
+                                }
+                        }
+                    }
+                    .onMove(perform: moveFolders)
                 }
-                Section {
-                    Button {
-                        folderName = ""
-                        creationError = nil
-                        showCreateFolder = true
-                    } label: {
-                        Label("Создать папку", systemImage: "folder.badge.plus")
-                            .frame(minHeight: 44)
+                if !isEditingFolders {
+                    Section {
+                        Button {
+                            folderName = ""
+                            creationError = nil
+                            showCreateFolder = true
+                        } label: {
+                            Label("Создать папку", systemImage: "folder.badge.plus")
+                                .frame(minHeight: 44)
+                        }
                     }
                 }
                 if let creationError {
@@ -104,7 +121,19 @@ struct FolderPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Готово") { showFolders = false }
+                    Button(isEditingFolders ? "Готово" : "Закрыть") {
+                        if isEditingFolders {
+                            isEditingFolders = false
+                        } else {
+                            showFolders = false
+                        }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if !isEditingFolders {
+                        Button("Править") { isEditingFolders = true }
+                            .disabled(library.options.isEmpty)
+                    }
                 }
             }
             .confirmationDialog(
@@ -119,6 +148,7 @@ struct FolderPicker: View {
                 Button("Удалить папку", role: .destructive) { deleteFolder(folder) }
                 Button("Отмена", role: .cancel) { pendingDeletion = nil }
             }
+            .errorAlert(title: "Не удалось изменить папки", error: $managementError)
             .errorAlert(title: "Не удалось удалить папку", error: $deletionError)
             .navigationDestination(isPresented: $showCreateFolder) {
                 Form {
@@ -143,7 +173,35 @@ struct FolderPicker: View {
                     }
                 }
             }
+            .navigationDestination(item: $folderToRename) { folder in
+                Form {
+                    Section("Название папки") {
+                        TextField("Например, Урок 1", text: $renameName)
+                            .textInputAutocapitalization(.sentences)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                if !renameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    renameFolder(folder)
+                                }
+                            }
+                    }
+                    if let renameError {
+                        Section { errorLabel(renameError) }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(Color.appBackground)
+                .navigationTitle("Переименовать папку")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Сохранить") { renameFolder(folder) }
+                            .disabled(renameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
         }
+        .environment(\.editMode, .constant(isEditingFolders ? .active : .inactive))
         .tint(Color.appAccent)
     }
 
@@ -163,6 +221,31 @@ struct FolderPicker: View {
             .contentShape(Rectangle())
         }
         .accessibilityAddTraits(selectedFolderID == id ? .isSelected : [])
+    }
+
+    private func managementRow(_ option: FolderLibraryStore.Option) -> some View {
+        HStack(spacing: 12) {
+            Text(option.name)
+                .foregroundStyle(Color.appInk)
+            Spacer()
+            Button {
+                renameName = option.name
+                renameError = nil
+                folderToRename = option
+            } label: {
+                Image(systemName: "pencil")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Переименовать папку «\(option.name)»")
+            Button(role: .destructive) {
+                pendingDeletion = option
+            } label: {
+                Image(systemName: "trash")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Удалить папку «\(option.name)»")
+        }
+        .frame(minHeight: 44)
     }
 
     private func errorLabel(_ error: String) -> some View {
@@ -200,5 +283,30 @@ struct FolderPicker: View {
             showCreateFolder = false
             showFolders = false
         } catch { creationError = error.localizedDescription }
+    }
+
+    private func moveFolders(from source: IndexSet, to destination: Int) {
+        var ids = library.options.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        do {
+            try library.reorder(ids: ids, context: modelContext)
+        } catch { managementError = error.localizedDescription }
+    }
+
+    private func renameFolder(_ folder: FolderLibraryStore.Option) {
+        do {
+            try library.rename(id: folder.id, name: renameName, context: modelContext)
+            renameError = nil
+            folderToRename = nil
+        } catch { renameError = error.localizedDescription }
+    }
+
+    private func resetFolderManagementState() {
+        isEditingFolders = false
+        folderToRename = nil
+        renameName = ""
+        renameError = nil
+        pendingDeletion = nil
+        managementError = nil
     }
 }

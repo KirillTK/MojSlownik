@@ -18,6 +18,31 @@ final class ScannedTextTokenizerTests: XCTestCase {
         XCTAssertTrue(ScannedTextTokenizer.words(in: "").isEmpty)
     }
 
+    func testJoiningLineBreakHyphenationJoinsPolishAndRussianLetters() {
+        XCTAssertEqual(
+            ScannedTextTokenizer.joiningLineBreakHyphenation(in: "przy-\nkład и пе-\nренос"),
+            "przykład и перенос"
+        )
+    }
+
+    func testJoiningLineBreakHyphenationSupportsSoftHyphenAndCRLF() {
+        XCTAssertEqual(
+            ScannedTextTokenizer.joiningLineBreakHyphenation(in: "sło\u{00AD}\r\nwo"),
+            "słowo"
+        )
+    }
+
+    func testJoiningLineBreakHyphenationPreservesCompoundsDashesAndNonmatchingText() {
+        XCTAssertEqual(
+            ScannedTextTokenizer.joiningLineBreakHyphenation(in: "biało-czerwony oraz pół–\nnoc i pół—\nnoc"),
+            "biało-czerwony oraz pół–\nnoc i pół—\nnoc"
+        )
+        XCTAssertEqual(
+            ScannedTextTokenizer.joiningLineBreakHyphenation(in: "koniec-\n  nowy\n-\nstart"),
+            "koniec-\n  nowy\n-\nstart"
+        )
+    }
+
     func testNearbyLinesGroupWhileSeparateColumnsAndParagraphsStayApart() {
         let lines = [
             line("000000000001", "first line", CGRect(x: 10, y: 10, width: 70, height: 12)),
