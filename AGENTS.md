@@ -10,6 +10,7 @@ UI copy is Russian; code, file names and project instructions are English.
 - MojSlownikApp registers Word and WordFolder; RootTabView hosts Dictionary/Training tabs.
 - Models/Word.swift: russian/polish pair, source language, folder UUID memberships, creation date and shared SRS state.
 - Stores/: shared observable application state; FolderLibraryStore owns the folder catalog.
+- Achievements: catalog/evaluator in Services/Achievements.swift, state in Stores/AchievementStore.swift (see docs/architecture.md).
 - Services/: persistence operations, language detection, translation, speech, OCR tokenization and SM-2 scheduling.
 - Views/: screens; Views/Components/: reusable controls (FolderPicker, CategoryMenu,
   PronounceButton, SessionProgress, errorAlert). Keep persistence actions in stores/services.

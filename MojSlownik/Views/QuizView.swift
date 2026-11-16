@@ -5,6 +5,7 @@ struct QuizView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(DailyStudyStore.self) private var dailyStudy
+    @Environment(AchievementStore.self) private var achievements
     @Query private var allWords: [Word]
 
     @State private var questions: [QuizQuestion] = []
@@ -147,6 +148,8 @@ struct QuizView: View {
         if isCorrect {
             score += 1
         }
+        AchievementEvent.quizAnswer(index: currentIndex, count: questions.count, scoreAfter: score,
+                                    isCorrect: isCorrect).forEach { achievements.record($0) }
         scheduleAdvance()
     }
 
@@ -281,4 +284,5 @@ struct QuizQuestion {
     .modelContainer(resources.container)
         .environment(FolderLibraryStore())
         .environment(resources.dailyStudy)
+    .environment(resources.achievements)
 }

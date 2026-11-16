@@ -8,6 +8,7 @@ struct FlashcardsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(DailyStudyStore.self) private var dailyStudy
+    @Environment(AchievementStore.self) private var achievements
     @Query private var allWords: [Word]
 
     @State private var sessionWords: [Word] = []
@@ -176,6 +177,7 @@ struct FlashcardsView: View {
             reviewError = error.localizedDescription
             return
         }
+        achievements.record(.answer(mode: .flashcards, isCorrect: grade != .again))
         if grade == .again {
             sessionWords.append(word)
         }
@@ -233,4 +235,5 @@ struct FlashcardsView: View {
     .modelContainer(resources.container)
     .environment(FolderLibraryStore())
     .environment(resources.dailyStudy)
+    .environment(resources.achievements)
 }

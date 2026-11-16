@@ -8,8 +8,13 @@ struct RootTabView: View {
 
             TrainingView()
                 .tabItem { Label("Практика", systemImage: "rectangle.on.rectangle.angled") }
+
+            NavigationStack { AchievementsView() }
+                .tabItem { Label("Достижения", systemImage: "trophy.fill") }
         }
         .tint(.appAccent)
+        .background { AchievementTracker() }
+        .achievementBanner()
         .modifier(AppleTranslationHost())
     }
 }
@@ -20,4 +25,5 @@ struct RootTabView: View {
         .modelContainer(resources.container)
         .environment(FolderLibraryStore())
         .environment(resources.dailyStudy)
+        .environment(resources.achievements)
 }
