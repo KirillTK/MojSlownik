@@ -5,7 +5,7 @@ import SwiftData
 @MainActor
 @Observable
 final class FolderLibraryStore {
-    struct Option: Identifiable, Equatable {
+    struct Option: Identifiable, Equatable, Hashable {
         let id: UUID
         let name: String
     }
@@ -13,7 +13,7 @@ final class FolderLibraryStore {
     private(set) var options: [Option] = []
 
     func load(context: ModelContext) throws {
-        options = try context.fetch(FetchDescriptor<WordFolder>(sortBy: [SortDescriptor(\WordFolder.createdAt)]))
+        options = try FolderStore.folders(in: context)
             .map { Option(id: $0.id, name: $0.name) }
     }
 
@@ -26,6 +26,16 @@ final class FolderLibraryStore {
 
     func delete(id: UUID, context: ModelContext) throws {
         try FolderStore.delete(id: id, container: context.container)
+        try load(context: context)
+    }
+
+    func rename(id: UUID, name: String, context: ModelContext) throws {
+        try FolderStore.rename(id: id, name: name, context: context)
+        try load(context: context)
+    }
+
+    func reorder(ids: [UUID], context: ModelContext) throws {
+        try FolderStore.reorder(ids: ids, container: context.container)
         try load(context: context)
     }
 }

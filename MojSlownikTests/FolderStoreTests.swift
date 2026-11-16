@@ -286,4 +286,122 @@ extension FolderStoreTests {
         XCTAssertEqual(saved.folderIDs, [created.id])
         XCTAssertFalse(saved.folderIDs.contains(original.id))
     }
+
+    @MainActor
+    func testRenamePreservesFolderIdentityMembershipAndStudyProgress() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let folder = try FolderStore.create(name: "Урок 1", context: context)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id, included: true, container: container)
+
+        try FolderStore.rename(id: folder.id, name: "  Первый   урок ", context: context)
+
+        let savedFolder = try XCTUnwrap(FolderStore.folders(in: ModelContext(container)).first)
+        let savedWord = try XCTUnwrap(words(in: container).first)
+        XCTAssertEqual(savedFolder.id, folder.id)
+        XCTAssertEqual(savedFolder.name, "Первый урок")
+        XCTAssertEqual(savedWord.folderIDs, [folder.id])
+        assertProgress(savedWord)
+        try FolderStore.rename(id: folder.id, name: "ПЕРВЫЙ УРОК", context: context)
+        XCTAssertEqual(try XCTUnwrap(FolderStore.folders(in: context).first).name, "ПЕРВЫЙ УРОК")
+    }
+
+    @MainActor
+    func testRejectedRenameLeavesFoldersAndWordsUnchanged() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let first = try FolderStore.create(name: "Урок 1", context: context)
+        let second = try FolderStore.create(name: "GÓRA", context: context)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: first.id, included: true, container: container)
+
+        XCTAssertThrowsError(try FolderStore.rename(id: first.id, name: " \n ", context: context))
+        XCTAssertThrowsError(try FolderStore.rename(id: first.id, name: "góra".decomposedStringWithCanonicalMapping, context: context))
+        XCTAssertThrowsError(try FolderStore.rename(id: UUID(), name: "Новое", context: context)) { error in
+            XCTAssertNotNil(error as? FolderStore.StoreError)
+        }
+
+        XCTAssertEqual(try FolderStore.folders(in: context).map(\.name), ["Урок 1", "GÓRA"])
+        let savedWord = try XCTUnwrap(words(in: container).first)
+        XCTAssertEqual(savedWord.folderIDs, [first.id])
+        assertProgress(savedWord)
+        XCTAssertEqual(second.name, "GÓRA")
+    }
+
+    @MainActor
+    func testReorderPersistsAndPreservesWordStudyData() throws {
+        let container = try makeContainer()
+        let first = try FolderStore.create(name: "Урок 1", container: container)
+        let second = try FolderStore.create(name: "Урок 2", container: container)
+        let third = try FolderStore.create(name: "Урок 3", container: container)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: first.id, included: true, container: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: third.id, included: true, container: container)
+
+        try FolderStore.reorder(ids: [third.id, first.id, second.id], container: container)
+
+        XCTAssertEqual(try FolderStore.folders(in: ModelContext(container)).map(\.id), [third.id, first.id, second.id])
+        let savedWord = try XCTUnwrap(words(in: container).first)
+        XCTAssertEqual(savedWord.folderIDs, [first.id, third.id])
+        assertProgress(savedWord)
+    }
+
+    @MainActor
+    func testRejectedReorderDoesNotPartiallyChangeOrderOrWordData() throws {
+        let container = try makeContainer()
+        let first = try FolderStore.create(name: "Урок 1", container: container)
+        let second = try FolderStore.create(name: "Урок 2", container: container)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: first.id, included: true, container: container)
+        let originalOrder = try FolderStore.folders(in: ModelContext(container)).map(\.id)
+
+        XCTAssertThrowsError(try FolderStore.reorder(ids: [second.id, second.id], container: container))
+        XCTAssertThrowsError(try FolderStore.reorder(ids: [first.id], container: container))
+        XCTAssertThrowsError(try FolderStore.reorder(ids: [first.id, UUID()], container: container))
+
+        XCTAssertEqual(try FolderStore.folders(in: ModelContext(container)).map(\.id), originalOrder)
+        let savedWord = try XCTUnwrap(words(in: container).first)
+        XCTAssertEqual(savedWord.folderIDs, [first.id])
+        assertProgress(savedWord)
+    }
+
+    @MainActor
+    func testLegacyOrderHasStableFallbackAndNewFolderAppends() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let laterID = UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!
+        let earlierID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let firstTieID = UUID(uuidString: "00000000-0000-0000-0000-000000000010")!
+        let secondTieID = UUID(uuidString: "00000000-0000-0000-0000-000000000020")!
+        let later = WordFolder(name: "Позже")
+        later.id = laterID
+        later.createdAt = Date(timeIntervalSince1970: 20)
+        later.sortOrder = 0
+        let earlier = WordFolder(name: "Раньше")
+        earlier.id = earlierID
+        earlier.createdAt = Date(timeIntervalSince1970: 10)
+        earlier.sortOrder = 0
+        let firstTie = WordFolder(name: "Одинаковая дата 1")
+        firstTie.id = firstTieID
+        firstTie.createdAt = Date(timeIntervalSince1970: 15)
+        firstTie.sortOrder = 0
+        let secondTie = WordFolder(name: "Одинаковая дата 2")
+        secondTie.id = secondTieID
+        secondTie.createdAt = Date(timeIntervalSince1970: 15)
+        secondTie.sortOrder = 0
+        context.insert(later)
+        context.insert(earlier)
+        context.insert(secondTie)
+        context.insert(firstTie)
+        try context.save()
+
+        XCTAssertEqual(try FolderStore.folders(in: context).map(\.id), [earlierID, firstTieID, secondTieID, laterID])
+        let appended = try FolderStore.create(name: "Новая", context: context)
+        XCTAssertEqual(try FolderStore.folders(in: context).map(\.id), [earlierID, firstTieID, secondTieID, laterID, appended.id])
+        try FolderStore.reorder(ids: [laterID, earlierID, firstTieID, secondTieID, appended.id], container: container)
+        XCTAssertEqual(try FolderStore.folders(in: ModelContext(container)).map(\.id), [laterID, earlierID, firstTieID, secondTieID, appended.id])
+        try FolderStore.delete(id: earlierID, container: container)
+        XCTAssertEqual(try FolderStore.folders(in: ModelContext(container)).map(\.id), [laterID, firstTieID, secondTieID, appended.id])
+    }
 }

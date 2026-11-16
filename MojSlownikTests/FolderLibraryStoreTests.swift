@@ -86,6 +86,25 @@ final class FolderLibraryStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testRenameAndReorderPublishSharedCatalogAndPersistAfterReload() throws {
+        let context = try makeContext()
+        let library = FolderLibraryStore()
+        let first = try library.create(name: "Урок 1", context: context)
+        let second = try library.create(name: "Урок 2", context: context)
+
+        try library.rename(id: first, name: "Первый урок", context: context)
+        try library.reorder(ids: [second, first], context: context)
+
+        XCTAssertEqual(library.options, [
+            .init(id: second, name: "Урок 2"),
+            .init(id: first, name: "Первый урок")
+        ])
+        let relaunched = FolderLibraryStore()
+        try relaunched.load(context: ModelContext(context.container))
+        XCTAssertEqual(relaunched.options, library.options)
+    }
+
+    @MainActor
     private func makeContext() throws -> ModelContext {
         let container = try ModelContainer(for: Word.self, WordFolder.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))

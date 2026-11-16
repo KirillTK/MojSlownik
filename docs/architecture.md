@@ -126,7 +126,11 @@ separately reports unique words and total answers. No achievements are implement
 
 ## Study Folders
 
-`Models/WordFolder.swift` stores a UUID, display name and creation date.
+`Models/WordFolder.swift` stores a UUID, display name, creation date and persisted
+display order. Existing folders whose additive ordering value is equal retain a
+deterministic legacy order by creation date and UUID; the first explicit reorder
+replaces that fallback with contiguous saved positions. New folders append after
+the current order, and deletion keeps the relative order of the remaining folders.
 `Word.folderIDs` is an additive array defaulting to empty: one vocabulary entry can
 belong to multiple folders, sharing its SRS progress. Categories remain independent.
 `Services/FolderStore.swift` validates folder names, prevents case-equivalent duplicates,
@@ -146,6 +150,12 @@ native Menu/Picker or on a per-view Query snapshot. Only the destination selecti
 and presentation state stay local to each screen, preserving the no-folder default
 for a new scan. Removing a folder clears invalid local selections through the shared
 catalog update.
+
+The same self-contained `FolderPicker` sheet exposes `Править`: users can drag
+folders into a new order, rename one in a prefilled form, or request deletion with
+the existing named confirmation. Selection remains a one-tap checkmark action
+outside edit mode; persistence and shared-catalog refresh remain in
+`FolderStore`/`FolderLibraryStore`, not in individual screens.
 
 `FolderPicker` is reused in dictionary, add, scan and training screens. It can create
 and select a folder. AddWordView initializes its destination once through SwiftUI State, preserving
