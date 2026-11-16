@@ -3,21 +3,31 @@ import Foundation
 /// Неофициальный бесплатный эндпоинт Google Translate (client=gtx).
 /// Без ключа, качество заметно выше MyMemory. Для личного использования.
 struct GoogleWebTranslator: TranslationService {
-    func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
+    static func url(for text: String, pair: TranslationPair, dt: [String], interfaceLanguage: String? = nil) -> URL {
         var components = URLComponents(string: "https://translate.googleapis.com/translate_a/single")!
-        components.queryItems = [
+        var items = [
             URLQueryItem(name: "client", value: "gtx"),
-            URLQueryItem(name: "sl", value: source.rawValue),
-            URLQueryItem(name: "tl", value: target.rawValue),
-            URLQueryItem(name: "dt", value: "t"),
-            URLQueryItem(name: "q", value: text),
+            URLQueryItem(name: "sl", value: pair.source.googleCode),
+            URLQueryItem(name: "tl", value: pair.target.googleCode),
         ]
+        if let interfaceLanguage {
+            items.append(URLQueryItem(name: "hl", value: interfaceLanguage))
+        }
+        items += dt.map { URLQueryItem(name: "dt", value: $0) }
+        items.append(URLQueryItem(name: "q", value: text))
+        components.queryItems = items
 
         // «+» не входит в urlQueryAllowed-экранирование, а сервер трактует его как пробел.
         components.percentEncodedQuery = components.percentEncodedQuery?
             .replacingOccurrences(of: "+", with: "%2B")
+        return components.url!
+    }
 
-        let (data, response) = try await URLSession.shared.data(from: components.url!)
+    func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
+        let pair = TranslationPair(source: source.translationLanguage, target: target.translationLanguage)
+        let url = Self.url(for: text, pair: pair, dt: ["t"])
+
+        let (data, response) = try await URLSession.shared.data(from: url)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw TranslationError.badResponse
         }

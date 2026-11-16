@@ -15,7 +15,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
-| Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. |
+| Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `TranslationLanguage.swift` is the central descriptor table (provider codes, Apple identifier, expected scripts); `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
@@ -39,7 +39,10 @@ Removing a folder preserves vocabulary, SRS and other folder memberships.
 
 **Adding:** input → `LanguageDetector` → `Translator` → editable translation →
 `Word` → SwiftData → dictionary/training `@Query` updates. Pair fields always
-follow their languages regardless of input direction. These screens use the
+follow their languages regardless of input direction. After the debounce, gated input
+(one line, at most 4 words and 60 characters) also fetches alternatives in parallel
+(Google `dt=bd/at`, MyMemory `matches`); they appear as «Варианты» chips, never delay or
+replace the primary translation and are not persisted. These screens use the
 SwiftData context and autosaving, without a repository layer or explicit `save()`.
 
 **Voice input:** Add Word starts `SpeechRecognitionService` only from its
@@ -218,9 +221,16 @@ secondary folder/category metadata.
   a continuation. It holds one pending request; a new request cancels the previous
   one. Cancellation handling prevents session waiting from blocking the timeout.
 - Google uses an unofficial endpoint without a key. MyMemory rejects empty,
-  unchanged and alphabet-incompatible candidates; it tries the main response,
-  then `matches` in descending score order. This filters candidates but does not
-  guarantee quality. Requests include the implementation's default contact email.
+  unchanged and script-incompatible candidates (target script required, source-only
+  script letters rejected, driven by `TranslationLanguage` descriptors); it tries the
+  main response, then `matches` in descending score order. A non-200 `responseStatus`
+  and `MYMEMORY WARNING` texts are never used as translations. This filters candidates
+  but does not guarantee quality. Requests include the implementation's default contact email.
+- Alternatives (`TranslationAlternativesService`) are fetched from Google and MyMemory
+  even when Apple translates, so entered text leaves the device. Each source fails
+  silently (5 s resource timeout, ephemeral session), results are deduplicated
+  case-insensitively, capped at 6 and never stored. `AddWordDraft` keeps its task until
+  alternatives finish; dictation keeps visible chips and clears them only when the text changes.
 - The camera requires permission and positive `DataScannerViewController.isSupported`
   and `isAvailable` checks. OCR languages are selected from supported ru/pl languages;
   if neither is supported, an empty list allows automatic selection. Polish
@@ -248,7 +258,7 @@ Personal iPhone installation: [README.md](../README.md).
 
 `MojSlownikTests/` contains XCTest coverage for Word lowercase storage, category
 assignment/overrides, normalized duplicate-pair matching, SwiftData round trips,
-OCR tokenization, SRS scheduling, and scan add/remove/category persistence, folder membership and scoped quiz options. The scanner reuses `Word.matches` for pair
+OCR tokenization, translation alternatives parsing/merging, language descriptors and MyMemory validation, SRS scheduling, and scan add/remove/category persistence, folder membership and scoped quiz options. The scanner reuses `Word.matches` for pair
 lookup, so its duplicate-comparison rules are tested outside SwiftUI.
 Run the isolated `MojSlownikUnitTests` scheme (see AGENTS.md); it does not include
 `MojSlownikUITests`. New or changed nontrivial logic requires committed unit tests.
