@@ -1,6 +1,6 @@
 ---
 name: feature-flow
-description: Plan, implement, verify, and review features in Mój Słownik with Codex subagents. Use when requested as $feature-flow or feature-flow; accepts free-form task context only. Excludes E2E and UI automation.
+description: Plan, implement, verify, and review features in Mój Słownik with Codex subagents. Use when requested as $feature-flow or feature-flow; accepts free-form task context only. Includes fixture-based XCUITest E2E for changed user-facing flows; no browser/Playwright.
 ---
 
 # Feature flow for Codex
@@ -39,7 +39,8 @@ ticket numbers, mode flags or a special plan-path argument.
    explicitly approves it. The `$feature-flow` invocation itself is not approval.
    If the user requests changes, revise and review the plan, show the updated
    version, and wait for approval again. If the user declines, stop without
-   implementation. Do not ask about E2E/browser testing.
+   implementation. Do not ask whether to write E2E (changed
+   user-facing flows always get fixture-based XCUITest); never ask about browser testing.
 
 ## Delegation
 
@@ -60,8 +61,10 @@ Models inherit the parent; do not use Claude model names or tools.
 10. `feature-implementer` implements model/services before SwiftUI. Preserve iOS 17
    support and existing SwiftData records. Resolve contradictions with real code
    before continuing rather than blindly implementing an invalid plan.
-11. Do not create, update or run E2E, Playwright or XCUITest. Preserve existing
-   MojSlownikUITests and its target. Add committed XCTest unit tests for new or changed nontrivial logic and
+11. For changed user-facing flows, add or update XCUITest E2E scenarios in
+   MojSlownikUITests built on named UITEST_FIXTURE fixtures (reuse or add fixtures
+   with unit tests; never seed data through UI steps). Never create Playwright/browser
+   tests. Preserve existing MojSlownikUITests and its target. Add committed XCTest unit tests for new or changed nontrivial logic and
    regression tests for bug fixes. Run them using the isolated MojSlownikUnitTests
    scheme; do not substitute temporary assertions or build-only checks.
 
@@ -71,8 +74,9 @@ Models inherit the parent; do not use Claude model names or tools.
    Choose an installed iPhone simulator with xcrun simctl list devices available;
    run xcodebuild build using the project and scheme in AGENTS.md.
    Use DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer if needed.
-   Run xcodebuild test with scheme MojSlownikUnitTests only; never run the
-   application scheme's tests, which include UI tests.
+   Run xcodebuild test with scheme MojSlownikUnitTests, and with scheme
+   MojSlownikE2E for changed user-facing flows; never run the application
+   scheme's tests, which include UI tests.
 13. Run `feature-quality-reviewer` always; `feature-ui-reviewer` for SwiftUI;
    `feature-data-reviewer` for Word, SRS, persistence or translation data flows.
    Independent reviews may run concurrently within host limits. Include tracked
@@ -80,9 +84,9 @@ Models inherit the parent; do not use Claude model names or tools.
 14. Merge confirmed findings with severity, path:line, failing scenario and fix.
     Delegate fixes to the implementer; at most two rounds.
     Rerun affected checks; report unresolved issues instead of claiming success.
-15. Provide a manual checklist for affected UI: ru/pl input, editable translation,
-    save, flashcards and quiz. OCR needs a physical iPhone: line translation,
-    word/chip selection and preserved scan result after dismissing AddWordView.
+15. Report E2E results. Provide a manual checklist only for what E2E does not cover:
+    OCR needs a physical iPhone (line translation, word/chip selection and
+    preserved scan result after dismissing AddWordView) plus visual polish.
     Never claim manual checks were performed unless actually performed.
 
 ## Report

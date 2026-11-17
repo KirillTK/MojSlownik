@@ -182,6 +182,11 @@ enum TranslationAlternativesService {
 
     /// Returns [googleCandidates, myMemoryCandidates]; never throws, [] per failed source.
     static func fetch(_ text: String, pair: TranslationPair) async -> [[TranslationAlternative]] {
+        #if DEBUG
+        if UITestLaunchConfiguration.current != nil {
+            return UITestTranslationStub.alternatives(text, pair: pair)
+        }
+        #endif
         async let google = load(
             GoogleWebTranslator.url(for: text, pair: pair, dt: ["t", "bd", "at"], interfaceLanguage: interfaceLanguage)
         ) { TranslationAlternatives.parseGoogle($0) }

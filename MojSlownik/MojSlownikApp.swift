@@ -11,7 +11,16 @@ struct MojSlownikApp: App {
 
     init() {
         do {
+            #if DEBUG
+            let resources: AppResources
+            if let configuration = try UITestLaunchConfiguration.parse(ProcessInfo.processInfo.environment) {
+                resources = try AppResources.uiTest(configuration)
+            } else {
+                resources = try AppResources()
+            }
+            #else
             let resources = try AppResources()
+            #endif
             container = resources.container
             _dailyStudy = State(initialValue: resources.dailyStudy)
             _achievements = State(initialValue: resources.achievements)
@@ -48,6 +57,17 @@ struct AppResources {
         dailyStudy = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
         achievements = AchievementStore(defaults: defaults, calendar: calendar)
     }
+
+    #if DEBUG
+    static func uiTest(_ configuration: UITestLaunchConfiguration, now: Date = .now) throws -> AppResources {
+        UserDefaults().removePersistentDomain(forName: UITestLaunchConfiguration.defaultsSuite)
+        let defaults = UserDefaults(suiteName: UITestLaunchConfiguration.defaultsSuite)!
+        let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
+                                         defaults: defaults, now: now)
+        try configuration.fixture.seed(into: resources.container.mainContext, now: now)
+        return resources
+    }
+    #endif
 
     static let preview: AppResources = {
         do {

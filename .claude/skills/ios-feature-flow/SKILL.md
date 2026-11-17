@@ -1,6 +1,6 @@
 ---
 name: ios-feature-flow
-description: Plan, critique, implement, verify and review a Mój Słownik feature with project subagents. Run as /ios-feature-flow [--lite] <free-form task context>, or /ios-feature-flow <path-to-plan.md> to resume an approved plan. Excludes E2E and UI automation.
+description: Plan, critique, implement, verify and review a Mój Słownik feature with project subagents. Run as /ios-feature-flow [--lite] <free-form task context>, or /ios-feature-flow <path-to-plan.md> to resume an approved plan. Includes fixture-based XCUITest E2E for changed user-facing flows; no browser/Playwright.
 argument-hint: "[--lite] <task / extra context> | <plan.md>"
 disable-model-invocation: true
 ---
@@ -58,7 +58,8 @@ Input: $ARGUMENTS
 ## 3. Open questions
 
 Ask only material, unresolved decisions with `AskUserQuestion` (recommended option
-first, one decision per question). Never ask about E2E or browser testing.
+first, one decision per question). Do not ask whether to write E2E: changed user-facing flows always get
+fixture-based XCUITest scenarios. Never ask about browser testing.
 Record answers in the plan under `## Decisions`.
 
 ## 4. Approval gate — STOP
@@ -79,7 +80,8 @@ link to the plan file. Ask with `AskUserQuestion`: `Approve` / `Request changes`
    or switch branches. No fetch, commit, push or PR unless the user authorizes it.
 2. Run `feature-implementer` with plan, base and the list of files it owns.
    Order: model/services → stores → SwiftUI. It adds committed XCTest unit tests
-   for changed nontrivial logic and regression tests for bug fixes.
+   for changed nontrivial logic and regression tests for bug fixes, and adds/updates
+   fixture-based E2E scenarios for changed user-facing flows.
 3. If the implementer reports that real code contradicts the plan, stop and
    resolve it (ask the user if it changes scope) instead of forcing the plan.
 
@@ -96,10 +98,12 @@ xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownik \
   -destination "platform=iOS Simulator,name=$SIM" build 2>&1 | grep -E 'error:|warning:|BUILD (SUCCEEDED|FAILED)'
 xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikUnitTests \
   -destination "platform=iOS Simulator,name=$SIM" test 2>&1 | grep -E 'error:|failed|Executed|TEST (SUCCEEDED|FAILED)'
+xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
+  -destination "platform=iOS Simulator,name=$SIM" test 2>&1 | grep -E 'error:|failed|Executed|TEST (SUCCEEDED|FAILED)'
 ```
 
-Build must have zero warnings in touched files. Never run the `MojSlownik` scheme's
-tests (they include UI tests); a project hook blocks it. If `xcodegen` is missing,
+Build must have zero warnings in touched files. Never run tests through the
+`MojSlownik` app scheme; use `MojSlownikUnitTests` and `MojSlownikE2E` (the hook enforces this). If `xcodegen` is missing,
 report it instead of editing the generated project by hand.
 
 ## 7. Review and fix
@@ -115,8 +119,9 @@ report it instead of editing the generated project by hand.
 ## 8. Report
 
 - What changed (files), verification commands and real results, unresolved issues.
-- Manual checklist for affected areas: ru/pl input, editable translation, save,
-  flashcards (ratings update dueDate), quiz. OCR needs a physical iPhone: line
-  translation, word/chip selection, scan result kept after dismissing AddWordView.
+- E2E results (scenarios added/updated and the MojSlownikE2E run).
+- Manual checklist only for what E2E does not cover: OCR/camera on a physical iPhone
+  (line translation, word/chip selection, scan result kept after dismissing
+  AddWordView) and visual polish.
   Never claim a manual check that was not performed.
 - Update `docs/architecture.md` if architecture changed; task history stays in the plan.

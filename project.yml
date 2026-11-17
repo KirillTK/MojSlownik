@@ -78,3 +78,13 @@ schemes:
       config: Debug
       targets:
         - MojSlownikTests
+  MojSlownikE2E:
+    build:
+      targets:
+        MojSlownik: all
+        MojSlownikUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - name: MojSlownikUITests
+          parallelizable: true

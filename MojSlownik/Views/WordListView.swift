@@ -124,11 +124,13 @@ struct WordListView: View {
             .onAppear {
                 // Вход для UI-тестов: имитирует префилл из сканера (ввод кириллицы
                 // с тестовой клавиатуры ненадёжен).
+                #if DEBUG
                 if !didHandleTestPrefill,
-                   let prefill = ProcessInfo.processInfo.environment["UITEST_PREFILL"] {
+                   let prefill = UITestLaunchConfiguration.current?.prefill {
                     didHandleTestPrefill = true
                     scannedResult = ScannedText(text: prefill)
                 }
+                #endif
             }
         }
         .tint(.appAccentText)
@@ -149,6 +151,7 @@ struct WordListView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Сканировать текст")
+            .accessibilityIdentifier("scanButton")
             Button {
                 showAddSheet = true
             } label: {
@@ -161,6 +164,7 @@ struct WordListView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Добавить слово")
+            .accessibilityIdentifier("addWordButton")
         }
         .padding(.trailing, AppSpacing.l)
         .padding(.bottom, AppSpacing.m)

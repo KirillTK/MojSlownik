@@ -39,6 +39,7 @@ struct FolderPicker: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Папка: \(selectionTitle)")
             .accessibilityHint("Выбрать или создать папку")
+            .accessibilityIdentifier("folderPickerButton")
             if let creationError, !showFolders {
                 errorLabel(creationError)
             }
@@ -98,13 +99,13 @@ struct FolderPicker: View {
             List {
                 Section {
                     if !isEditingFolders {
-                        optionRow(id: nil, name: emptyTitle)
+                        optionRow(id: nil, name: emptyTitle, identifier: "all")
                     }
                     ForEach(library.options) { option in
                         if isEditingFolders {
                             managementRow(option)
                         } else {
-                            optionRow(id: option.id, name: option.name)
+                            optionRow(id: option.id, name: option.name, identifier: option.name)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button {
                                         pendingDeletion = option
@@ -127,6 +128,7 @@ struct FolderPicker: View {
                             Label("Создать папку", systemImage: "folder.badge.plus")
                                 .frame(minHeight: 44)
                         }
+                        .accessibilityIdentifier("createFolderButton")
                     }
                 }
                 if let creationError {
@@ -172,6 +174,7 @@ struct FolderPicker: View {
                 Form {
                     Section("Название папки") {
                         TextField("Например, Урок 1", text: $folderName)
+                            .accessibilityIdentifier("folderNameField")
                             .textInputAutocapitalization(.sentences)
                             .submitLabel(.done)
                             .onSubmit { if !folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { createFolder() } }
@@ -187,6 +190,7 @@ struct FolderPicker: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Создать") { createFolder() }
+                            .accessibilityIdentifier("confirmCreateFolderButton")
                             .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
@@ -225,7 +229,7 @@ struct FolderPicker: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func optionRow(id: UUID?, name: String) -> some View {
+    private func optionRow(id: UUID?, name: String, identifier: String) -> some View {
         Button {
             selectedFolderID = id
             showFolders = false
@@ -243,6 +247,7 @@ struct FolderPicker: View {
             .contentShape(Rectangle())
         }
         .accessibilityAddTraits(selectedFolderID == id ? .isSelected : [])
+        .accessibilityIdentifier("folderOption-\(identifier)")
     }
 
     private func managementRow(_ option: FolderLibraryStore.Option) -> some View {

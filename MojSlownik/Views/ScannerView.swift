@@ -270,6 +270,7 @@ struct ScanResultView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Готово") { dismiss() }
+                        .accessibilityIdentifier("scanDoneButton")
                 }
             }
             .sheet(item: $selectedWord, onDismiss: {
@@ -450,6 +451,7 @@ struct ScanResultView: View {
             } label: {
                 Label("Исправить слово…", systemImage: "pencil")
             }
+            .accessibilityIdentifier("scanEditWordButton")
             if let translation {
                 Button {
                     toggleSaved(word)

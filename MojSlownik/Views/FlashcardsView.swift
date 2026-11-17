@@ -208,6 +208,7 @@ struct FlashcardsView: View {
                             .contentShape(RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("gradeButton-\(grade.rawValue)")
                 }
             }
         }
@@ -260,6 +261,7 @@ struct FlashcardsView: View {
                 Text("Тренировка завершена")
                     .font(.title.weight(.bold))
                     .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("flashcardsCompleted")
                 Text("Повторено слов: \(Set(sessionWords.map(\.persistentModelID)).count)")
                     .font(.title3.weight(.medium))
                 Label("Всего ответов: \(reviewedCount)", systemImage: "checklist")
@@ -271,6 +273,7 @@ struct FlashcardsView: View {
                     .overlay { Capsule().strokeBorder(Color.appCardEdge, lineWidth: 1) }
                 Button("К практике") { dismiss() }
                     .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("backToPracticeButton")
                     .padding(.top, AppSpacing.xs)
             }
             .padding(AppSpacing.xl)

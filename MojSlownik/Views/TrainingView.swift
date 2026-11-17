@@ -84,6 +84,7 @@ struct TrainingView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Повторено сегодня")
                 .accessibilityValue("\(progress.completed) из \(progress.total). Осталось: \(progress.remaining)")
+                .accessibilityIdentifier("todayProgress")
             practiceButton(progress: progress)
             layout {
                 answerBadge(count: answers.correct, title: "Верных", icon: "checkmark")
@@ -93,6 +94,7 @@ struct TrainingView: View {
             Text("Ответов: \(answers.total)")
                 .font(.caption)
                 .foregroundStyle(secondary)
+                .accessibilityIdentifier("answerTotal")
         }
         .foregroundStyle(Color.appOnAccent)
         .padding(AppSpacing.m)
@@ -145,6 +147,7 @@ struct TrainingView: View {
         .buttonStyle(PrimaryButtonStyle(kind: .inverse))
         .disabled(words.isEmpty)
         .accessibilityHint(progress.remaining > 0 ? "Открыть карточки для повторения" : "Потренировать до десяти случайных слов")
+        .accessibilityIdentifier("practiceStartButton")
     }
 
     // MARK: Modes
@@ -164,6 +167,7 @@ struct TrainingView: View {
                              iconSize: modeTile, isWide: isAX)
                 }
                 .disabled(words.isEmpty)
+                .accessibilityIdentifier("flashcardsModeTile")
                 NavigationLink {
                     QuizView(folderID: selectedFolderID)
                 } label: {
@@ -171,6 +175,7 @@ struct TrainingView: View {
                              icon: "checklist", iconSize: modeTile, isWide: isAX)
                 }
                 .disabled(words.count < 4)
+                .accessibilityIdentifier("quizModeTile")
             }
             .buttonStyle(TileButtonStyle())
             NavigationLink {

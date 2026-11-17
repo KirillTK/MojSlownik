@@ -31,5 +31,6 @@ struct SessionProgress: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Прогресс практики")
         .accessibilityValue("Ответов: \(completed) из \(total)")
+        .accessibilityIdentifier("sessionProgress")
     }
 }
