@@ -7,20 +7,21 @@ struct KnowledgeTierBadge: View {
 
     private var presentation: Presentation { Self.presentation(for: level) }
 
+    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 22
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<4, id: \.self) { mark in
-                Capsule()
-                    .fill(mark < presentation.filledMarks ? presentation.color.color : Color.appBorder)
-                    .frame(width: 4, height: 8)
-            }
+        let lineWidth = size * 0.2
+        ZStack {
+            Circle().stroke(Color.appRingTrack, lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: presentation.fillFraction)
+                .stroke(presentation.color.color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
+                .rotationEffect(.degrees(-90))
         }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 4)
-        .background(Color.cardBackground, in: Capsule())
-        .overlay {
-            Capsule().strokeBorder(Color.appBorder, lineWidth: 1)
-        }
+        .padding(lineWidth / 2)
+        .frame(width: size, height: size)
+        .animation(reduceMotion ? nil : .snappy, value: presentation.fillFraction)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -48,6 +49,9 @@ struct KnowledgeTierBadge: View {
         let filledMarks: Int
         let levelName: String
         let color: IndicatorColor
+
+        /// Share of the ring that is filled: a quarter per tier step.
+        var fillFraction: Double { Double(filledMarks) / 4 }
     }
 
     enum IndicatorColor: Equatable {
@@ -56,8 +60,8 @@ struct KnowledgeTierBadge: View {
         var color: Color {
             switch self {
             case .error: .appError
-            case .warning: .appWarning
-            case .accent: .appAccent
+            case .warning: .appCaution
+            case .accent: .appAccentText
             case .mastery: .appMastery
             }
         }

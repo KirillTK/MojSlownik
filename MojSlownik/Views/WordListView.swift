@@ -16,6 +16,9 @@ struct WordListView: View {
     @State private var showScanner = false
     @State private var scannedResult: ScannedText?
     @State private var didHandleTestPrefill = false
+    @ScaledMetric(relativeTo: .title2) private var fabScaled: CGFloat = 56
+
+    private var fabSize: CGFloat { min(fabScaled, 72) }
 
     private var filteredWords: [Word] {
         let query = searchText.lowercased()
@@ -31,34 +34,32 @@ struct WordListView: View {
             VStack(spacing: 0) {
                 categoryFilters
                 Group {
-                if words.isEmpty {
-                    ContentUnavailableView {
-                        Label("Словарь пуст", systemImage: "character.book.closed")
-                    } description: {
-                        Text("Добавьте первое слово кнопкой «плюс» или отсканируйте его камерой.")
-                    }
-                } else {
-                    VStack(spacing: 0) {
+                    if words.isEmpty {
+                        EmptyStateView(icon: "character.book.closed", title: "Словарь пуст",
+                                       message: "Добавьте первое слово кнопкой «плюс» или отсканируйте его камерой.")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.bottom, fabSize)
+                    } else {
                         List {
                             if filteredWords.isEmpty {
-                                ContentUnavailableView {
-                                    Label("Нет подходящих слов", systemImage: "magnifyingglass")
-                                } description: {
-                                    Text("Проверьте выбранную папку, категорию и поисковый запрос.")
-                                } actions: {
+                                EmptyStateView(icon: "magnifyingglass", title: "Нет подходящих слов",
+                                               message: "Проверьте выбранную папку, категорию и поисковый запрос.") {
                                     Button("Показать все слова") {
                                         selectedFolderID = nil
                                         selectedCategory = nil
                                         searchText = ""
                                     }
+                                    .font(.body.weight(.bold))
+                                    .frame(minHeight: 44)
                                 }
                                 .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                             }
                             ForEach(filteredWords) { word in
                                 WordRow(word: word)
                                     .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
-                                    .listRowSeparatorTint(Color.appBorder.opacity(0.5))
+                                    .listRowInsets(EdgeInsets(top: AppSpacing.xs, leading: AppSpacing.l, bottom: AppSpacing.xs, trailing: AppSpacing.l))
+                                    .listRowSeparatorTint(Color.appBorder)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                         let wordID = word.persistentModelID
                                         Button(role: .destructive) {
@@ -72,13 +73,15 @@ struct WordListView: View {
                         }
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
+                        .contentMargins(.bottom, fabSize + AppSpacing.m + AppSpacing.m, for: .scrollContent)
+                        .searchable(text: $searchText, prompt: "Найти слово")
                     }
-                    .searchable(text: $searchText, prompt: "Найти слово")
                 }
             }
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
+            .overlay(alignment: .bottomTrailing) { floatingActions }
             .navigationTitle("Словарь")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -87,25 +90,10 @@ struct WordListView: View {
                         Button("Удалить папку", systemImage: "folder.badge.minus") { showDeleteFolder = true }
                     }
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        showScanner = true
-                    } label: {
-                        Image(systemName: "camera.viewfinder")
-                            .frame(minWidth: 44, minHeight: 44)
-                            .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    }
-                    .accessibilityLabel("Сканировать текст")
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.title3)
-                            .frame(minWidth: 44, minHeight: 44)
-                            .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    }
-                    .accessibilityLabel("Добавить слово")
-                }
+            }
+            .sensoryFeedback(.selection, trigger: selectedCategory)
+            .sensoryFeedback(trigger: words.count) { old, new in
+                new > old ? .impact(weight: .light) : nil
             }
             .confirmationDialog("Удалить папку «\(folderLibrary.options.first { $0.id == selectedFolderID }?.name ?? "")»? Слова останутся в словаре.", isPresented: $showDeleteFolder, titleVisibility: .visible) {
                 Button("Удалить папку", role: .destructive) {
@@ -143,11 +131,45 @@ struct WordListView: View {
                 }
             }
         }
+        .tint(.appAccentText)
+    }
+
+    private var floatingActions: some View {
+        HStack(spacing: AppSpacing.s) {
+            Button {
+                showScanner = true
+            } label: {
+                Image(systemName: "text.viewfinder")
+                    .font(.title2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appInk)
+                    .frame(width: fabSize - 4, height: fabSize - 4)
+                    .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Сканировать текст")
+            Button {
+                showAddSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(Color.appOnAccent)
+                    .frame(width: fabSize, height: fabSize)
+                    .background(Color.appAccent, in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Добавить слово")
+        }
+        .padding(.trailing, AppSpacing.l)
+        .padding(.bottom, AppSpacing.m)
+        .ignoresSafeArea(.keyboard)
     }
 
     private var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.xs) {
                 FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true, compact: true)
                 Rectangle()
                     .fill(Color.appBorder)
@@ -162,8 +184,8 @@ struct WordListView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.bottom, AppSpacing.xs)
         }
         .accessibilityLabel("Папка и фильтр по теме")
     }
@@ -175,15 +197,10 @@ struct WordListView: View {
         } label: {
             HStack(spacing: 6) {
                 Text(title)
-                    .fontWeight(isSelected ? .semibold : .medium)
                 Text(count.formatted())
                     .monospacedDigit()
             }
-            .font(.subheadline)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .foregroundStyle(isSelected ? Color.appOnAccent : Color.appInk)
-            .background(isSelected ? Color.appAccent : Color.cardBackground, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .chipStyle(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(title), слов: \(count)")
@@ -202,6 +219,45 @@ struct ScannedText: Identifiable {
     let text: String
 }
 
+/// Empty/no-result state: soft-yellow icon tile, title, explanation and an optional text action.
+private struct EmptyStateView<Actions: View>: View {
+    let icon: String
+    let title: String
+    let message: String
+    @ViewBuilder var actions: Actions
+    @ScaledMetric(relativeTo: .title) private var tile: CGFloat = 64
+
+    var body: some View {
+        VStack(spacing: AppSpacing.xs) {
+            Image(systemName: icon)
+                .font(.title)
+                .fontWeight(.medium)
+                .foregroundStyle(Color.appInk)
+                .frame(width: tile, height: tile)
+                .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.hero - 4, style: .continuous))
+                .padding(.bottom, AppSpacing.xxs)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.appInk)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(Color.subtleText)
+            actions
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, AppSpacing.xl)
+        .padding(.top, AppSpacing.xxl)
+    }
+}
+
+extension EmptyStateView where Actions == EmptyView {
+    init(icon: String, title: String, message: String) {
+        self.init(icon: icon, title: title, message: message) { EmptyView() }
+    }
+}
+
 private struct WordRow: View {
     let word: Word
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -212,14 +268,34 @@ private struct WordRow: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
                     wordText
-                    wordActions.frame(maxWidth: .infinity, alignment: .trailing)
+                    translation
+                    HStack(spacing: AppSpacing.xs) {
+                        ring
+                        PronounceButton(text: word.polish, language: .polish)
+                    }
+                    HStack(spacing: AppSpacing.xs) {
+                        categoryMenu
+                        folderMenu
+                    }
                 }
             } else {
-                HStack(spacing: 12) {
-                    wordText.frame(maxWidth: .infinity, alignment: .leading)
-                    wordActions.frame(width: 180)
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    HStack(alignment: .center, spacing: AppSpacing.s) {
+                        wordText
+                        Spacer(minLength: 0)
+                        ring
+                        PronounceButton(text: word.polish, language: .polish)
+                    }
+                    HStack(spacing: AppSpacing.xs) {
+                        translation
+                        Spacer(minLength: 0)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: AppSpacing.xs) { categoryMenu; folderMenu }
+                            VStack(alignment: .trailing, spacing: 0) { categoryMenu; folderMenu }
+                        }
+                    }
                 }
             }
         }
@@ -228,73 +304,87 @@ private struct WordRow: View {
     }
 
     private var wordText: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Spacer(minLength: 0)
-                KnowledgeTierBadge(word: word, level: KnowledgeProgressService.tier(for: word))
-            }
-            Text(word.polish)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.appInk)
-            Text(word.russian)
-                .font(.subheadline)
-                .foregroundStyle(Color.subtleText)
-        }
-        .fixedSize(horizontal: false, vertical: true)
+        Text(word.polish)
+            .font(.title3.weight(.bold))
+            .foregroundStyle(Color.appInk)
+            .frame(minWidth: 160, alignment: .leading)
+            .layoutPriority(1)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var wordActions: some View {
-        HStack(spacing: 8) {
-            CategoryMenu(selection: Binding(
-                get: { word.category },
-                set: { word.category = $0 }
-            )) {
-                HStack(spacing: 5) {
-                    Text(word.category.rawValue)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .fixedSize()
-                }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.appAccent)
-                .frame(minWidth: 44, maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
+    private var translation: some View {
+        Text(word.russian)
+            .font(.subheadline)
+            .foregroundStyle(Color.subtleText)
+            .layoutPriority(1)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var ring: some View {
+        KnowledgeTierBadge(word: word, level: KnowledgeProgressService.tier(for: word))
+    }
+
+    private var categoryMenu: some View {
+        CategoryMenu(selection: Binding(
+            get: { word.category },
+            set: { word.category = $0 }
+        )) {
+            HStack(spacing: AppSpacing.xxs) {
+                Image(systemName: "tag")
+                    .font(.caption2)
+                    .fixedSize()
+                Text(word.category.rawValue)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .fixedSize()
             }
-            .accessibilityLabel("Категория слова \(word.polish): \(word.category.rawValue)")
-            .accessibilityHint("Выбрать другую категорию")
-            if !folderLibrary.options.isEmpty {
-                Menu {
-                    if !word.folderIDs.isEmpty {
-                        Button(role: .destructive) {
-                            do {
-                                try FolderStore.removeFromAllFolders(wordID: word.persistentModelID, context: modelContext)
-                            } catch { folderError = error.localizedDescription }
-                        } label: {
-                            Label("Убрать из всех папок", systemImage: "folder.badge.minus")
-                        }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.subtleText)
+            .padding(.horizontal, AppSpacing.xs)
+            .frame(minHeight: 28)
+            .background(Color.appSecondarySurface, in: Capsule())
+            .frame(maxWidth: 120, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Категория слова \(word.polish): \(word.category.rawValue)")
+        .accessibilityHint("Выбрать другую категорию")
+    }
+
+    @ViewBuilder
+    private var folderMenu: some View {
+        if !folderLibrary.options.isEmpty {
+            Menu {
+                if !word.folderIDs.isEmpty {
+                    Button(role: .destructive) {
+                        do {
+                            try FolderStore.removeFromAllFolders(wordID: word.persistentModelID, context: modelContext)
+                        } catch { folderError = error.localizedDescription }
+                    } label: {
+                        Label("Убрать из всех папок", systemImage: "folder.badge.minus")
                     }
-                    ForEach(folderLibrary.options) { folder in
-                        let included = word.folderIDs.contains(folder.id)
-                        Button {
-                            do {
-                                try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
-                                                              included: !included, context: modelContext)
-                            } catch { folderError = error.localizedDescription }
-                        } label: {
-                            Label(folder.name, systemImage: included ? "checkmark" : "folder")
-                        }
-                    }
-                } label: {
-                    Image(systemName: word.folderIDs.isEmpty ? "folder.badge.plus" : "folder.fill")
-                        .frame(minWidth: 44, minHeight: 44)
                 }
-                .fixedSize(horizontal: true, vertical: false)
-                .accessibilityLabel("Папки слова \(word.polish)")
+                ForEach(folderLibrary.options) { folder in
+                    let included = word.folderIDs.contains(folder.id)
+                    Button {
+                        do {
+                            try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
+                                                          included: !included, context: modelContext)
+                        } catch { folderError = error.localizedDescription }
+                    } label: {
+                        Label(folder.name, systemImage: included ? "checkmark" : "folder")
+                    }
+                }
+            } label: {
+                Image(systemName: word.folderIDs.isEmpty ? "folder.badge.plus" : "folder")
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appInk)
+                    .frame(minWidth: 44, minHeight: 44)
             }
-            PronounceButton(text: word.polish, language: .polish)
-                .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: true, vertical: false)
+            .accessibilityLabel("Папки слова \(word.polish)")
         }
     }
 }

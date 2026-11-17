@@ -4,15 +4,12 @@ struct RootTabView: View {
     var body: some View {
         TabView {
             WordListView()
-                .tabItem { Label("Словарь", systemImage: "book.closed.fill") }
+                .tabItem { Label("Словарь", systemImage: "character.book.closed") }
 
             TrainingView()
-                .tabItem { Label("Практика", systemImage: "rectangle.on.rectangle.angled") }
-
-            NavigationStack { AchievementsView() }
-                .tabItem { Label("Достижения", systemImage: "trophy.fill") }
+                .tabItem { Label("Практика", systemImage: "rectangle.stack") }
         }
-        .tint(.appAccent)
+        .tint(.appAccentStrong)
         .background { AchievementTracker() }
         .achievementBanner()
         .modifier(AppleTranslationHost())

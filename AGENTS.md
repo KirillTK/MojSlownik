@@ -15,6 +15,7 @@ UI copy is Russian; code, file names and project instructions are English.
 - Views/: screens; Views/Components/: reusable controls (FolderPicker, CategoryMenu,
   PronounceButton, SessionProgress, errorAlert). Keep persistence actions in stores/services.
 - Theme/Theme.swift: shared colors and cardStyle.
+- Before any UI/visual work read [DESIGN.md](DESIGN.md).
 - Translation: Apple on supported iOS 18+ devices → Google gtx → MyMemory.
   Short entries (≤4 words/60 chars) also go to Google and MyMemory for alternative chips.
   Translation is editable before saving. Apple sessions require translationTask.

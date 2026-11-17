@@ -8,12 +8,12 @@ struct PronounceButton: View {
         Button {
             SpeechService.shared.speak(text, language: language)
         } label: {
-            Image(systemName: "speaker.wave.2.fill")
+            Image(systemName: "speaker.wave.2")
                 .font(.body)
-                .foregroundStyle(Color.appAccent)
-                .frame(minWidth: 44, minHeight: 44)
-                .background(Color.appSecondarySurface)
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .fontWeight(.medium)
+                .foregroundStyle(Color.appInk)
+                .frame(width: 44, height: 44)
+                .background(Color.appSecondarySurface, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Произнести: \(text)")

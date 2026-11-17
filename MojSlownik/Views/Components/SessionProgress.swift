@@ -26,9 +26,7 @@ struct SessionProgress: View {
                 }
             }
             .font(.subheadline.weight(.medium))
-            ProgressView(value: Double(completed), total: Double(max(total, 1)))
-                .tint(.appAccent)
-                .accessibilityHidden(true)
+            MarkerProgressBar(value: Double(completed) / Double(max(total, 1)))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Прогресс практики")
