@@ -9,6 +9,7 @@ UI copy is Russian; code, file names and project instructions are English.
 
 - Persistence and business logic live in Stores/ and Services/, not in Views.
   Reuse existing services and Theme/Theme.swift; make the smallest complete change.
+- Before any UI/visual work read [DESIGN.md](DESIGN.md) (tokens, components, icons, a11y).
 - Stores/FolderLibraryStore.swift is injected once at the app root via environment;
   views keep only local selection/presentation state.
 - Removing folders or folder memberships never deletes words.

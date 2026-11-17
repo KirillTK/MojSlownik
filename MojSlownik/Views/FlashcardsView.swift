@@ -18,6 +18,8 @@ struct FlashcardsView: View {
     @State private var sessionStarted = false
     @State private var reviewError: String?
     @State private var frontIsRussian = Bool.random()
+    @ScaledMetric(relativeTo: .largeTitle) private var cardWordSize: CGFloat = 38
+    @ScaledMetric(relativeTo: .largeTitle) private var completedIconSize: CGFloat = 40
 
     private var currentWord: Word? {
         sessionWords.indices.contains(currentIndex) ? sessionWords[currentIndex] : nil
@@ -36,7 +38,7 @@ struct FlashcardsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
-        .tint(Color.appAccent)
+        .tint(Color.appAccentText)
         .navigationTitle("Карточки")
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert(title: "Не удалось сохранить ответ", error: $reviewError)
@@ -55,87 +57,137 @@ struct FlashcardsView: View {
 
     private func sessionView(word: Word) -> some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: AppSpacing.xl) {
                 SessionProgress(completed: reviewedCount, total: sessionWords.count)
-                card(word: word)
+                VStack(spacing: AppSpacing.xl) {
+                    card(word: word)
 
-                if isFlipped {
-                    gradeButtons(word: word)
-                } else {
-                    Text("Вспомните перевод, затем откройте ответ.")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.subtleText)
-                        .multilineTextAlignment(.center)
+                    if isFlipped {
+                        gradeButtons(word: word)
+                    } else {
+                        Text("Вспомните перевод, затем откройте ответ.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.subtleText)
+                            .multilineTextAlignment(.center)
+                    }
                 }
+                .id(currentIndex)
+                .transition(reduceMotion
+                            ? .opacity
+                            : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
+                                          removal: .opacity))
             }
-            .padding(20)
+            .padding(AppSpacing.l)
         }
+        .sensoryFeedback(.selection, trigger: reviewedCount)
     }
 
     private func card(word: Word) -> some View {
         let frontLanguage: AppLanguage = frontIsRussian ? .russian : .polish
         let shownLanguage = isFlipped ? frontLanguage.other : frontLanguage
         let shownText = word.text(in: shownLanguage)
+        let frontText = word.text(in: frontLanguage)
+        let backText = word.text(in: frontLanguage.other)
+        let tier = KnowledgeProgressService.tier(for: word)
+        let cardShape = RoundedRectangle(cornerRadius: AppRadius.flashcard, style: .continuous)
 
-        return VStack(spacing: 12) {
-            HStack {
-                Spacer(minLength: 0)
-                KnowledgeTierBadge(word: word,
-                                  level: KnowledgeProgressService.tier(for: word),
-                                  hidesWordInAccessibilityLabel: shownLanguage == .russian)
+        return Button {
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.35)) {
+                isFlipped.toggle()
             }
-            .padding(.top, 24)
-            .padding(.horizontal, 24)
-
-            Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                    isFlipped.toggle()
-                }
-            } label: {
-                VStack(spacing: 28) {
-                    Text(shownLanguage.displayName)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.appAccent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.cardBackground, in: Capsule())
-                    Text(shownText)
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(Color.appInk)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                    Label(isFlipped ? "Скрыть перевод" : "Показать перевод",
-                          systemImage: isFlipped ? "eye.slash" : "eye")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.appAccent)
-                        .frame(minHeight: 44)
-                        .padding(.horizontal, 14)
-                        .background(Color.cardBackground, in: Capsule())
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, minHeight: 230)
-                .contentShape(Rectangle())
+        } label: {
+            ZStack {
+                frontFace(word: word, language: frontLanguage, text: frontText, tier: tier)
+                    .modifier(FlipFace(angle: isFlipped ? 180 : 0, isVisible: !isFlipped))
+                    .accessibilityHidden(isFlipped)
+                backFace(word: word, language: frontLanguage.other, text: backText,
+                         original: frontText, tier: tier)
+                    .modifier(FlipFace(angle: isFlipped ? 0 : -180, isVisible: isFlipped))
+                    .accessibilityHidden(!isFlipped)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("flashcard")
-            .accessibilityHint(isFlipped ? "Вернуться к исходному слову" : "Открыть ответ")
-
+            .frame(maxWidth: .infinity, minHeight: 300)
+            .background(Color.cardBackground, in: cardShape)
+            .overlay { cardShape.strokeBorder(Color.appCardEdge, lineWidth: 1) }
+            .contentShape(cardShape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("flashcard")
+        .accessibilityLabel(isFlipped ? "\(frontText) — \(backText)" : frontText)
+        .accessibilityValue(KnowledgeTierBadge.accessibilityDescription(
+            for: word, level: tier, hidesWord: shownLanguage == .russian))
+        .accessibilityHint(isFlipped ? "Скрыть перевод" : "Показать перевод")
+        .accessibilityAddTraits(.isButton)
+        .overlay(alignment: .topTrailing) {
             if shownLanguage == .polish {
-                // Keep pronunciation separate from the reveal button.
+                // Sibling of the reveal button, so speaking never flips the card.
                 PronounceButton(text: shownText, language: .polish)
-                    .padding(.bottom, 20)
+                    .padding(AppSpacing.s)
             }
         }
-        .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private func faceHeader(language: AppLanguage, word: Word, tier: Int) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            Text(language.displayName)
+                .font(.caption.weight(.bold))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundStyle(Color.subtleText)
+            KnowledgeTierBadge(word: word, level: tier,
+                               hidesWordInAccessibilityLabel: language == .russian)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.trailing, 56)
+    }
+
+    private func frontFace(word: Word, language: AppLanguage, text: String, tier: Int) -> some View {
+        VStack(spacing: AppSpacing.m) {
+            faceHeader(language: language, word: word, tier: tier)
+            Spacer(minLength: 0)
+            Text(text)
+                .font(.system(size: cardWordSize, weight: .heavy))
+                .foregroundStyle(Color.appInk)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+            Spacer(minLength: 0)
+        }
+        .padding(AppSpacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func backFace(word: Word, language: AppLanguage, text: String,
+                          original: String, tier: Int) -> some View {
+        VStack(spacing: AppSpacing.m) {
+            faceHeader(language: language, word: word, tier: tier)
+            Spacer(minLength: 0)
+            Text(original)
+                .font(.headline)
+                .foregroundStyle(Color.subtleText)
+                .multilineTextAlignment(.center)
+            Rectangle()
+                .fill(Color.appBorder)
+                .frame(height: 1)
+                .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
+            Text(text)
+                .font(.system(size: cardWordSize, weight: .heavy))
+                .foregroundStyle(Color.appInk)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+            Spacer(minLength: 0)
+        }
+        .padding(AppSpacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func gradeButtons(word: Word) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.s) {
             Text("Насколько легко вспомнили?")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color.subtleText)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
-                                     count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.s),
+                                     count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: AppSpacing.s) {
                 ForEach(ReviewGrade.allCases, id: \.self) { grade in
                     Button {
                         apply(grade, to: word)
@@ -143,10 +195,17 @@ struct FlashcardsView: View {
                         Text(grade.title)
                             .font(.body.weight(.semibold))
                             .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, minHeight: 50)
                             .foregroundStyle(gradeTint(grade))
-                            .background(gradeSurface(grade), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(gradeSurface(grade),
+                                        in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
+                            .overlay {
+                                if grade != .easy {
+                                    RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                                        .strokeBorder(Color.appBorder, lineWidth: 1)
+                                }
+                            }
+                            .contentShape(RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -157,17 +216,13 @@ struct FlashcardsView: View {
     private func gradeTint(_ grade: ReviewGrade) -> Color {
         switch grade {
         case .again: .appError
-        case .hard: .appWarning
-        case .good, .easy: .appAccent
+        case .hard, .good: .appInk
+        case .easy: .appOnAccent
         }
     }
 
     private func gradeSurface(_ grade: ReviewGrade) -> Color {
-        switch grade {
-        case .again: .appErrorSurface
-        case .hard: .appWarningSurface
-        case .good, .easy: .appSecondarySurface
-        }
+        grade == .easy ? .appAccent : .cardBackground
     }
 
     private func apply(_ grade: ReviewGrade, to word: Word) {
@@ -184,18 +239,24 @@ struct FlashcardsView: View {
         reviewedCount += 1
         // Change the word without a flip that could obscure the next prompt.
         isFlipped = false
-        currentIndex += 1
+        if reduceMotion {
+            currentIndex += 1
+        } else {
+            withAnimation(.snappy(duration: 0.3)) { currentIndex += 1 }
+        }
         frontIsRussian = Bool.random()
     }
 
     private var completedView: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundStyle(Color.appSuccess)
-                    .padding(16)
-                    .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            VStack(spacing: AppSpacing.l) {
+                Image(systemName: "flag.checkered")
+                    .font(.system(size: completedIconSize))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appInk)
+                    .padding(AppSpacing.m)
+                    .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                    .accessibilityHidden(true)
                 Text("Тренировка завершена")
                     .font(.title.weight(.bold))
                     .multilineTextAlignment(.center)
@@ -207,14 +268,12 @@ struct FlashcardsView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Color.cardBackground, in: Capsule())
+                    .overlay { Capsule().strokeBorder(Color.appCardEdge, lineWidth: 1) }
                 Button("К практике") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appAccent)
-                    .foregroundStyle(Color.appOnAccent)
-                    .controlSize(.large)
-                    .padding(.top, 8)
+                    .buttonStyle(PrimaryButtonStyle())
+                    .padding(.top, AppSpacing.xs)
             }
-            .padding(24)
+            .padding(AppSpacing.xl)
         }
     }
 
@@ -224,6 +283,37 @@ struct FlashcardsView: View {
         } description: {
             Text("Сначала добавьте слова в словарь.")
         }
+    }
+}
+
+/// Rotates one card face around Y; the angle drives visibility so faces swap at the edge-on midpoint.
+/// With Reduce Motion the faces crossfade without rotating.
+private struct FlipFace: ViewModifier {
+    let angle: Double
+    let isVisible: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content.opacity(isVisible ? 1 : 0)
+        } else {
+            content
+                .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+                .modifier(FaceVisibility(angle: angle))
+        }
+    }
+}
+
+private struct FaceVisibility: ViewModifier, Animatable {
+    var angle: Double
+
+    var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content.opacity(abs(angle) < 90 ? 1 : 0)
     }
 }
 

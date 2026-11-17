@@ -25,5 +25,8 @@ struct AchievementTracker: View {
             .onChange(of: scenePhase, initial: true) {
                 store.setSceneActive(scenePhase == .active)
             }
+            .sensoryFeedback(trigger: store.currentAnnouncement?.id) { _, new in
+                new == nil ? nil : .impact(weight: .light)
+            }
     }
 }

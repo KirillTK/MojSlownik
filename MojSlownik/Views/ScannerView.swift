@@ -9,6 +9,7 @@ import UIKit
 struct ScannerScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var unavailableIconSize: CGFloat = 44
     var onPick: (String) -> Void
 
     @State private var cameraAuthorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
@@ -83,7 +84,8 @@ struct ScannerScreen: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.body.weight(.semibold))
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(Color.appInk)
                             .frame(width: 44, height: 44)
                             .background(.regularMaterial, in: Circle())
                     }
@@ -140,13 +142,8 @@ struct ScannerScreen: View {
                             if !selectedBlockText.isEmpty { onPick(selectedBlockText) }
                         } label: {
                             Label("Перевести выбранное", systemImage: "text.magnifyingglass")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(minHeight: 44)
-                                .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color.appAccent)
-                        .foregroundStyle(Color.appOnAccent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(selectedBlockIDs.isEmpty)
                         .accessibilityHint("Перевести выбранные текстовые блоки по порядку чтения")
                     }
@@ -207,9 +204,11 @@ struct ScannerScreen: View {
     private var unavailableView: some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: "camera.on.rectangle")
-                .font(.system(size: 44))
-                .foregroundStyle(Color.appAccent)
+            Image(systemName: "camera")
+                .font(.system(size: unavailableIconSize))
+                .fontWeight(.medium)
+                .foregroundStyle(Color.appAccentText)
+                .accessibilityHidden(true)
             Text(cameraAuthorized
                  ? "Сканер недоступен на этом устройстве (в симуляторе нет камеры)."
                  : "Разрешите доступ к камере в Настройках, чтобы сканировать слова.")
@@ -250,14 +249,14 @@ struct ScanResultView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AppSpacing.xl) {
                     VStack(spacing: 0) {
                         sourceCard
-                        Divider().overlay(Color.appBorder.opacity(0.5))
-                            .padding(.horizontal, 20)
+                        Divider().overlay(Color.appBorder)
+                            .padding(.horizontal, AppSpacing.l)
                         translationCard
                     }
-                    .cardStyle(cornerRadius: 20)
+                    .cardStyle(cornerRadius: AppRadius.hero)
                     FolderPicker(selectedFolderID: $selectedFolderID)
                     wordChips
                 }
@@ -265,7 +264,7 @@ struct ScanResultView: View {
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
-            .tint(Color.appAccent)
+            .tint(Color.appAccentText)
             .navigationTitle("Из текста")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -315,24 +314,12 @@ struct ScanResultView: View {
                 .frame(minHeight: 120, alignment: .topLeading)
                 .scrollContentBackground(.hidden)
                 .padding(8)
-                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                 .accessibilityIdentifier("scanOriginalText")
                 .accessibilityLabel("Оригинал распознавания")
                 .accessibilityHint("Исправьте распознанный текст перед переводом")
-            if !words.isEmpty {
-                Menu {
-                    ForEach(words, id: \.self) { word in
-                        Button(word) { selectedWord = SelectedWord(text: word) }
-                    }
-                } label: {
-                    Label("Исправить слово", systemImage: "pencil")
-                        .font(.subheadline.weight(.medium))
-                        .frame(minHeight: 44)
-                }
-                .accessibilityHint("Выберите слово, чтобы исправить его перед добавлением")
-            }
         }
-        .padding(20)
+        .padding(AppSpacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -342,7 +329,7 @@ struct ScanResultView: View {
                 Text("Слова в словарь")
                     .font(.headline)
                     .foregroundStyle(Color.appInk)
-                Text("Нажмите +, чтобы сохранить. Повторное нажатие убирает слово.")
+                Text("Нажмите +, чтобы сохранить. Удерживайте слово, чтобы исправить или выбрать тему.")
                     .font(.caption)
                     .foregroundStyle(Color.subtleText)
             }
@@ -394,7 +381,7 @@ struct ScanResultView: View {
                             .foregroundStyle(Color.appInk)
                         Spacer(minLength: 0)
                         Image(systemName: isSaved ? "checkmark.circle.fill" : "plus.circle")
-                            .foregroundStyle(isSaved ? Color.appSuccess : Color.appAccent)
+                            .foregroundStyle(isSaved ? Color.appMastery : Color.appAccentText)
                             .accessibilityHidden(true)
                     }
                     if let translation {
@@ -405,7 +392,7 @@ struct ScanResultView: View {
                         Text(error).font(.caption).foregroundStyle(Color.subtleText)
                         Label("Повторить", systemImage: "arrow.clockwise")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(Color.appAccent)
+                            .foregroundStyle(Color.appAccentText)
                     } else {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.mini)
@@ -432,8 +419,14 @@ struct ScanResultView: View {
             .accessibilityHint(isSaved ? (selectedFolderID == nil ? "Удалить из словаря" : "Убрать из папки") : draft.wordErrors[word] != nil
                 ? "Повторить перевод" : translation == nil
                 ? "Дождитесь перевода" : "Добавить в словарь без открытия формы")
-            if let translation {
-                categoryMenu(word, translation: translation, existing: existing)
+            .accessibilityActions {
+                Button("Исправить слово") { selectedWord = SelectedWord(text: word) }
+                if translation != nil {
+                    Button(toggleTitle(isSaved: isSaved)) { toggleSaved(word) }
+                    ForEach(WordCategory.allCases) { option in
+                        Button("Тема: \(option.rawValue)") { changeCategory(option, for: word, existing: existing) }
+                    }
+                }
             }
             if let error = saveErrors[word] {
                 Text(error)
@@ -444,38 +437,43 @@ struct ScanResultView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isSaved ? Color.appSecondarySurface : Color.cardBackground,
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(isSaved ? Color.appAccentSoft : Color.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(isSaved ? Color.appAccent.opacity(0.3) : Color.appBorder.opacity(0.5), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous)
+                .strokeBorder(Color.appBorder, lineWidth: 1)
                 .allowsHitTesting(false)
+        }
+        .contextMenu {
+            Button {
+                selectedWord = SelectedWord(text: word)
+            } label: {
+                Label("Исправить слово…", systemImage: "pencil")
+            }
+            if let translation {
+                Button {
+                    toggleSaved(word)
+                } label: {
+                    Label(toggleTitle(isSaved: isSaved), systemImage: isSaved ? "minus.circle" : "plus")
+                }
+                categoryContextMenu(word, translation: translation, existing: existing)
+            }
         }
     }
 
-    private func categoryMenu(_ word: String, translation: String, existing: Word?) -> some View {
+    private func toggleTitle(isSaved: Bool) -> String {
+        guard isSaved else { return "Добавить в словарь" }
+        return selectedFolderID == nil ? "Убрать из словаря" : "Убрать из папки"
+    }
+
+    private func categoryContextMenu(_ word: String, translation: String, existing: Word?) -> some View {
         let current = categoryOverrides[word] ?? existing?.category ?? category(word, translation: translation)
         return CategoryMenu(selection: Binding(
             get: { current },
             set: { changeCategory($0, for: word, existing: existing) }
         )) {
-            HStack(spacing: 5) {
-                Text(current.rawValue)
-                    .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(Color.appAccent)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color.cardBackground.opacity(0.65), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            Label("Тема: \(current.rawValue)", systemImage: "tag")
         }
-        .accessibilityLabel("Категория слова \(word): \(current.rawValue)")
-        .accessibilityHint("Открыть выбор категории")
     }
 
     private func changeCategory(_ category: WordCategory, for word: String, existing: Word?) {
@@ -513,8 +511,10 @@ struct ScanResultView: View {
                 Text("Переводим…").foregroundStyle(Color.subtleText)
             }
             if let translationError = draft.translationError {
-                Label(translationError, systemImage: "wifi.exclamationmark")
-                    .font(.caption).foregroundStyle(Color.appError)
+                Label("Перевод предложения недоступен", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(Color.subtleText)
+                    .accessibilityLabel("Перевод предложения недоступен. \(translationError)")
                 Button("Повторить перевод предложения") {
                     draft.retryContent()
                 }
@@ -584,7 +584,7 @@ private struct FrozenBlockOverlay: View {
                 ForEach(blocks) { block in
                     let selected = selectedIDs.contains(block.id)
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(selected ? Color.appAccent.opacity(0.22) : Color.white.opacity(0.04))
+                        .fill(selected ? Color.appAccent.opacity(0.3) : Color.white.opacity(0.04))
                         .overlay {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .stroke(selected ? Color.appAccent : Color.white.opacity(0.85), lineWidth: selected ? 3 : 1.5)
@@ -594,8 +594,8 @@ private struct FrozenBlockOverlay: View {
                             if selected {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.title3)
-                                    .foregroundStyle(Color.appAccent)
-                                    .background(.white, in: Circle())
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(Color.appOnAccent, Color.appAccent)
                                     .offset(x: 8, y: -8)
                             }
                         }

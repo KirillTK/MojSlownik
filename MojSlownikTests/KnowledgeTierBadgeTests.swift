@@ -10,6 +10,12 @@ final class KnowledgeTierBadgeTests: XCTestCase {
         XCTAssertEqual(presentations.map(\.color), [.error, .warning, .accent, .mastery])
     }
 
+    func testRingFillFractionGrowsWithTier() {
+        XCTAssertEqual((0...3).map { KnowledgeTierBadge.presentation(for: $0).fillFraction }, [0.25, 0.5, 0.75, 1.0])
+        XCTAssertEqual(KnowledgeTierBadge.presentation(for: -1).fillFraction, 0.25)
+        XCTAssertEqual(KnowledgeTierBadge.presentation(for: 9).fillFraction, 1.0)
+    }
+
     func testPresentationClampsOutOfRangeLevels() {
         XCTAssertEqual(KnowledgeTierBadge.presentation(for: -1), KnowledgeTierBadge.presentation(for: 0))
         XCTAssertEqual(KnowledgeTierBadge.presentation(for: 4), KnowledgeTierBadge.presentation(for: 3))

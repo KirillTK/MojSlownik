@@ -4,6 +4,7 @@ import SwiftData
 struct QuizView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var allWords: [Word]
@@ -15,6 +16,7 @@ struct QuizView: View {
     @State private var quizStarted = false
     @State private var answerError: String?
     @State private var advanceTask: Task<Void, Never>?
+    @ScaledMetric(relativeTo: .largeTitle) private var resultIconSize: CGFloat = 40
 
     private var currentQuestion: QuizQuestion? {
         questions.indices.contains(currentIndex) ? questions[currentIndex] : nil
@@ -33,7 +35,7 @@ struct QuizView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
-        .tint(Color.appAccent)
+        .tint(Color.appAccentText)
         .navigationTitle("Викторина")
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert(title: "Не удалось сохранить ответ", error: $answerError)
@@ -42,6 +44,14 @@ struct QuizView: View {
             if selectedAnswer != nil { scheduleAdvance() }
         }
         .onDisappear { advanceTask?.cancel() }
+        .sensoryFeedback(trigger: selectedAnswer) { _, new -> SensoryFeedback? in
+            guard let new else { return nil }
+            return new == currentQuestion?.correctAnswer ? .success : .error
+        }
+    }
+
+    private var feedbackTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98))
     }
 
     private func startQuiz() {
@@ -53,10 +63,10 @@ struct QuizView: View {
 
     private func questionView(_ question: QuizQuestion) -> some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: AppSpacing.xl) {
                 SessionProgress(completed: currentIndex + (selectedAnswer == nil ? 0 : 1), total: questions.count)
 
-                VStack(spacing: 16) {
+                VStack(spacing: AppSpacing.m) {
                     if let word = allWords.first(where: { $0.persistentModelID == question.wordID }) {
                         HStack {
                             Spacer(minLength: 0)
@@ -69,7 +79,7 @@ struct QuizView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(Color.subtleText)
                     Text(question.prompt)
-                        .font(.title.weight(.bold))
+                        .font(.largeTitle.weight(.bold))
                         .foregroundStyle(Color.appInk)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -77,11 +87,11 @@ struct QuizView: View {
                         PronounceButton(text: question.prompt, language: .polish)
                     }
                 }
-                .padding(24)
+                .padding(AppSpacing.xl)
                 .frame(maxWidth: .infinity, minHeight: 150)
-                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .cardStyle(cornerRadius: AppRadius.hero)
 
-                VStack(spacing: 10) {
+                VStack(spacing: AppSpacing.s) {
                     ForEach(question.options, id: \.self) { option in
                         Button {
                             select(option, in: question)
@@ -96,36 +106,40 @@ struct QuizView: View {
                                 if selectedAnswer != nil {
                                     if option == question.correctAnswer {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(Color.appSuccess)
+                                            .foregroundStyle(Color.appMastery)
+                                            .transition(feedbackTransition)
                                             .accessibilityLabel("Правильный ответ")
                                     } else if option == selectedAnswer {
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundStyle(Color.appError)
+                                            .transition(feedbackTransition)
                                             .accessibilityLabel("Неверный ответ")
                                     }
                                 }
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(optionBackground(option, in: question), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .background(optionBackground(option, in: question), in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                             .overlay {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .strokeBorder(Color.appBorder.opacity(0.5), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                                    .strokeBorder(Color.appBorder, lineWidth: 1)
                             }
+                            .contentShape(RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .disabled(selectedAnswer != nil)
                     }
                 }
+                .animation(.smooth(duration: 0.25), value: selectedAnswer)
             }
-            .padding(20)
+            .padding(AppSpacing.l)
         }
     }
 
     private func optionBackground(_ option: String, in question: QuizQuestion) -> Color {
         guard selectedAnswer != nil else { return .cardBackground }
-        if option == question.correctAnswer { return .appSecondarySurface }
+        if option == question.correctAnswer { return .appMasterySurface }
         if option == selectedAnswer { return .appErrorSurface }
         return .cardBackground
     }
@@ -170,11 +184,13 @@ struct QuizView: View {
     private var resultView: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Image(systemName: score == questions.count ? "trophy.fill" : "flag.checkered")
-                    .font(.system(size: 40))
-                    .foregroundStyle(Color.appAccent)
-                    .padding(16)
-                    .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Image(systemName: score == questions.count ? "trophy" : "flag.checkered")
+                    .font(.system(size: resultIconSize))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appInk)
+                    .padding(AppSpacing.m)
+                    .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                    .accessibilityHidden(true)
                 Text("\(score) из \(questions.count)")
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Color.appInk)
@@ -199,14 +215,9 @@ struct QuizView: View {
                     startQuiz()
                 } label: {
                     Text("Ещё раз")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .padding(.vertical, 6)
-                        .foregroundStyle(Color.appOnAccent)
-                        .background(Color.appAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.top, AppSpacing.xxs)
             }
             .padding(24)
         }
@@ -215,10 +226,10 @@ struct QuizView: View {
     private var resultBadges: some View {
         Group {
             Label("Верных: \(score)", systemImage: "checkmark")
-                .foregroundStyle(Color.appSuccess)
+                .foregroundStyle(Color.appMastery)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color.appSecondarySurface, in: Capsule())
+                .background(Color.appMasterySurface, in: Capsule())
             Label("Ошибок: \(questions.count - score)", systemImage: "xmark")
                 .foregroundStyle(Color.appError)
                 .padding(.horizontal, 14)

@@ -11,7 +11,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Area | Files and responsibilities |
 | --- | --- |
 | Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder, daily-study and achievement stores, and presents `RootTabView`. |
-| Navigation | `Views/RootTabView.swift`: Dictionary, Training and Achievements tabs, root `AppleTranslationHost`, `AchievementTracker` and `achievementBanner()`. |
+| Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs (Achievements is pushed from Training), root `AppleTranslationHost`, `AchievementTracker` and `achievementBanner()`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
@@ -204,7 +204,9 @@ quiz distractors. Empty folders never fall back to global vocabulary.
 ## Reusable Views
 
 `Views/Components/` contains FolderPicker, CategoryMenu, PronounceButton,
-SessionProgress, AchievementBadge, the achievementBanner() modifier and the errorAlert modifier. CategoryMenu shares available choices
+SessionProgress, PrimaryButtonStyle, chipStyle, MarkerProgressBar, KnowledgeTierBadge
+(ring), AchievementBadge, AchievementBanner, the achievementBanner() modifier and the
+errorAlert modifier. CategoryMenu shares available choices
 and selected-state behavior while callers supply their label and persistence action.
 SessionProgress shares practice-session progress rendering. errorAlert shares optional
 error presentation and dismissal. Screens retain navigation, session state and content;
@@ -212,23 +214,9 @@ Theme.cardStyle handles shared surfaces instead of a universal card component.
 
 ## Presentation
 
-Lilac Studio uses adaptive warm pearl surfaces, dark ink, violet actions and pale
-lavender accents, with native sans-serif typography, open lists and fine dividers.
-Body text uses ink rather than the accent color. Semantic error/warning surfaces
-keep feedback readable without relying on color alone. `appOnAccent` supplies
-contrasting text on solid accent fills in both appearances.
-Practice uses a compact Today panel with a thin progress bar and icon/text badges
-for correct answers and errors; unique-word progress and answer totals remain
-separate. The page and tab are both named «Практика».
-FolderPicker offers a compact selector for browsing and a metadata row for forms,
-with the same folder sheet, creation and reconciliation behavior.
-Controls retain 44-point targets and use Dynamic Type text;
-scan cards switch to a single column at accessibility text sizes. Save and category
-selection are sibling controls. Saved cards remain readable rather than dimmed.
-Flashcards use an explicit reveal button with a separate pronunciation action,
-subtle motion respecting Reduce Motion, and vertically stacked ratings at
-accessibility text sizes. Add Word places input and editable translation before
-secondary folder/category metadata.
+The «Маркер» language: warm paper, ink type and highlighter-yellow fills. Practice is
+hero-led with one primary action, and flashcards flip on tap. Tokens, components, icons,
+motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 
 ## Non-obvious Constraints
 

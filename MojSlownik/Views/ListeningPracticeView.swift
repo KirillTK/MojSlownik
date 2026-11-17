@@ -4,6 +4,7 @@ import SwiftData
 struct ListeningPracticeView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var allWords: [Word]
@@ -18,6 +19,8 @@ struct ListeningPracticeView: View {
     @State private var answerError: String?
     @State private var advanceTask: Task<Void, Never>?
     @FocusState private var answerFocused: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var resultIconSize: CGFloat = 40
+    @ScaledMetric(relativeTo: .title) private var replaySize: CGFloat = 64
 
     private var currentQuestion: ListeningQuestion? {
         questions.indices.contains(currentIndex) ? questions[currentIndex] : nil
@@ -36,7 +39,7 @@ struct ListeningPracticeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
-        .tint(Color.appAccent)
+        .tint(Color.appAccentText)
         .navigationTitle("На слух")
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert(title: "Не удалось сохранить ответ", error: $answerError)
@@ -48,6 +51,14 @@ struct ListeningPracticeView: View {
             advanceTask?.cancel()
             SpeechService.shared.stop()
         }
+        .sensoryFeedback(trigger: answerIsCorrect) { _, new -> SensoryFeedback? in
+            guard let new else { return nil }
+            return new ? .success : .error
+        }
+    }
+
+    private var feedbackTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98))
     }
 
     private func startSession() {
@@ -61,10 +72,10 @@ struct ListeningPracticeView: View {
 
     private func questionView(_ question: ListeningQuestion) -> some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: AppSpacing.xl) {
                 SessionProgress(completed: currentIndex + (submittedAnswer == nil ? 0 : 1), total: questions.count)
 
-                VStack(spacing: 16) {
+                VStack(spacing: AppSpacing.m) {
                     if let word = allWords.first(where: { $0.persistentModelID == question.wordID }) {
                         HStack {
                             Spacer(minLength: 0)
@@ -78,7 +89,7 @@ struct ListeningPracticeView: View {
                         .foregroundStyle(Color.subtleText)
                     if question.mode == .translation {
                         Text(question.prompt)
-                            .font(.title.weight(.bold))
+                            .font(.largeTitle.weight(.bold))
                             .foregroundStyle(Color.appInk)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
@@ -87,9 +98,9 @@ struct ListeningPracticeView: View {
                         replayButton
                     }
                 }
-                .padding(24)
+                .padding(AppSpacing.xl)
                 .frame(maxWidth: .infinity, minHeight: 150)
-                .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .cardStyle(cornerRadius: AppRadius.hero)
 
                 if question.mode == .choices {
                     choiceAnswers(question)
@@ -104,16 +115,13 @@ struct ListeningPracticeView: View {
                         advanceToNextQuestion()
                     } label: {
                         Text(currentIndex == questions.count - 1 ? "К результатам" : "Дальше")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.vertical, 6)
-                            .foregroundStyle(Color.appOnAccent)
-                            .background(Color.appAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PrimaryButtonStyle())
+                    .transition(.opacity)
                 }
             }
-            .padding(20)
+            .animation(.smooth(duration: 0.25), value: submittedAnswer)
+            .padding(AppSpacing.l)
         }
         .scrollDismissesKeyboard(.interactively)
     }
@@ -130,19 +138,25 @@ struct ListeningPracticeView: View {
         Button {
             speakCurrentQuestion()
         } label: {
-            Label("Повторить", systemImage: "speaker.wave.2.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.appAccent)
-                .frame(minHeight: 44)
-                .padding(.horizontal, 14)
-                .background(Color.cardBackground, in: Capsule())
+            VStack(spacing: AppSpacing.xs) {
+                Image(systemName: "speaker.wave.2")
+                    .font(.title2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appInk)
+                    .frame(width: replaySize, height: replaySize)
+                    .background(Color.appAccentSoft, in: Circle())
+                Text("Повторить")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.subtleText)
+            }
+            .frame(minWidth: 44, minHeight: 44)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Повторить произношение")
     }
 
     private func choiceAnswers(_ question: ListeningQuestion) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: AppSpacing.s) {
             ForEach(question.options, id: \.self) { option in
                 Button {
                     submit(option, for: question)
@@ -157,23 +171,26 @@ struct ListeningPracticeView: View {
                         if submittedAnswer != nil {
                             if option == question.correctAnswer {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color.appSuccess)
+                                    .foregroundStyle(Color.appMastery)
+                                    .transition(feedbackTransition)
                                     .accessibilityLabel("Правильный ответ")
                             } else if option == submittedAnswer {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(Color.appError)
+                                    .transition(feedbackTransition)
                                     .accessibilityLabel("Неверный ответ")
                             }
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(optionBackground(option, in: question), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(optionBackground(option, in: question), in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.appBorder.opacity(0.5), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                            .strokeBorder(Color.appBorder, lineWidth: 1)
                     }
+                    .contentShape(RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(submittedAnswer != nil)
@@ -183,7 +200,7 @@ struct ListeningPracticeView: View {
 
     private func optionBackground(_ option: String, in question: ListeningQuestion) -> Color {
         guard submittedAnswer != nil else { return .cardBackground }
-        if option == question.correctAnswer { return .appSecondarySurface }
+        if option == question.correctAnswer { return .appMasterySurface }
         if option == submittedAnswer { return .appErrorSurface }
         return .cardBackground
     }
@@ -199,10 +216,11 @@ struct ListeningPracticeView: View {
                 .onSubmit { submit(answer, for: question) }
                 .padding(16)
                 .frame(minHeight: 52)
-                .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.appBorder.opacity(0.5), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                        .strokeBorder(answerFocused ? Color.appAccentStrong : Color.appBorder,
+                                      lineWidth: answerFocused ? 2 : 1)
                 }
                 .disabled(submittedAnswer != nil)
                 .accessibilityIdentifier("listeningAnswer")
@@ -211,22 +229,18 @@ struct ListeningPracticeView: View {
                 submit(answer, for: question)
             } label: {
                 Text("Проверить")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .padding(.vertical, 6)
-                    .foregroundStyle(Color.appOnAccent)
-                    .background(Color.appAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(submittedAnswer != nil || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
     private func feedbackView(for question: ListeningQuestion, submittedAnswer: String) -> some View {
         VStack(spacing: 6) {
-            Text(answerIsCorrect == true ? "Верно!" : "Правильный ответ: \(question.correctAnswer)")
+            Label(answerIsCorrect == true ? "Верно!" : "Правильный ответ: \(question.correctAnswer)",
+                  systemImage: answerIsCorrect == true ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(answerIsCorrect == true ? Color.appSuccess : Color.appError)
+                .foregroundStyle(answerIsCorrect == true ? Color.appMastery : Color.appError)
                 .multilineTextAlignment(.center)
             if answerIsCorrect == false && question.mode != .choices {
                 Text("Ваш ответ: \(submittedAnswer)")
@@ -237,9 +251,10 @@ struct ListeningPracticeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(14)
-        .background(answerIsCorrect == true ? Color.appSecondarySurface : Color.appErrorSurface,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(answerIsCorrect == true ? Color.appMasterySurface : Color.appErrorSurface,
+                    in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
         .accessibilityElement(children: .combine)
+        .transition(feedbackTransition)
     }
 
     private func submit(_ answer: String, for question: ListeningQuestion) {
@@ -297,11 +312,13 @@ struct ListeningPracticeView: View {
     private var resultView: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Image(systemName: score == questions.count ? "trophy.fill" : "flag.checkered")
-                    .font(.system(size: 40))
-                    .foregroundStyle(Color.appAccent)
-                    .padding(16)
-                    .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Image(systemName: score == questions.count ? "trophy" : "flag.checkered")
+                    .font(.system(size: resultIconSize))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appInk)
+                    .padding(AppSpacing.m)
+                    .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
+                    .accessibilityHidden(true)
                 Text("\(score) из \(questions.count)")
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Color.appInk)
@@ -326,14 +343,9 @@ struct ListeningPracticeView: View {
                     startSession()
                 } label: {
                     Text("Ещё раз")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .padding(.vertical, 6)
-                        .foregroundStyle(Color.appOnAccent)
-                        .background(Color.appAccent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.top, AppSpacing.xxs)
             }
             .padding(24)
         }
@@ -342,10 +354,10 @@ struct ListeningPracticeView: View {
     private var resultBadges: some View {
         Group {
             Label("Верных: \(score)", systemImage: "checkmark")
-                .foregroundStyle(Color.appSuccess)
+                .foregroundStyle(Color.appMastery)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color.appSecondarySurface, in: Capsule())
+                .background(Color.appMasterySurface, in: Capsule())
             Label("Ошибок: \(questions.count - score)", systemImage: "xmark")
                 .foregroundStyle(Color.appError)
                 .padding(.horizontal, 14)

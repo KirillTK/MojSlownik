@@ -5,6 +5,8 @@ struct FolderPicker: View {
     @Binding var selectedFolderID: UUID?
     var allowsAll = false
     var compact = false
+    /// Grows with Dynamic Type so the title is not truncated at accessibility sizes.
+    @ScaledMetric(relativeTo: .subheadline) private var compactMaxWidth: CGFloat = 220
 
     @Environment(\.modelContext) private var modelContext
     @Environment(FolderLibraryStore.self) private var library
@@ -32,33 +34,7 @@ struct FolderPicker: View {
                 refresh()
                 showFolders = true
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "folder")
-                        .foregroundStyle(Color.appAccent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        if !compact {
-                            Text("Папка")
-                                .font(.caption)
-                                .foregroundStyle(Color.subtleText)
-                        }
-                        Text(selectionTitle)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color.appInk)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(compact ? 2 : nil)
-                            .frame(maxWidth: compact ? 140 : nil, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if !compact { Spacer(minLength: 8) }
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.appAccent)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, compact ? 6 : 10)
-                .frame(maxWidth: compact ? 220 : .infinity, minHeight: 44, alignment: .leading)
-                .fixedSize(horizontal: compact, vertical: false)
-                .background(Color.appSecondarySurface.opacity(compact ? 0.7 : 0.4), in: RoundedRectangle(cornerRadius: compact ? 14 : 16, style: .continuous))
+                pickerLabel
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Папка: \(selectionTitle)")
@@ -72,6 +48,48 @@ struct FolderPicker: View {
         .onChange(of: library.options.map(\.id)) { reconcileSelection() }
         .onChange(of: showFolders) {
             if !showFolders { resetFolderManagementState() }
+        }
+    }
+
+    @ViewBuilder
+    private var pickerLabel: some View {
+        let content = HStack(spacing: compact ? AppSpacing.xs : 10) {
+            if compact {
+                Image(systemName: "folder").fontWeight(.medium)
+            } else {
+                Image(systemName: "folder").fontWeight(.medium).foregroundStyle(Color.appInk)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                if !compact {
+                    Text("Папка")
+                        .font(.caption)
+                        .foregroundStyle(Color.subtleText)
+                }
+                Text(selectionTitle)
+                    .font(compact ? nil : .subheadline.weight(.medium))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(compact ? 1 : nil)
+                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: !compact)
+            }
+            if !compact { Spacer(minLength: 8) }
+            if compact {
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+            } else {
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(Color.subtleText)
+            }
+        }
+        if compact {
+            content
+                .frame(maxWidth: compactMaxWidth, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
+                .chipStyle(isSelected: selectedFolderID != nil)
+        } else {
+            content
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .cardStyle(cornerRadius: AppRadius.control)
         }
     }
 
@@ -202,7 +220,9 @@ struct FolderPicker: View {
             }
         }
         .environment(\.editMode, .constant(isEditingFolders ? .active : .inactive))
-        .tint(Color.appAccent)
+        .tint(Color.appAccentText)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private func optionRow(id: UUID?, name: String) -> some View {
@@ -214,7 +234,9 @@ struct FolderPicker: View {
                 Text(name).foregroundStyle(Color.appInk)
                 Spacer()
                 if selectedFolderID == id {
-                    Image(systemName: "checkmark").foregroundStyle(Color.appAccent)
+                    Image(systemName: "checkmark")
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.appAccentStrong)
                 }
             }
             .frame(minHeight: 44)
@@ -234,6 +256,7 @@ struct FolderPicker: View {
                 folderToRename = option
             } label: {
                 Image(systemName: "pencil")
+                    .fontWeight(.medium)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Переименовать папку «\(option.name)»")
@@ -241,6 +264,7 @@ struct FolderPicker: View {
                 pendingDeletion = option
             } label: {
                 Image(systemName: "trash")
+                    .fontWeight(.medium)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Удалить папку «\(option.name)»")

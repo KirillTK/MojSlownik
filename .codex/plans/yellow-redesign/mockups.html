@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mój Słownik — жёлтый редизайн</title>
+<style>
+:root{color-scheme:light dark;--page:#F4F2EC;--pageInk:#1C1B17;--pageSub:#6B675C;--pageLine:#DDD8CB}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--page:#0F0F0D;--pageInk:#F2EFE6;--pageSub:#A29D90;--pageLine:#2D2B26}}
+:root[data-theme="dark"]{--page:#0F0F0D;--pageInk:#F2EFE6;--pageSub:#A29D90;--pageLine:#2D2B26}
+*{box-sizing:border-box}
+body{margin:0;color:var(--pageInk);font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 64px}
+h1{font-size:30px;letter-spacing:-.02em;margin:0 0 6px}
+h2{font-size:22px;letter-spacing:-.01em;margin:44px 0 4px}
+.lead{color:var(--pageSub);max-width:760px;margin:0}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 0}
+.bar button{font:inherit;border:1px solid var(--pageLine);background:transparent;color:var(--pageInk);padding:7px 14px;border-radius:999px;cursor:pointer}
+.bar button.on{background:var(--pageInk);color:var(--page)}
+.dir-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.tag{font-size:12px;padding:2px 9px;border-radius:999px;background:#FFD43B;color:#1C1B17;font-weight:600}
+.desc{color:var(--pageSub);margin:4px 0 14px;max-width:820px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.sw{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--pageSub)}
+.sw i{width:22px;height:22px;border-radius:7px;border:1px solid var(--pageLine);display:inline-block}
+.phones{display:flex;flex-wrap:wrap;gap:20px;padding-bottom:8px}
+@media (max-width:1000px){.phones{zoom:.76;gap:12px}}
+.cap{font-size:12px;color:var(--pageSub);margin:8px 0 0 4px}
+
+/* ---------- phone ---------- */
+.phone{flex:0 0 280px;height:590px;border-radius:40px;background:var(--bg);color:var(--ink);position:relative;overflow:hidden;
+  box-shadow:0 0 0 8px #1a1a1a,0 18px 40px rgba(0,0,0,.18);margin:8px}
+.sb{height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:13px;font-weight:600}
+.scr{padding:4px 16px 0}
+.lt{font-size:30px;font-weight:800;letter-spacing:-.03em;margin:2px 0 10px}
+.search{height:36px;border-radius:12px;background:var(--fill);display:flex;align-items:center;padding:0 12px;color:var(--sub);font-size:14px;gap:7px}
+.chips{display:flex;gap:6px;margin:10px 0 6px;overflow:hidden}
+.chip{padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--fill);white-space:nowrap}
+.chip.on{background:var(--acc);color:var(--onacc)}
+.row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.row .w{flex:1;min-width:0}
+.pl{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.ru{font-size:13px;color:var(--sub)}
+.marks{display:flex;gap:2px}
+.marks b{width:4px;height:14px;border-radius:2px;background:var(--line)}
+.marks b.f{background:var(--accText)}
+.donut{--c:var(--accText);width:22px;height:22px;border-radius:50%;flex:0 0 22px;
+  background:conic-gradient(var(--c) calc(var(--p)*1%),var(--line) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent 58%,#000 60%);mask:radial-gradient(farthest-side,transparent 58%,#000 60%)}
+.donut.t1{--c:var(--err)} .donut.t2{--c:#C77700} .donut.t4{--c:var(--mastery)}
+.A{--mastery:#2D7E56} .dark .A{--mastery:#8BD3A8}
+.B{--mastery:#2D7E56} .dark .B{--mastery:#8BD3A8}
+.C{--mastery:#2D7E56} .dark .C{--mastery:#8BD3A8}
+.spk{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--fill);font-size:13px}
+.fab{position:absolute;right:16px;bottom:92px;display:flex;gap:10px}
+.fab span{width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:22px;font-weight:700}
+.fab .p{background:var(--acc);color:var(--onacc);box-shadow:0 6px 16px var(--accShadow)}
+.fab .s{background:var(--card);color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.tabs{position:absolute;left:14px;right:14px;bottom:18px;height:58px;border-radius:29px;background:var(--glass);backdrop-filter:blur(12px);
+  display:flex;justify-content:space-around;align-items:center;font-size:11px;font-weight:600;color:var(--sub);box-shadow:0 4px 18px rgba(0,0,0,.10)}
+.tabs div{text-align:center;padding:6px 14px;border-radius:22px}
+.tabs .on{color:var(--ink);background:var(--fill)}
+.tabs i{display:block;font-style:normal;font-size:17px}
+.hl{background:linear-gradient(transparent 52%,var(--hl) 52%,var(--hl) 92%,transparent 92%);padding:0 2px}
+
+/* practice */
+.today{border-radius:24px;padding:16px;background:var(--hero);color:var(--onhero)}
+.today .k{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.75}
+.today .n{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin:4px 0}
+.today .n small{font-size:17px;font-weight:600;opacity:.7}
+.prog{height:8px;border-radius:4px;background:var(--progBg);overflow:hidden;margin:8px 0 12px}
+.prog i{display:block;height:100%;width:60%;background:var(--progFg);border-radius:4px}
+.cta{height:48px;border-radius:16px;background:var(--ctaBg);color:var(--ctaFg);display:grid;place-items:center;font-weight:700;font-size:16px}
+.badges{display:flex;gap:6px;margin-top:10px;font-size:12px;font-weight:600}
+.badges span{padding:3px 9px;border-radius:999px;background:var(--progBg)}
+.sec{font-size:13px;font-weight:700;color:var(--sub);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.05em}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{border-radius:20px;background:var(--card);padding:14px;min-height:92px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:var(--cardShadow)}
+.mode.wide{grid-column:span 2;min-height:64px;flex-direction:row;align-items:center}
+.mode i{font-style:normal;font-size:20px;width:36px;height:36px;border-radius:12px;background:var(--soft);display:grid;place-items:center}
+.mode b{font-size:15px}
+.mode small{color:var(--sub);font-size:12px;display:block}
+
+/* flashcard */
+.top{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--sub)}
+.top .x{width:30px;height:30px;border-radius:50%;background:var(--fill);display:grid;place-items:center;color:var(--ink)}
+.top .pb{flex:1;height:6px;border-radius:3px;background:var(--fill);overflow:hidden}
+.top .pb i{display:block;width:35%;height:100%;background:var(--accStrong)}
+.card{margin-top:16px;border-radius:30px;height:300px;background:var(--fcBg);color:var(--fcInk);padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;box-shadow:var(--cardShadow);position:relative}
+.card .lang{position:absolute;top:16px;left:18px;font-size:12px;font-weight:700;opacity:.6}
+.card .big{font-size:38px;font-weight:800;letter-spacing:-.03em}
+.card .tr{margin-top:14px;padding-top:14px;border-top:1px dashed var(--fcLine);width:80%;font-size:20px;font-weight:600;opacity:.85}
+.card .spk2{position:absolute;top:12px;right:14px;width:38px;height:38px;border-radius:50%;background:var(--fcBtn);display:grid;place-items:center}
+.q{font-size:13px;color:var(--sub);text-align:center;margin:14px 0 8px;font-weight:600}
+.rates{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rates div{border-radius:14px;padding:9px 2px;text-align:center;font-size:11px;font-weight:700;background:var(--card);box-shadow:var(--cardShadow)}
+.rates div i{display:block;font-style:normal;font-size:10px;font-weight:600;color:var(--sub);margin-top:2px}
+.rates .r0{color:var(--err)} .rates .r3{background:var(--acc);color:var(--onacc)} .rates .r3 i{color:var(--onacc);opacity:.7}
+
+/* ---------- direction tokens ---------- */
+.A{--bg:#FAF8F2;--card:#FFFFFF;--ink:#1C1B17;--sub:#6B675C;--line:#E7E2D5;--fill:#F0ECE1;--acc:#FFD43B;--onacc:#1C1B17;--accText:#8A6A00;--accStrong:#1C1B17;
+  --soft:#FFF3BF;--hl:#FFE066;--accShadow:rgba(230,180,0,.35);--glass:rgba(255,255,255,.78);--hero:#FFD43B;--onhero:#1C1B17;--progBg:rgba(28,27,23,.12);--progFg:#1C1B17;
+  --ctaBg:#1C1B17;--ctaFg:#FFD43B;--cardShadow:0 1px 0 #E7E2D5;--fcBg:#FFFFFF;--fcInk:#1C1B17;--fcLine:#E7E2D5;--fcBtn:#FFF3BF;--err:#B3261E}
+.dark .A{--bg:#141310;--card:#1F1E1A;--ink:#F4F1E8;--sub:#A8A293;--line:#2E2C26;--fill:#2A2823;--accText:#FFD43B;--accStrong:#FFD43B;--soft:#3A3318;--hl:rgba(255,212,59,.38);
+  --glass:rgba(40,38,33,.8);--accShadow:rgba(0,0,0,.4);--cardShadow:none;--fcBg:#1F1E1A;--fcInk:#F4F1E8;--fcLine:#3A372F;--fcBtn:#3A3318;--err:#FF8A80}
+
+.B{--bg:#FFFFFF;--card:#F4F4F1;--ink:#111111;--sub:#6E6E68;--line:#ECECE7;--fill:#F1F1EC;--acc:#FACC15;--onacc:#111111;--accText:#111111;--accStrong:#111111;
+  --soft:#FACC15;--hl:#FACC15;--accShadow:rgba(0,0,0,.18);--glass:rgba(255,255,255,.8);--hero:#111111;--onhero:#FFFFFF;--progBg:rgba(255,255,255,.16);--progFg:#FACC15;
+  --ctaBg:#FACC15;--ctaFg:#111111;--cardShadow:none;--fcBg:#FACC15;--fcInk:#111111;--fcLine:rgba(17,17,17,.25);--fcBtn:rgba(17,17,17,.1);--err:#B3261E}
+.dark .B{--bg:#0B0B0B;--card:#1A1A1A;--ink:#FFFFFF;--sub:#9A9A93;--line:#222;--fill:#1F1F1F;--accText:#FACC15;--accStrong:#FACC15;--hero:#FACC15;--onhero:#111111;
+  --progBg:rgba(0,0,0,.15);--progFg:#111;--ctaBg:#111111;--ctaFg:#FACC15;--glass:rgba(30,30,30,.8);--err:#FF8A80}
+
+.C{--bg:#FFF9EC;--card:#FFFFFF;--ink:#3A2A12;--sub:#8A7656;--line:#F0E3C8;--fill:#FBEFD6;--acc:#F2A900;--onacc:#2B1D06;--accText:#9A6400;--accStrong:#F2A900;
+  --soft:#FDE7B0;--hl:#FDE7B0;--accShadow:rgba(242,169,0,.3);--glass:rgba(255,250,238,.85);--hero:#FFFFFF;--onhero:#3A2A12;--progBg:#FBEFD6;--progFg:#F2A900;
+  --ctaBg:#F2A900;--ctaFg:#2B1D06;--cardShadow:0 6px 18px rgba(154,100,0,.08);--fcBg:#FFFFFF;--fcInk:#3A2A12;--fcLine:#F0E3C8;--fcBtn:#FDE7B0;--err:#A3361B}
+.dark .C{--bg:#1A140A;--card:#251D10;--ink:#FBEFD6;--sub:#BBA57E;--line:#3A2E1A;--fill:#30251A;--accText:#FFC23D;--soft:#4A3712;--hl:rgba(242,169,0,.35);
+  --glass:rgba(40,31,18,.85);--hero:#251D10;--onhero:#FBEFD6;--progBg:#3A2E1A;--cardShadow:none;--fcBg:#251D10;--fcInk:#FBEFD6;--fcLine:#3A2E1A;--fcBtn:#4A3712;--err:#FF9E80}
+
+
+.field{border-radius:16px;background:var(--card);padding:12px 14px;box-shadow:var(--cardShadow);margin-bottom:10px}
+.field .lbl{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:4px}
+.field .val{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.alts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.alt{border-radius:12px;padding:6px 10px;background:var(--fill);font-size:13px;font-weight:600;line-height:1.2}
+.alt small{display:block;font-size:10px;color:var(--sub);font-weight:600}
+.alt.on{background:var(--acc);color:var(--onacc)} .alt.on small{color:var(--onacc);opacity:.7}
+.meta{display:flex;gap:6px;margin:6px 0 12px}
+.save{height:50px;border-radius:16px;background:var(--acc);color:var(--onacc);display:grid;place-items:center;font-weight:800;font-size:16px}
+.ach-hero{border-radius:24px;padding:14px 16px;background:var(--ctaBg);color:var(--ctaFg)}
+.ach-hero .pts{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.ach-hero .sub{font-size:12px;opacity:.75;color:#F4F1E8}
+.streak{display:flex;gap:4px;margin-top:10px}
+.streak i{flex:1;height:22px;border-radius:7px;background:rgba(255,255,255,.12);font-style:normal;font-size:10px;display:grid;place-items:center;color:#A8A293}
+.streak i.on{background:#FFD43B;color:#1C1B17;font-weight:700}
+.arow{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.abadge{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:18px;flex:0 0 40px;position:relative}
+.abadge.on{background:var(--acc);color:var(--onacc)}
+.abadge.off{background:var(--fill);color:var(--sub);opacity:.8}
+.abadge.off::after{content:"🔒";position:absolute;right:-3px;bottom:-3px;font-size:10px}
+.arow .t{flex:1;min-width:0;font-size:14px;font-weight:700}
+.arow .t small{display:block;font-size:11px;color:var(--sub);font-weight:500}
+.mini{height:4px;border-radius:2px;background:var(--fill);margin-top:4px;overflow:hidden}.mini i{display:block;height:100%;background:var(--accStrong)}
+.pt{font-size:12px;font-weight:800}
+.toast{position:absolute;left:12px;right:12px;top:46px;border-radius:20px;background:var(--ink);color:var(--bg);padding:10px 12px;display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:3}
+.toast .abadge{width:36px;height:36px;flex-basis:36px}
+.toast small{display:block;font-size:11px;opacity:.7}
+.toast b{font-size:14px;white-space:nowrap}
+.toast>span:nth-child(2){min-width:0;flex:1}
+.toast .plus{margin-left:auto;background:#FFD43B;color:#1C1B17;border-radius:999px;padding:4px 9px;font-weight:800;font-size:12px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:12px 0 0;display:grid;gap:10px;max-width:860px}
+.steps li{counter-increment:s;padding:12px 14px 12px 50px;border:1px solid var(--pageLine);border-radius:14px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:14px;top:11px;width:24px;height:24px;border-radius:50%;background:#FFD43B;color:#1C1B17;font-weight:700;display:grid;place-items:center;font-size:13px}
+table{border-collapse:collapse;width:100%;max-width:960px;font-size:14px;margin-top:10px}
+td,th{border-bottom:1px solid var(--pageLine);padding:9px 8px;text-align:left;vertical-align:top}
+th{color:var(--pageSub);font-weight:600}
+@media (max-width:640px){h1{font-size:24px}.phone{flex-basis:260px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <h1>Mój Słownik: жёлтый редизайн</h1>
+  <p class="lead">Три направления на одних и тех же трёх экранах: Словарь, Практика, Карточка. Здесь важен характер, а не пиксели. Выберите направление, потом уточним детали и превратим их в токены <code>Theme.swift</code>.</p>
+  <div class="bar" id="modes">
+    <button class="on" data-m="light">Светлая тема</button>
+    <button data-m="dark">Тёмная тема</button>
+  </div>
+
+  <!-- A -->
+  <section>
+    <div class="dir-head"><h2>A · «Маркер»</h2><span class="tag">рекомендую</span></div>
+    <p class="desc"><b>Выбрано.</b> Уровень знания показан кольцом: 1/4 · 2/4 · 3/4 · полное, цвет по уровню (Не помню, Трудно, Хорошо, Легко). Метафора: выделяешь слово маркером в учебнике (и это прямо связано со сканированием текста). Тёплая бумага, чёрные чернила, жёлтый как заливка: основная кнопка, блок «Сегодня», подсветка под словами. Жёлтый никогда не используется как цвет текста на светлом фоне.</p>
+    <div class="swatches">
+      <span class="sw"><i style="background:#FFD43B"></i>Маркер #FFD43B</span>
+      <span class="sw"><i style="background:#1C1B17"></i>Чернила #1C1B17</span>
+      <span class="sw"><i style="background:#FAF8F2"></i>Бумага #FAF8F2</span>
+      <span class="sw"><i style="background:#FFF3BF"></i>Мягкий #FFF3BF</span>
+      <span class="sw"><i style="background:#8A6A00"></i>Охра для текста #8A6A00</span>
+    </div>
+    <div class="phones" data-dir="A"></div>
+  </section>
+
+  <!-- B -->
+  <section>
+    <div class="dir-head"><h2>B · «Графит»</h2></div>
+    <p class="desc">Смелый контраст: чёрное и белое плюс насыщенный жёлтый крупными блоками, карточка слова целиком жёлтая. Энергично, как у Drops, но в одном цвете. Риск: утомляет на длинных сессиях, жёлтые плоскости в тёмной теме очень яркие.</p>
+    <div class="swatches">
+      <span class="sw"><i style="background:#FACC15"></i>Жёлтый #FACC15</span>
+      <span class="sw"><i style="background:#111111"></i>Графит #111111</span>
+      <span class="sw"><i style="background:#FFFFFF"></i>Белый</span>
+    </div>
+    <div class="phones" data-dir="B"></div>
+  </section>
+
+  <!-- C -->
+  <section>
+    <div class="dir-head"><h2>C · «Мёд»</h2></div>
+    <p class="desc">Мягкий янтарь, кремовый фон, коричневые чернила, мягкие тени. Самое спокойное и уютное направление, но ближе всего к прошлому «тёплому» дизайну и легко выглядит «бежевым», а не жёлтым.</p>
+    <div class="swatches">
+      <span class="sw"><i style="background:#F2A900"></i>Янтарь #F2A900</span>
+      <span class="sw"><i style="background:#3A2A12"></i>Кофе #3A2A12</span>
+      <span class="sw"><i style="background:#FFF9EC"></i>Крем #FFF9EC</span>
+    </div>
+    <div class="phones" data-dir="C"></div>
+  </section>
+
+
+  <section>
+    <div class="dir-head"><h2>A · новые экраны</h2><span class="tag">после мержа</span></div>
+    <p class="desc">Варианты перевода и Достижения в языке «Маркер». Разблокированный значок = жёлтая плитка с чёрной иконкой; заблокированный = серый с замком. Тост о достижении — тёмная «чернильная» плашка, а не белая карточка: так он отделяется от контента.</p>
+    <div class="phones A" style="display:flex">
+      <div><div class="phone">
+        <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="scr">
+          <div class="lt" style="font-size:24px">Новое слово</div>
+          <div class="field"><div class="lbl">🇵🇱 Польский · 🎙</div><div class="val">zamek</div></div>
+          <div class="field"><div class="lbl">🇷🇺 Перевод</div><div class="val">замок</div>
+            <div class="alts"><span class="alt on">замок<small>сущ.</small></span><span class="alt">застёжка<small>сущ.</small></span><span class="alt">дворец<small>сущ.</small></span></div></div>
+          <div class="meta"><span class="chip">📁 Поездки</span><span class="chip">🏠 Дом</span></div>
+          <div class="save">Сохранить</div>
+        </div>
+      </div><div class="cap">Варианты перевода</div></div>
+
+      <div><div class="phone">
+        <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="scr">
+          <div class="lt" style="font-size:24px">Достижения</div>
+          <div class="ach-hero"><div class="pts">340 очков</div><div class="sub">7 из 15 получено · рекорд 9 дн.</div>
+            <div class="streak"><i class="on">пн</i><i class="on">вт</i><i class="on">ср</i><i class="on">чт</i><i>пт</i><i>сб</i><i>вс</i></div></div>
+          <div class="sec">Словарь · 3/5</div>
+          <div class="arow"><span class="abadge on">★</span><span class="t">Первое слово<small>Получено 3 ноября</small></span><span class="pt">10</span></div>
+          <div class="arow"><span class="abadge on">▤</span><span class="t">Полсотни<small>Получено 12 ноября</small></span><span class="pt">25</span></div>
+          <div class="arow"><span class="abadge off">⌂</span><span class="t">Библиотекарь<small>128 из 200</small><div class="mini"><i style="width:64%"></i></div></span><span class="pt" style="color:var(--sub)">50</span></div>
+          <div class="arow"><span class="abadge off">?</span><span class="t">Секретное достижение</span><span class="pt" style="color:var(--sub)">?</span></div>
+        </div>
+        <div class="tabs"><div><i>▤</i>Словарь</div><div><i>◈</i>Практика</div><div class="on"><i>🏆</i>Награды</div></div>
+      </div><div class="cap">Достижения</div></div>
+
+      <div><div class="phone">
+        <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="toast"><span class="abadge on">🔥</span><span><small>Достижение получено</small><b>Три дня подряд</b></span><span class="plus">+20</span></div>
+        <div class="scr" style="opacity:.55">
+          <div class="lt">Практика</div>
+          <div class="today"><div class="k">Сегодня</div><div class="n">20 <small>из 20 слов</small></div><div class="prog"><i style="width:100%"></i></div><div class="cta">Свободная практика</div></div>
+        </div>
+        <div class="tabs"><div><i>▤</i>Словарь</div><div class="on"><i>◈</i>Практика</div><div><i>🏆</i>Награды</div></div>
+      </div><div class="cap">Тост о достижении</div></div>
+    </div>
+  </section>
+
+  <h2>Что берём у конкурентов</h2>
+  <table>
+    <tr><th>Приложение</th><th>Что берём</th><th>Чего не берём</th></tr>
+    <tr><td>Vocabulary</td><td>Крупная типографика, одно слово на экран, спокойные фоны</td><td>Сплошной поток слов без цели</td></tr>
+    <tr><td>Drops</td><td>Короткие сессии, жесты, приятные микроанимации и тактильный отклик</td><td>Иллюстрации к каждому слову (у нас нет ассетов), мультяшность</td></tr>
+    <tr><td>Lingvist</td><td>Ясная дневная цель: «осталось N», одно главное действие</td><td>Плотный, «экзаменационный» интерфейс</td></tr>
+    <tr><td>Busuu</td><td>Видимая «сила» слова (у нас уже есть 4 деления уровня знания)</td><td>Уроки, сообщество, платные экраны</td></tr>
+    <tr><td>Promova</td><td>Дружелюбные заголовки, нижние шторки вместо полноэкранных форм</td><td>Агрессивные апсейлы и стрики-давление</td></tr>
+  </table>
+
+  <h2>Как утверждаем</h2>
+  <ol class="steps">
+    <li><b>Направление.</b> Выбираете A/B/C (или «A, но с карточкой из B»). Проверьте обе темы.</li>
+    <li><b>Дизайн-спецификация в плане.</b> Токены (цвета light/dark, шрифты, радиусы, отступы), правила использования жёлтого, компоненты. Утверждаете текст плана.</li>
+    <li><b>Пилот на 2 экранах.</b> Theme + Практика + Словарь в реальном SwiftUI. Скриншоты из симулятора: светлая/тёмная тема, крупный шрифт. Это второй, «настоящий» гейт.</li>
+    <li><b>Раскатка.</b> Добавление слова, сканер, карточки, викторина, «На слух», папки, без изменений данных и SRS.</li>
+  </ol>
+</div>
+
+<template id="screens">
+  <div>
+    <div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="scr">
+        <div class="lt">Словарь</div>
+        <div class="search">⌕ Поиск слова</div>
+        <div class="chips"><span class="chip on">Все · 128</span><span class="chip">Работа</span><span class="chip">Поездки</span><span class="chip">Еда</span></div>
+        <div class="row"><div class="w"><div class="pl"><span class="hl">jabłko</span></div><div class="ru">яблоко</div></div><span class="donut t3" style="--p:75" role="img" aria-label="уровень 3 из 4"></span><span class="spk">🔊</span></div>
+        <div class="row"><div class="w"><div class="pl">dworzec</div><div class="ru">вокзал</div></div><span class="donut t1" style="--p:25" role="img" aria-label="уровень 1 из 4"></span><span class="spk">🔊</span></div>
+        <div class="row"><div class="w"><div class="pl">przyjaciółka</div><div class="ru">подруга</div></div><span class="donut t2" style="--p:50" role="img" aria-label="уровень 2 из 4"></span><span class="spk">🔊</span></div>
+        <div class="row"><div class="w"><div class="pl">śniadanie</div><div class="ru">завтрак</div></div><span class="donut t4" style="--p:100" role="img" aria-label="уровень 4 из 4"></span><span class="spk">🔊</span></div>
+        <div class="row"><div class="w"><div class="pl">lekarz</div><div class="ru">врач</div></div><span class="donut t2" style="--p:50" role="img" aria-label="уровень 2 из 4"></span><span class="spk">🔊</span></div>
+      </div>
+      <div class="fab"><span class="s">⌗</span><span class="p">＋</span></div>
+      <div class="tabs"><div class="on"><i>▤</i>Словарь</div><div><i>◈</i>Практика</div></div>
+    </div>
+    <div class="cap">Словарь</div>
+  </div>
+  <div>
+    <div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="scr">
+        <div class="lt">Практика</div>
+        <div class="today">
+          <div class="k">Сегодня</div>
+          <div class="n">12 <small>из 20 слов</small></div>
+          <div class="prog"><i></i></div>
+          <div class="cta">Повторить 8 слов</div>
+          <div class="badges"><span>✓ 10 верно</span><span>✕ 2 ошибки</span></div>
+        </div>
+        <div class="sec">Режимы</div>
+        <div class="modes">
+          <div class="mode"><i>▭</i><div><b>Карточки</b><small>Вспомнить перевод</small></div></div>
+          <div class="mode"><i>?</i><div><b>Викторина</b><small>4 варианта</small></div></div>
+          <div class="mode wide"><i>♪</i><div style="margin-left:12px"><b>На слух</b><small>Услышать и написать</small></div></div>
+        </div>
+      </div>
+      <div class="tabs"><div><i>▤</i>Словарь</div><div class="on"><i>◈</i>Практика</div></div>
+    </div>
+    <div class="cap">Практика</div>
+  </div>
+  <div>
+    <div class="phone">
+      <div class="sb"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="scr">
+        <div class="top"><span class="x">✕</span><span class="pb"><i></i></span><span>7 / 20</span></div>
+        <div class="card">
+          <span class="lang">PL</span><span class="spk2">🔊</span>
+          <div class="big">dziękuję</div>
+          <div class="tr">спасибо</div>
+        </div>
+        <div class="q">Насколько легко вспомнили?</div>
+        <div class="rates">
+          <div class="r0">Не помню<i>&lt;1 мин</i></div>
+          <div>Трудно<i>1 д</i></div>
+          <div>Хорошо<i>3 д</i></div>
+          <div class="r3">Легко<i>7 д</i></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">Карточка (ответ открыт)</div>
+  </div>
+</template>
+
+<script>
+const tpl=document.getElementById('screens').content;
+document.querySelectorAll('.phones[data-dir]').forEach(p=>{
+  p.classList.add(p.dataset.dir);
+  p.appendChild(tpl.cloneNode(true));
+  [...p.children].forEach(c=>c.style.flex='0 0 auto');
+  p.style.display='flex';
+});
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#modes button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('root').classList.toggle('dark',b.dataset.m==='dark');
+});
+</script>
+</body>

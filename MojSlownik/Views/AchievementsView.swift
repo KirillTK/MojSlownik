@@ -1,16 +1,17 @@
 import SwiftUI
 import SwiftData
 
-/// Works both pushed from Training and as the root of its own tab; it owns no NavigationStack.
+/// Pushed from Практика; owns no NavigationStack.
 struct AchievementsView: View {
     @Query private var words: [Word]
     @Query private var folders: [WordFolder]
     @Environment(AchievementStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let vocabulary = AchievementMetrics.vocabulary(words: words, folderCount: folders.count)
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: AppSpacing.l) {
                 header
                 ForEach(AchievementCategory.allCases, id: \.self) { category in
                     let items = store.catalog.filter { $0.category == category }
@@ -19,9 +20,9 @@ struct AchievementsView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.horizontal, AppSpacing.l)
+            .padding(.top, AppSpacing.xs)
+            .padding(.bottom, AppSpacing.xl)
         }
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
@@ -30,57 +31,57 @@ struct AchievementsView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "trophy.fill")
-                    .font(.title2)
+        let shape = RoundedRectangle(cornerRadius: AppRadius.hero, style: .continuous)
+        let secondary = Color.appOnInverse.opacity(0.75)
+        return VStack(alignment: .leading, spacing: AppSpacing.s) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text("\(store.totalPoints) очков")
+                    .font(.largeTitle.weight(.heavy))
+                    .monospacedDigit()
                     .foregroundStyle(Color.appAccent)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(store.totalPoints) очков")
-                        .font(.title2.weight(.bold))
-                        .monospacedDigit()
-                    Text("\(store.unlockedCount) из \(store.catalog.count) получено")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.subtleText)
-                }
-                Spacer(minLength: 0)
-            }
-            ProgressView(value: Double(store.unlockedCount), total: Double(max(store.catalog.count, 1)))
-                .tint(.appAccent)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Серия: \(store.currentStreak()) дн.", systemImage: "flame")
-                    .font(.subheadline.weight(.medium))
-                Text("Рекорд: \(store.ledger.longestStreakDays) дн.")
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .snappy, value: store.totalPoints)
+                Text("\(store.unlockedCount) из \(store.catalog.count) получено · рекорд \(store.ledger.longestStreakDays) дн.")
                     .font(.subheadline)
-                    .foregroundStyle(Color.subtleText)
+                    .foregroundStyle(secondary)
             }
+            MarkerProgressBar(value: Double(store.unlockedCount) / Double(max(store.catalog.count, 1)),
+                              track: Color.appOnInverse.opacity(0.12), fill: .appAccent)
+            Label {
+                Text("Серия: \(store.currentStreak()) дн.")
+                    .foregroundStyle(Color.appOnInverse)
+            } icon: {
+                Image(systemName: "flame").foregroundStyle(Color.appAccent)
+            }
+            .font(.subheadline.weight(.medium))
         }
-        .padding(16)
+        .padding(AppSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color.appInverseSurface, in: shape)
+        .overlay { shape.strokeBorder(Color.appInverseEdge, lineWidth: 1) }
         .accessibilityElement(children: .combine)
     }
 
     private func section(_ category: AchievementCategory, items: [AchievementDefinition],
                          vocabulary: AchievementMetrics) -> some View {
         let done = items.filter { store.unlocked[$0.id] != nil }.count
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: AppSpacing.xs) {
             HStack {
                 Text(category.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.footnote.weight(.bold))
+                    .textCase(.uppercase)
+                    .tracking(0.6)
                     .foregroundStyle(Color.subtleText)
                 Spacer(minLength: 0)
                 Text("\(done)/\(items.count)")
-                    .font(.subheadline)
+                    .font(.footnote)
                     .monospacedDigit()
                     .foregroundStyle(Color.subtleText)
             }
             .accessibilityElement(children: .combine)
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { Divider().overlay(Color.appBorder.opacity(0.5)) }
+                    if index > 0 { Divider().overlay(Color.appBorder) }
                     row(item, vocabulary: vocabulary)
                 }
             }
@@ -107,9 +108,9 @@ struct AchievementsView: View {
             }
             Spacer(minLength: 0)
             Text("\(item.points)")
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(progress.isUnlocked ? Color.appAccent : Color.subtleText)
+                .foregroundStyle(progress.isUnlocked ? Color.appInk : Color.subtleText)
         }
         .padding(.vertical, 12)
         .frame(minHeight: 44)
@@ -121,11 +122,9 @@ struct AchievementsView: View {
         if let date = progress.unlockedAt {
             Text("Получено \(date.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "ru_RU"))))")
                 .font(.caption)
-                .foregroundStyle(Color.appAccent)
+                .foregroundStyle(Color.subtleText)
         } else {
-            ProgressView(value: progress.fraction)
-                .tint(.appAccent)
-                .accessibilityHidden(true)
+            MarkerProgressBar(value: progress.fraction, height: 4)
             Text("\(progress.current) из \(progress.target)")
                 .font(.caption)
                 .monospacedDigit()

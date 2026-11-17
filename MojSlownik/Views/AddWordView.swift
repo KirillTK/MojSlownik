@@ -6,6 +6,7 @@ struct AddWordView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var initialText: String = ""
     @State private var selectedFolderID: UUID?
@@ -15,6 +16,7 @@ struct AddWordView: View {
     @State private var draft = AddWordDraft()
     @State private var speech = SpeechRecognitionService()
     @State private var isVisible = false
+    @State private var selectionTick = 0
     @FocusState private var sourceFieldFocused: Bool
 
     init(initialText: String = "", initialFolderID: UUID? = nil) {
@@ -29,18 +31,18 @@ struct AddWordView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AppSpacing.xl) {
                     VStack(spacing: 0) {
                         inputCard
-                        Divider().overlay(Color.appBorder.opacity(0.5))
-                            .padding(.horizontal, 20)
+                        Divider().overlay(Color.appBorder)
+                            .padding(.horizontal, AppSpacing.l)
                         translationCard
                     }
-                    .cardStyle(cornerRadius: 20)
+                    .cardStyle(cornerRadius: AppRadius.hero)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Размещение")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.footnote.weight(.bold))
                             .foregroundStyle(Color.subtleText)
                         FolderPicker(selectedFolderID: $selectedFolderID)
                         categoryPicker
@@ -50,18 +52,22 @@ struct AddWordView: View {
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
-            .tint(Color.appAccent)
+            .tint(Color.appAccentText)
+            .safeAreaInset(edge: .bottom) {
+                Button("Сохранить") { save() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(speech.isBusy || draft.sourceText.trimmingCharacters(in: .whitespaces).isEmpty
+                              || draft.translatedText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .padding(.horizontal, AppSpacing.l)
+                    .padding(.vertical, AppSpacing.s)
+                    .background(Color.appBackground)
+            }
+            .sensoryFeedback(.selection, trigger: selectionTick)
             .navigationTitle("Новое слово")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Отмена") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") { save() }
-                        .fontWeight(.semibold)
-                        .disabled(speech.isBusy || draft.sourceText.trimmingCharacters(in: .whitespaces).isEmpty
-                                  || draft.translatedText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
             .errorAlert(title: "Не удалось сохранить слово", error: $saveError)
@@ -108,26 +114,26 @@ struct AddWordView: View {
             }
         }
         .font(.subheadline)
-        .tint(Color.appAccent)
+        .tint(Color.appAccentText)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 4)
-        .cardStyle(cornerRadius: 14)
+        .cardStyle(cornerRadius: AppRadius.control)
     }
 
     private var inputCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Слово")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.footnote.weight(.bold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
                 Text("\((speech.isBusy ? AppLanguage.polish : detectedLanguage).flag) \((speech.isBusy ? AppLanguage.polish : detectedLanguage).displayName)")
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(Color.appAccent.opacity(0.12))
-                    .foregroundStyle(Color.appAccent)
+                    .background(Color.appAccentSoft)
+                    .foregroundStyle(Color.appInk)
                     .clipShape(Capsule())
                     .opacity(draft.sourceText.isEmpty && speech.draft.isEmpty ? 0 : 1)
             }
@@ -136,7 +142,7 @@ struct AddWordView: View {
                     get: { speech.isBusy && !speech.draft.isEmpty ? speech.draft : draft.sourceText },
                     set: { draft.setSource($0) }
                 ), axis: .vertical)
-                .font(.title2.weight(.semibold))
+                .font(.title2.weight(.bold))
                 .foregroundStyle(Color.appInk)
                 .frame(minHeight: 44)
                 .focused($sourceFieldFocused)
@@ -155,7 +161,9 @@ struct AddWordView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: speech.state == .listening ? "stop.fill" : "mic.fill")
+                    Image(systemName: speech.state == .listening ? "waveform" : "mic")
+                        .fontWeight(.medium)
+                        .symbolEffect(.variableColor.iterative, isActive: speech.state == .listening && !reduceMotion)
                         .frame(width: 44, height: 44)
                 }
                 .disabled(speech.isBusy && speech.state != .listening)
@@ -171,7 +179,7 @@ struct AddWordView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Перевод — \(detectedLanguage.other.flag) \(detectedLanguage.other.displayName)")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.footnote.weight(.bold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
                 if draft.isTranslating {
@@ -189,9 +197,10 @@ struct AddWordView: View {
                 .disabled(speech.isBusy)
 
             if let translationError = draft.translationError {
-                Label(translationError, systemImage: "wifi.exclamationmark")
-                    .font(.caption)
-                    .foregroundStyle(Color.appError)
+                Label("Автоперевод недоступен — впишите перевод вручную", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(Color.subtleText)
+                    .accessibilityLabel("Автоперевод недоступен. \(translationError)")
             }
 
             if !draft.translationOptions.isEmpty {
@@ -237,6 +246,7 @@ struct AddWordView: View {
         let selected = draft.isSelected(option)
         return Button {
             draft.select(option)
+            selectionTick += 1
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(option.text)
@@ -253,7 +263,7 @@ struct AddWordView: View {
             .padding(.vertical, 8)
             .frame(maxWidth: 260, minHeight: 44, alignment: .leading)
             .background(selected ? Color.appAccent : Color.appSecondarySurface,
-                        in: RoundedRectangle(cornerRadius: 14))
+                        in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(speech.isBusy)

@@ -43,6 +43,9 @@ Input: $ARGUMENTS
 2. Record `git rev-parse HEAD` and `git status --porcelain` as the base; pass both
    to every agent so pre-existing changes are not attributed to this task.
 3. Run `feature-planner` with: task text verbatim, mode, plan path, base.
+4. UI/visual tasks: load the `mobile-ios-design` skill first (mockups and direction choice
+   before planning). Tell the planner, critic, plan-reviewer and `feature-ui-reviewer` to read
+   `.claude/skills/mobile-ios-design/SKILL.md` and apply it (design spec in the plan, review rubric).
 
 ## 2. Critique and review (read-only agents)
 
