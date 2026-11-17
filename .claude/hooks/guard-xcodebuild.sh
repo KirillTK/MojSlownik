@@ -7,12 +7,14 @@
 cmd=$(jq -r '.tool_input.command // empty')
 case "$cmd" in *xcodebuild*) ;; *) exit 0 ;; esac
 # xcodebuild must be invoked at a command position (after ; & | ( or line start,
-# optionally behind VAR=value assignments, xcrun or a path prefix).
-invoke='(^|[;&|(])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(xcrun[[:space:]]+|[^[:space:]]*/)?xcodebuild[[:space:]]'
+# or right after a quote opening a `bash -c '…'` body), optionally behind VAR=value
+# assignments, wrappers (env/time/nohup/sudo/command/exec), xcrun or a path prefix.
+# Best effort: this is an accident guard, not a security boundary.
+invoke='(^|[;&|(]|-c[[:space:]]+["'"'"'])[[:space:]]*(((env|time|nohup|sudo|command|exec)([[:space:]]+-[^[:space:]]+)*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*)[[:space:]]+)*(xcrun[[:space:]]+|[^[:space:]]*/)?xcodebuild[[:space:]]'
 echo "$cmd" | grep -qE "$invoke" || exit 0
 # test action in xcodebuild's action position, also glued to shell operators:
 # "test|tail", "test;echo", "test&&..." (paths like /tmp/test/dd or test.xcresult do not match)
-echo "$cmd" | grep -qE 'xcodebuild([^|;&]*[[:space:]])(test|test-without-building)([[:space:]|;&]|$)' || exit 0
+echo "$cmd" | grep -qE 'xcodebuild([^|;&]*[[:space:]])(test|test-without-building)([[:space:]|;&"'"'"']|$)' || exit 0
 schemes=$(echo "$cmd" | grep -oE -- '-scheme[[:space:]=]+["'"'"']?[A-Za-z0-9_]+' \
           | sed -E 's/^-scheme[[:space:]=]+["'"'"']?//')
 block() {

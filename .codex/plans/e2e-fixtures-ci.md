@@ -89,7 +89,7 @@ Agreed in conversation (binding):
   Each shard uploads its `.xcresult` on failure. All actions are pinned to full commit SHAs.
 - AC-8 `.github/rulesets/main.json` defines a ruleset for the default branch with no bypass actors.
   It requires a PR (0 approvals), requires the status check `ci-passed` from GitHub Actions (`integration_id` 15368) with
-  "strict" (up to date) policy, and blocks force-push and deletion. Exact apply and verify commands
+  non-strict policy (per D4, freshness is enforced by the `Branch freshness` job: ≤ 10 commits behind), and blocks force-push and deletion. Exact apply and verify commands
   are documented. After it is applied, a PR with running or failed CI shows merging as blocked.
 - AC-9 The hook blocks any command containing a test action, including when it is glued to shell
   operators (`test|…`, `test;…`, `test&&…`), unless every `-scheme` in the command is

@@ -36,5 +36,10 @@ check 2 "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer $XB -scheme Mo
 check 2 "cd /tmp && $XB -scheme MojSlownik $T"
 check 0 "echo 'run $XB -scheme MojSlownik $T later'"
 check 0 "git commit -m 'docs: mention $XB $T'"
+check 2 "env $XB -scheme MojSlownik $T"
+check 2 "time $XB -scheme MojSlownik $T"
+check 2 "env -i FOO=1 $XB -scheme MojSlownik $T"
+check 2 "bash -c '$XB -scheme MojSlownik $T'"
+check 0 "env $XB -scheme MojSlownikE2E $T"
 
 exit $fail
