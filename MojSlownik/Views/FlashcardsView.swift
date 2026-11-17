@@ -9,7 +9,8 @@ struct FlashcardsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
-    @Query private var allWords: [Word]
+    @Query private var storedAllWords: [Word]
+    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
 
     @State private var sessionWords: [Word] = []
     @State private var currentIndex = 0
@@ -323,7 +324,8 @@ private struct FaceVisibility: ViewModifier, Animatable {
         FlashcardsView()
     }
     .modelContainer(resources.container)
-    .environment(FolderLibraryStore())
+    .environment(resources.folders)
+    .environment(resources.vocabulary)
     .environment(resources.dailyStudy)
     .environment(resources.achievements)
 }

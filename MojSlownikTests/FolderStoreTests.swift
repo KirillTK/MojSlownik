@@ -80,7 +80,12 @@ final class FolderStoreTests: XCTestCase {
         XCTAssertEqual(saved.folderIDs, [second.id])
         assertProgress(saved)
         XCTAssertEqual(try words(in: container).count, 1)
-        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<WordFolder>()).map(\.id), [second.id])
+        let rows = try ModelContext(container).fetch(FetchDescriptor<WordFolder>())
+        XCTAssertEqual(rows.filter(\.isActive).map(\.id), [second.id])
+        let tombstone = try XCTUnwrap(rows.first { $0.id == first.id })
+        XCTAssertNotNil(tombstone.deletedAt)
+        XCTAssertEqual(tombstone.updatedAt, tombstone.deletedAt)
+        XCTAssertNil(saved.deletedAt)
     }
 
     @MainActor
@@ -155,6 +160,82 @@ final class FolderStoreTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(words(in: container).first).folderIDs.isEmpty)
         XCTAssertFalse(try ScanWordStore.toggle(source: "woda", translation: "вода", category: .food, container: container))
         XCTAssertTrue(try words(in: container).isEmpty)
+        let rows = try ModelContext(container).fetch(FetchDescriptor<Word>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows.first?.deletedAt)
+    }
+
+    @MainActor
+    func testReorderBumpsOnlyFoldersWhoseOrderChanged() throws {
+        let container = try makeContainer()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 2_000)
+        let first = try FolderStore.create(name: "A", container: container, now: t0)
+        let second = try FolderStore.create(name: "B", container: container, now: t0)
+        let third = try FolderStore.create(name: "C", container: container, now: t0)
+        try FolderStore.reorder(ids: [first.id, third.id, second.id], container: container, now: t1)
+        let rows = try ModelContext(container).fetch(FetchDescriptor<WordFolder>())
+        XCTAssertEqual(rows.first { $0.id == first.id }?.updatedAt, t0)
+        XCTAssertEqual(rows.first { $0.id == second.id }?.updatedAt, t1)
+        XCTAssertEqual(rows.first { $0.id == third.id }?.updatedAt, t1)
+    }
+
+    @MainActor
+    func testFolderSoftDeleteBumpsMemberWordsAndNeverDeletesThem() throws {
+        let container = try makeContainer()
+        let t1 = Date(timeIntervalSince1970: 5_000)
+        let folder = try FolderStore.create(name: "Урок", container: container)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id, included: true, container: container)
+        try FolderStore.delete(id: folder.id, container: container, now: t1)
+        let saved = try XCTUnwrap(ModelContext(container).fetch(FetchDescriptor<Word>()).first)
+        XCTAssertNil(saved.deletedAt)
+        XCTAssertEqual(saved.updatedAt, t1)
+        XCTAssertTrue(saved.folderIDs.isEmpty)
+        XCTAssertThrowsError(try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
+                                                           included: true, container: container))
+        // The name can be reused: a new row with a new id.
+        let recreated = try FolderStore.create(name: "Урок", container: container)
+        XCTAssertNotEqual(recreated.id, folder.id)
+    }
+
+    @MainActor
+    func testFolderDeleteLeavesTombstonedWordUpdatedAtUnchangedAndBumpsActiveWord() throws {
+        let container = try makeContainer()
+        let t1 = Date(timeIntervalSince1970: 5_000)
+        let t2 = Date(timeIntervalSince1970: 6_000)
+        let folder = try FolderStore.create(name: "Урок", container: container)
+        let context = ModelContext(container)
+        let active = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let deleted = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
+        for word in [active, deleted] { word.folderIDs = [folder.id]; context.insert(word) }
+        deleted.markDeleted(now: t1)
+        try context.save()
+
+        try FolderStore.delete(id: folder.id, container: container, now: t2)
+
+        let rows = try ModelContext(container).fetch(FetchDescriptor<Word>())
+        let savedDeleted = try XCTUnwrap(rows.first { $0.polish == "kawa" })
+        let savedActive = try XCTUnwrap(rows.first { $0.polish == "woda" })
+        XCTAssertTrue(savedDeleted.folderIDs.isEmpty)
+        XCTAssertEqual(savedDeleted.updatedAt, t1)
+        XCTAssertEqual(savedDeleted.deletedAt, t1)
+        XCTAssertTrue(savedActive.folderIDs.isEmpty)
+        XCTAssertEqual(savedActive.updatedAt, t2)
+    }
+
+    @MainActor
+    func testMembershipBumpsUpdatedAtOnlyWhenFolderIDsChange() throws {
+        let container = try makeContainer()
+        let t1 = Date(timeIntervalSince1970: 5_000)
+        let t2 = Date(timeIntervalSince1970: 6_000)
+        let folder = try FolderStore.create(name: "Урок", container: container)
+        let word = try insertWord(in: container)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
+                                      included: true, container: container, now: t1)
+        try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
+                                      included: true, container: container, now: t2)
+        XCTAssertEqual(try XCTUnwrap(words(in: container).first).updatedAt, t1)
     }
 
     @MainActor
@@ -261,7 +342,7 @@ final class FolderStoreTests: XCTestCase {
 
     @MainActor
     private func words(in container: ModelContainer) throws -> [Word] {
-        try ModelContext(container).fetch(FetchDescriptor<Word>())
+        try ModelContext(container).fetch(FetchDescriptor<Word>()).filter(\.isActive)
     }
 
     private func assertProgress(_ word: Word, file: StaticString = #filePath, line: UInt = #line) {

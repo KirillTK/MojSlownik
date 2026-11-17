@@ -2,10 +2,11 @@ import SwiftUI
 import SwiftData
 
 struct WordListView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Word.createdAt, order: .reverse) private var words: [Word]
+    @Query(sort: \Word.createdAt, order: .reverse) private var storedWords: [Word]
+    private var words: [Word] { storedWords.filter(\.isActive) }
 
     @Environment(FolderLibraryStore.self) private var folderLibrary
+    @Environment(VocabularyStore.self) private var vocabulary
     @State private var selectedFolderID: UUID?
     @State private var showDeleteFolder = false
     @State private var deletionError: String?
@@ -61,9 +62,8 @@ struct WordListView: View {
                                     .listRowInsets(EdgeInsets(top: AppSpacing.xs, leading: AppSpacing.l, bottom: AppSpacing.xs, trailing: AppSpacing.l))
                                     .listRowSeparatorTint(Color.appBorder)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        let wordID = word.persistentModelID
                                         Button(role: .destructive) {
-                                            deleteWord(id: wordID)
+                                            deleteWord(word)
                                         } label: {
                                             Label("Удалить", systemImage: "trash")
                                         }
@@ -99,7 +99,7 @@ struct WordListView: View {
                 Button("Удалить папку", role: .destructive) {
                     guard let id = selectedFolderID else { return }
                     do {
-                        try folderLibrary.delete(id: id, context: modelContext)
+                        try folderLibrary.delete(id: id)
                         selectedFolderID = nil
                     } catch { folderError = error.localizedDescription }
                 }
@@ -207,9 +207,9 @@ struct WordListView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func deleteWord(id: PersistentIdentifier) {
+    private func deleteWord(_ word: Word) {
         do {
-            try ScanWordStore.delete(wordID: id, container: modelContext.container)
+            try vocabulary.deleteWord(word)
         } catch { deletionError = error.localizedDescription }
     }
 }
@@ -261,9 +261,10 @@ extension EmptyStateView where Actions == EmptyView {
 private struct WordRow: View {
     let word: Word
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.modelContext) private var modelContext
     @Environment(FolderLibraryStore.self) private var folderLibrary
+    @Environment(VocabularyStore.self) private var vocabulary
     @State private var folderError: String?
+    @State private var categoryError: String?
 
     var body: some View {
         Group {
@@ -301,6 +302,7 @@ private struct WordRow: View {
         }
         .padding(.vertical, 2)
         .errorAlert(title: "Не удалось изменить папку", error: $folderError)
+        .errorAlert(title: "Не удалось изменить категорию", error: $categoryError)
     }
 
     private var wordText: some View {
@@ -327,7 +329,10 @@ private struct WordRow: View {
     private var categoryMenu: some View {
         CategoryMenu(selection: Binding(
             get: { word.category },
-            set: { word.category = $0 }
+            set: { newCategory in
+                do { try vocabulary.setCategory(newCategory, for: word) }
+                catch { categoryError = error.localizedDescription }
+            }
         )) {
             HStack(spacing: AppSpacing.xxs) {
                 Image(systemName: "tag")
@@ -359,7 +364,7 @@ private struct WordRow: View {
                 if !word.folderIDs.isEmpty {
                     Button(role: .destructive) {
                         do {
-                            try FolderStore.removeFromAllFolders(wordID: word.persistentModelID, context: modelContext)
+                            try vocabulary.removeFromAllFolders(word)
                         } catch { folderError = error.localizedDescription }
                     } label: {
                         Label("Убрать из всех папок", systemImage: "folder.badge.minus")
@@ -369,8 +374,7 @@ private struct WordRow: View {
                     let included = word.folderIDs.contains(folder.id)
                     Button {
                         do {
-                            try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id,
-                                                          included: !included, context: modelContext)
+                            try vocabulary.setMembership(of: word, folderID: folder.id, included: !included)
                         } catch { folderError = error.localizedDescription }
                     } label: {
                         Label(folder.name, systemImage: included ? "checkmark" : "folder")
@@ -390,8 +394,11 @@ private struct WordRow: View {
 }
 
 #Preview {
+    let resources = AppResources.preview
     WordListView()
-        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
-        .environment(FolderLibraryStore())
-        .environment(AppResources.preview.achievements)
+        .modelContainer(resources.container)
+        .environment(resources.folders)
+        .environment(resources.vocabulary)
+        .environment(resources.dailyStudy)
+        .environment(resources.achievements)
 }

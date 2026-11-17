@@ -365,6 +365,20 @@ final class DailyStudyStoreTests: XCTestCase {
         return folder.id
     }
 
+    func testReviewAndPracticeAnswerSetUpdatedAtUnconditionally() throws {
+        try withDefaults { defaults in
+            let (container, words) = try makeWords(2)
+            let later = now.addingTimeInterval(3_600)
+            let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
+            try store.review(.good, to: words[0], context: container.mainContext, now: later)
+            try store.recordPracticeAnswer(word: words[1], answer: .typed(expected: "słowo", submitted: "słowo"),
+                                           context: container.mainContext, now: later)
+            let fresh = try ModelContext(container).fetch(FetchDescriptor<Word>())
+            XCTAssertEqual(fresh.count, 2)
+            XCTAssertTrue(fresh.allSatisfy { $0.updatedAt == later })
+        }
+    }
+
     private func makeWords(_ count: Int) throws -> (ModelContainer, [Word]) {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Word.self, WordFolder.self, configurations: configuration)

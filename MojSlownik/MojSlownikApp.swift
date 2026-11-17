@@ -4,7 +4,8 @@ import SwiftData
 @main
 @MainActor
 struct MojSlownikApp: App {
-    @State private var folders = FolderLibraryStore()
+    @State private var folders: FolderLibraryStore
+    @State private var vocabulary: VocabularyStore
     @State private var dailyStudy: DailyStudyStore
     @State private var achievements: AchievementStore
     private let container: ModelContainer
@@ -13,6 +14,8 @@ struct MojSlownikApp: App {
         do {
             let resources = try AppResources()
             container = resources.container
+            _folders = State(initialValue: resources.folders)
+            _vocabulary = State(initialValue: resources.vocabulary)
             _dailyStudy = State(initialValue: resources.dailyStudy)
             _achievements = State(initialValue: resources.achievements)
         } catch {
@@ -24,6 +27,7 @@ struct MojSlownikApp: App {
         WindowGroup {
             RootTabView()
                 .environment(folders)
+                .environment(vocabulary)
                 .environment(dailyStudy)
                 .environment(achievements)
         }
@@ -34,6 +38,8 @@ struct MojSlownikApp: App {
 @MainActor
 struct AppResources {
     let container: ModelContainer
+    let folders: FolderLibraryStore
+    let vocabulary: VocabularyStore
     let dailyStudy: DailyStudyStore
     let achievements: AchievementStore
 
@@ -44,9 +50,14 @@ struct AppResources {
         } else {
             container = try ModelContainer(for: Word.self, WordFolder.self)
         }
+        WordIdentityBackfill.run(container: container)
         // PersistentIdentifier decoding requires Word's schema to be registered first.
-        dailyStudy = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
-        achievements = AchievementStore(defaults: defaults, calendar: calendar)
+        dailyStudy = DailyStudyStore(repository: UserDefaultsDailyActivityRepository(defaults: defaults),
+                                     calendar: calendar, now: now)
+        achievements = AchievementStore(repository: UserDefaultsAchievementStateRepository(defaults: defaults),
+                                        calendar: calendar)
+        folders = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+        vocabulary = VocabularyStore(repository: SwiftDataVocabularyRepository(container: container))
     }
 
     static let preview: AppResources = {

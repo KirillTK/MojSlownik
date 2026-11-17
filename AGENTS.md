@@ -13,6 +13,9 @@ UI copy is Russian; code, file names and project instructions are English.
 - Stores/FolderLibraryStore.swift is injected once at the app root via environment;
   views keep only local selection/presentation state.
 - Removing folders or folder memberships never deletes words.
+- Views write vocabulary/folders only via VocabularyStore/FolderLibraryStore (repositories in
+  Services/). Words and folders are soft-deleted (`deletedAt`): reads filter `\.isActive` in
+  memory, and a changed row gets `updatedAt`.
 - SwiftData: never lose stored words. New properties must be optional or have defaults;
   do not rename or remove persisted properties without a migration.
 - Achievements: catalog/evaluator in Services/Achievements.swift, state in

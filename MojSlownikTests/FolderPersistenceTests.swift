@@ -13,10 +13,10 @@ final class FolderPersistenceTests: XCTestCase {
 
         try autoreleasepool {
             let container = try makeContainer(at: url)
-            let library = FolderLibraryStore()
-            try library.load(context: container.mainContext)
+            let library = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+            try library.load()
             XCTAssertEqual(library.options, [.init(id: id, name: "Урок 1")])
-            let words = try container.mainContext.fetch(FetchDescriptor<Word>())
+            let words = try ModelContext(container).fetch(FetchDescriptor<Word>())
             XCTAssertEqual(words.count, 2)
             let member = try XCTUnwrap(words.first { $0.polish == "woda" })
             XCTAssertEqual(member.russian, "вода")
@@ -40,20 +40,20 @@ final class FolderPersistenceTests: XCTestCase {
 
         try autoreleasepool {
             let container = try makeContainer(at: url)
-            let library = FolderLibraryStore()
-            try library.load(context: container.mainContext)
-            XCTAssertThrowsError(try library.create(name: " УРОК\n 1 ", context: container.mainContext))
+            let library = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+            try library.load()
+            XCTAssertThrowsError(try library.create(name: " УРОК\n 1 "))
             XCTAssertEqual(library.options, [.init(id: id, name: "Урок 1")])
-            XCTAssertEqual(try container.mainContext.fetch(FetchDescriptor<WordFolder>()).count, 1)
+            XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<WordFolder>()).count, 1)
         }
     }
 
     @MainActor
     private func createSavedLibrary(at url: URL) throws -> UUID {
         let container = try makeContainer(at: url)
-        let context = container.mainContext
-        let library = FolderLibraryStore()
-        let id = try library.create(name: "Урок 1", context: context)
+        let context = ModelContext(container)
+        let library = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+        let id = try library.create(name: "Урок 1")
         XCTAssertEqual(library.options, [.init(id: id, name: "Урок 1")])
         let word = Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .polish)
         word.folderIDs = [id]
