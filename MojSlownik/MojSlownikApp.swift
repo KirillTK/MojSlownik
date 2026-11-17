@@ -51,9 +51,12 @@ struct AppResources {
     let vocabulary: VocabularyStore
     let dailyStudy: DailyStudyStore
     let achievements: AchievementStore
+    /// Not placed in the environment: nothing consumes it yet, and it creates its client lazily.
+    let supabase: SupabaseClientProvider
 
     init(configuration: ModelConfiguration? = nil, defaults: UserDefaults = .standard,
-         calendar: Calendar = .autoupdatingCurrent, now: Date = .now) throws {
+         calendar: Calendar = .autoupdatingCurrent, now: Date = .now,
+         supabase: SupabaseClientProvider? = nil) throws {
         if let configuration {
             container = try ModelContainer(for: Word.self, WordFolder.self, configurations: configuration)
         } else {
@@ -67,6 +70,7 @@ struct AppResources {
                                         calendar: calendar)
         folders = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
         vocabulary = VocabularyStore(repository: SwiftDataVocabularyRepository(container: container))
+        self.supabase = supabase ?? SupabaseClientProvider()
     }
 
     #if DEBUG

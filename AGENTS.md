@@ -1,7 +1,8 @@
 # Mój Słownik
 
 Personal iPhone dictionary and practice app for Russian speakers learning Polish.
-SwiftUI, SwiftData, Swift 5.9, iOS 17+. No backend, accounts or synchronization.
+SwiftUI, SwiftData, Swift 5.9, iOS 17+. No accounts or synchronization yet; the Supabase SDK is linked and configured
+(Services/SupabaseClientProvider.swift) but nothing calls it.
 All vocabulary is local; web translation sends entered/scanned text to external services.
 UI copy is Russian; code, file names and project instructions are English.
 

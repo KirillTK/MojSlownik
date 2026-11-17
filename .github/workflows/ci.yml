@@ -38,6 +38,9 @@ jobs:
         run: echo "destination=$(.github/scripts/pick-simulator.sh)" >> "$GITHUB_OUTPUT"
 
       # Builds the app and compiles the UI-test target without running it.
+      # Warnings-as-errors comes from project.yml (project-level settings), not command-line
+      # overrides: those would also reach Swift package targets, which Xcode builds with
+      # -suppress-warnings, and fail with "conflicting options".
       - name: Build app (warnings as errors)
         run: |
           set -o pipefail
@@ -47,8 +50,6 @@ jobs:
             -destination '${{ steps.sim.outputs.destination }}' \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            GCC_TREAT_WARNINGS_AS_ERRORS=YES \
             | xcbeautify --renderer github-actions
 
       - name: Run unit tests

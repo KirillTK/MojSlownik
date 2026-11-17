@@ -1,7 +1,8 @@
 # Mój Słownik Architecture
 
 Personal ru ↔ pl dictionary for iPhone, using SwiftUI and SwiftData on iOS 17+.
-No backend, accounts or synchronization. Vocabulary is stored locally; web
+No accounts or synchronization yet; the Supabase SDK is linked and configured
+(Services/SupabaseClientProvider.swift) but nothing calls it. Vocabulary is stored locally; web
 translation sends entered or recognized text to an external service.
 
 ## Application Map
@@ -21,7 +22,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
 | Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue; `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
-| Build | Root `project.yml`: XcodeGen, application, `MojSlownikTests` and `MojSlownikUITests`, iOS 17.0, Swift 5.9. Schemes: `MojSlownik` (app), `MojSlownikUnitTests` and `MojSlownikE2E` (UI tests, parallel classes). CI: `.github/workflows/ci.yml`. |
+| Build | Root `project.yml`: XcodeGen, application, `MojSlownikTests` and `MojSlownikUITests`, iOS 17.0, Swift 5.9. Schemes: `MojSlownik` (app), `MojSlownikUnitTests` and `MojSlownikE2E` (UI tests, parallel classes). CI: `.github/workflows/ci.yml`. Swift package `supabase-swift` (product `Supabase`, exact 2.55.7; needs Xcode 16.3+). |
 
 ## Data Flows
 
@@ -292,6 +293,13 @@ Personal iPhone installation: [README.md](../README.md).
 The local data layer is sync-shaped (stable `Word.uuid`/`WordFolder.id`, `updatedAt`,
 tombstones, one write seam) but not sync-ready. Local SwiftData stays the source of truth
 (offline-first); a future sync engine would exchange rows by id, `updatedAt` and `deletedAt`.
+
+`Services/SupabaseConfiguration.swift` holds the project URL and publishable key (public;
+secret keys never ship in the app). `Services/SupabaseClientProvider.swift` creates one
+`SupabaseClient` lazily, owned by `AppResources` and not placed in the environment. Nothing
+calls it, and launch, UI-test mode and previews never create it. Remote schema, RLS, auth and
+sync are not implemented (Gap H).
+
 Remaining gaps:
 
 - **A.** No change signal for the folder catalog after sync-applied changes.

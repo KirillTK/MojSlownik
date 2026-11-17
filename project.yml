@@ -11,12 +11,22 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+    # Project-level, so it covers app and test targets but not Swift packages.
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    exactVersion: 2.55.7
 targets:
   MojSlownik:
     type: application
     platform: iOS
     sources:
       - MojSlownik
+    dependencies:
+      - package: Supabase
+        product: Supabase
     info:
       path: MojSlownik/Info.plist
       properties:
