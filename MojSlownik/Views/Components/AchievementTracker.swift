@@ -8,8 +8,10 @@ struct AchievementTracker: View {
         let ledger: AchievementLedger
     }
 
-    @Query private var words: [Word]
-    @Query private var folders: [WordFolder]
+    @Query private var storedWords: [Word]
+    @Query private var storedFolders: [WordFolder]
+    private var words: [Word] { storedWords.filter(\.isActive) }
+    private var folders: [WordFolder] { storedFolders.filter(\.isActive) }
     @Environment(AchievementStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
 

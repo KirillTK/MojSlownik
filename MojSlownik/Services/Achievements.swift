@@ -58,6 +58,7 @@ struct AchievementMetrics: Equatable {
         var learned = 0
         var mastered = 0
         var maxInterval = 0.0
+        let words = words.filter(\.isActive)
         for word in words {
             if word.category != .other { categories.insert(word.category) }
             if word.repetitions >= 3 { learned += 1 }

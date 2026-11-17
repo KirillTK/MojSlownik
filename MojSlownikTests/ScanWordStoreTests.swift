@@ -15,6 +15,9 @@ final class ScanWordStoreTests: XCTestCase {
 
         XCTAssertFalse(try ScanWordStore.toggle(source: "woda", translation: "вода", category: .food, container: container))
         XCTAssertTrue(try words(in: container).isEmpty)
+        let tombstones = try allWords(in: container)
+        XCTAssertEqual(tombstones.count, 1)
+        XCTAssertNotNil(tombstones.first?.deletedAt)
         XCTAssertTrue(try ScanWordStore.toggle(source: "woda", translation: "вода", category: .travel, container: container))
         XCTAssertEqual(try words(in: container).count, 1)
         XCTAssertEqual(try words(in: container).first?.category, .travel)
@@ -134,7 +137,10 @@ final class ScanWordStoreTests: XCTestCase {
         try ScanWordStore.delete(wordID: targetID, container: container)
 
         let freshContext = ModelContext(container)
-        let remaining = try freshContext.fetch(FetchDescriptor<Word>())
+        let everything = try freshContext.fetch(FetchDescriptor<Word>())
+        XCTAssertEqual(everything.count, 3)
+        XCTAssertNotNil(everything.first { $0.persistentModelID == targetID }?.deletedAt)
+        let remaining = everything.filter(\.isActive)
         XCTAssertEqual(Set(remaining.map(\.persistentModelID)), survivorIDs)
         XCTAssertFalse(remaining.contains { $0.persistentModelID == targetID })
         XCTAssertEqual(remaining.filter { $0.polish == "woda" }.count, 1)
@@ -186,6 +192,11 @@ final class ScanWordStoreTests: XCTestCase {
 
     @MainActor
     private func words(in container: ModelContainer) throws -> [Word] {
+        try allWords(in: container).filter(\.isActive)
+    }
+
+    @MainActor
+    private func allWords(in container: ModelContainer) throws -> [Word] {
         try ModelContext(container).fetch(FetchDescriptor<Word>())
     }
 }
