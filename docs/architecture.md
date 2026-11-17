@@ -21,7 +21,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
 | Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue; `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
-| Build | Root `project.yml`: XcodeGen, application and `MojSlownikUITests`, iOS 17.0, Swift 5.9. |
+| Build | Root `project.yml`: XcodeGen, application, `MojSlownikTests` and `MojSlownikUITests`, iOS 17.0, Swift 5.9. Schemes: `MojSlownik` (app), `MojSlownikUnitTests` and `MojSlownikE2E` (UI tests, parallel classes). CI: `.github/workflows/ci.yml`. |
 
 ## Data Flows
 
@@ -273,9 +273,15 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 - Quiz requires at least 4 records and generates **up to** 10 questions. Options
   are deduplicated by exact text, so duplicate translations may yield fewer than
   four choices; questions without distractors are skipped.
-- The `UITEST_PREFILL` launch environment variable opens a scan result without
-  the camera. It is an existing UI-test entry point, not a separate data source.
-  The feature workflow does not create, update or run UI automation.
+- UI-test mode is DEBUG-only (`Services/UITestLaunchConfiguration.swift`,
+  `Services/UITestFixtures.swift`) and is activated by `UITEST_FIXTURE=<name>` and/or
+  `UITEST_PREFILL=<text>`. `UITEST_PREFILL` opens a scan result without the camera and
+  implies fixture `empty` when no fixture is given. The app then uses an in-memory store
+  seeded from `UITestFixture`, and the `MojSlownik.UITest` defaults suite (daily study,
+  achievements) wiped on every launch. Translation and alternatives are stubbed at
+  `Translator`/`TranslationAlternativesService` (no network). Fixture dates are relative
+  to launch time. An unknown fixture name crashes at launch. Release builds contain none
+  of this code.
 
 Regenerate with `xcodegen generate` after adding source files or changing project
 configuration. Build and verification instructions: [AGENTS.md](../AGENTS.md).
@@ -297,7 +303,7 @@ Remaining gaps:
 - **G.** Achievement counters cannot be merged without an event log or per-device counters.
 - **H.** Server-side uniqueness, `user_id`/RLS and category encoding.
 
-## Unit Tests
+## Tests and CI
 
 `MojSlownikTests/` contains XCTest coverage for Word lowercase storage, category
 assignment/overrides, normalized duplicate-pair matching, SwiftData round trips,
@@ -306,3 +312,22 @@ lookup, so its duplicate-comparison rules are tested outside SwiftUI.
 Run the isolated `MojSlownikUnitTests` scheme (see AGENTS.md); it does not include
 `MojSlownikUITests`. New or changed nontrivial logic requires committed unit tests.
 Network translation and physical-camera behavior are not exercised by these tests.
+
+E2E: `MojSlownikUITests/` holds XCUITest classes (AddWordFlow, EditTranslationFlow,
+FlashcardsFlow, QuizFlow, FoldersFlow) on the shared `E2ETestCase`, each launching a
+named fixture. Rule: when a user-facing flow changes, add or update E2E scenarios; reuse
+fixtures or add new ones (with unit tests in `UITestSupportTests`) and never seed data
+through UI steps. Typed E2E input must be ASCII; Cyrillic sources arrive via
+`UITEST_PREFILL`. Run with the `MojSlownikE2E` scheme (parallel classes on simulator
+clones). Camera, OCR and physical-device checks stay manual.
+
+CI (`.github/workflows/ci.yml`, PRs to `main`, pushes to `main`, manual dispatch):
+`Build & unit tests`, E2E shards `practice` (Flashcards, Quiz) and `dictionary` and
+`Branch freshness` (PR only; fails when the PR is more than 10 commits behind `main`).
+The `dictionary` shard is the catch-all (`-only-testing:MojSlownikUITests` minus the
+`-skip-testing` classes); a new class goes to `practice` only by adding it to both the
+`practice` `-only-testing` and the `dictionary` `-skip-testing` lists. `ci-passed` is the
+single aggregate check. `.github/rulesets/main.json` defines the `main` ruleset (PR
+required, `ci-passed` required, no bypass, no force-push or deletion); apply it with
+`gh api -X POST repos/KirillTK/MojSlownik/rulesets --input .github/rulesets/main.json`.
+`.github/scripts/pick-simulator.sh` prints a destination for the newest iPhone simulator.

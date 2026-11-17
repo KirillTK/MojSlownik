@@ -84,6 +84,7 @@ struct QuizView: View {
                         .foregroundStyle(Color.appInk)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("quizPrompt")
                     if question.promptLanguage == .polish {
                         PronounceButton(text: question.prompt, language: .polish)
                     }
@@ -93,7 +94,7 @@ struct QuizView: View {
                 .cardStyle(cornerRadius: AppRadius.hero)
 
                 VStack(spacing: AppSpacing.s) {
-                    ForEach(question.options, id: \.self) { option in
+                    ForEach(Array(question.options.enumerated()), id: \.element) { offset, option in
                         Button {
                             select(option, in: question)
                         } label: {
@@ -130,6 +131,7 @@ struct QuizView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(selectedAnswer != nil)
+                        .accessibilityIdentifier("quizOption-\(offset)")
                     }
                 }
                 .animation(.smooth(duration: 0.25), value: selectedAnswer)
@@ -196,6 +198,7 @@ struct QuizView: View {
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Color.appInk)
                     .monospacedDigit()
+                    .accessibilityIdentifier("quizScore")
                 Text(resultCaption)
                     .font(.body)
                     .foregroundStyle(Color.subtleText)

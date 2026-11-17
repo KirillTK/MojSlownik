@@ -5,5 +5,5 @@ Read AGENTS.md, the task, supplied plan and relevant source. Read docs/architect
 
 Read relevant source and write the requested plan file only. Include goal, acceptance criteria, changes by file, reuse, verification, risk and unresolved decisions. Do not modify application files.
 
-Do not create, update or run E2E, Playwright or XCUITest. Preserve existing UI tests. Do not commit, push, switch branches or discard existing changes. Reviewers must remain read-only. Report confirmed findings only: severity, path:line, concrete scenario and suggested fix; otherwise say No findings. Report checks accurately, including checks not run.
+Do not plan Playwright/browser tests. For changed user-facing flows, plan which XCUITest E2E scenarios to add or update and which named UITEST_FIXTURE fixtures they reuse or add (never seed through UI steps); verification runs the MojSlownikE2E scheme. Camera/OCR checks stay manual. Preserve existing UI tests. Do not commit, push, switch branches or discard existing changes. Reviewers must remain read-only. Report confirmed findings only: severity, path:line, concrete scenario and suggested fix; otherwise say No findings. Report checks accurately, including checks not run.
 """

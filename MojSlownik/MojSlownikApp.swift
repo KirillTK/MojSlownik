@@ -12,7 +12,16 @@ struct MojSlownikApp: App {
 
     init() {
         do {
+            #if DEBUG
+            let resources: AppResources
+            if let configuration = try UITestLaunchConfiguration.parse(ProcessInfo.processInfo.environment) {
+                resources = try AppResources.uiTest(configuration)
+            } else {
+                resources = try AppResources()
+            }
+            #else
             let resources = try AppResources()
+            #endif
             container = resources.container
             _folders = State(initialValue: resources.folders)
             _vocabulary = State(initialValue: resources.vocabulary)
@@ -59,6 +68,17 @@ struct AppResources {
         folders = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
         vocabulary = VocabularyStore(repository: SwiftDataVocabularyRepository(container: container))
     }
+
+    #if DEBUG
+    static func uiTest(_ configuration: UITestLaunchConfiguration, now: Date = .now) throws -> AppResources {
+        UserDefaults().removePersistentDomain(forName: UITestLaunchConfiguration.defaultsSuite)
+        let defaults = UserDefaults(suiteName: UITestLaunchConfiguration.defaultsSuite)!
+        let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
+                                         defaults: defaults, now: now)
+        try configuration.fixture.seed(into: resources.container.mainContext, now: now)
+        return resources
+    }
+    #endif
 
     static let preview: AppResources = {
         do {

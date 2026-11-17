@@ -56,6 +56,7 @@ struct AddWordView: View {
             .safeAreaInset(edge: .bottom) {
                 Button("Сохранить") { save() }
                     .buttonStyle(PrimaryButtonStyle())
+                    .accessibilityIdentifier("saveWordButton")
                     .disabled(speech.isBusy || draft.sourceText.trimmingCharacters(in: .whitespaces).isEmpty
                               || draft.translatedText.trimmingCharacters(in: .whitespaces).isEmpty)
                     .padding(.horizontal, AppSpacing.l)
@@ -268,6 +269,7 @@ struct AddWordView: View {
         .buttonStyle(.plain)
         .disabled(speech.isBusy)
         .accessibilityLabel(option.text + (option.partOfSpeech.map { ", \($0)" } ?? ""))
+        .accessibilityIdentifier("translationOption-\(option.text)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 

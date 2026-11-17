@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -19,10 +20,10 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Select latest stable Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
 
@@ -34,22 +35,7 @@ jobs:
 
       - name: Pick iPhone simulator
         id: sim
-        run: |
-          UDID=$(xcrun simctl list devices available -j \
-            | jq -r '[.devices | to_entries[]
-                      | select(.key | test("iOS-(1[7-9]|[2-9][0-9])"))
-                      | .key as $rt
-                      | .value[] | select(.name | startswith("iPhone"))
-                      | . + {ver: ($rt | capture("iOS-(?<v>[0-9]+(-[0-9]+)*)").v
-                                       | split("-") | map(tonumber))}]
-                     | sort_by(.ver) | last | .udid')
-          if [ -z "$UDID" ] || [ "$UDID" = "null" ]; then
-            echo "No iPhone simulator available" >&2
-            xcrun simctl list devices available
-            exit 1
-          fi
-          echo "Using simulator $UDID"
-          echo "destination=platform=iOS Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
+        run: echo "destination=$(.github/scripts/pick-simulator.sh)" >> "$GITHUB_OUTPUT"
 
       # Builds the app and compiles the UI-test target without running it.
       - name: Build app (warnings as errors)
@@ -79,8 +65,121 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: TestResults
           path: TestResults.xcresult
           retention-days: 7
+
+  # The dictionary shard is the catch-all (everything not listed in another shard),
+  # so new test classes are never left unrun. To move a class to `practice`, add it
+  # to the practice -only-testing list and to the dictionary -skip-testing list.
+  e2e:
+    name: E2E (${{ matrix.shard.name }})
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - name: practice
+            selector: >-
+              -only-testing:MojSlownikUITests/FlashcardsFlowTests
+              -only-testing:MojSlownikUITests/QuizFlowTests
+          - name: dictionary
+            selector: >-
+              -only-testing:MojSlownikUITests
+              -skip-testing:MojSlownikUITests/FlashcardsFlowTests
+              -skip-testing:MojSlownikUITests/QuizFlowTests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen and xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Pick iPhone simulator
+        id: sim
+        run: |
+          DEST=$(.github/scripts/pick-simulator.sh)
+          echo "destination=$DEST" >> "$GITHUB_OUTPUT"
+          echo "udid=${DEST##*id=}" >> "$GITHUB_OUTPUT"
+
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      # No CODE_SIGNING_ALLOWED=NO here: UI-test runners need default ad-hoc simulator signing.
+      - name: Run E2E shard
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
+            -destination '${{ steps.sim.outputs.destination }}' \
+            -derivedDataPath DerivedData \
+            -resultBundlePath E2E-${{ matrix.shard.name }}.xcresult \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
+            ${{ matrix.shard.selector }} \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload E2E results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: E2E-${{ matrix.shard.name }}
+          path: E2E-${{ matrix.shard.name }}.xcresult
+          retention-days: 7
+
+  # Fails a PR that is more than MAX_BEHIND_COMMITS commits behind its base branch.
+  # Evaluated when CI runs; it is not re-evaluated when the base branch advances later.
+  branch-freshness:
+    name: Branch freshness
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MAX_BEHIND_COMMITS: 10
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check commits behind base
+        run: |
+          BEHIND=$(git rev-list --count "$HEAD_SHA..origin/$BASE_REF")
+          echo "PR is $BEHIND commit(s) behind $BASE_REF (limit $MAX_BEHIND_COMMITS)"
+          if [ "$BEHIND" -gt "$MAX_BEHIND_COMMITS" ]; then
+            echo "::error::Branch is $BEHIND commits behind $BASE_REF (max $MAX_BEHIND_COMMITS). Merge or rebase $BASE_REF into the branch."
+            exit 1
+          fi
+
+  # Single stable required check for the branch ruleset.
+  ci-passed:
+    name: ci-passed
+    if: always()
+    needs: [build-and-test, e2e, branch-freshness]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all jobs to succeed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "$NEEDS"
+          # branch-freshness only runs on pull_request; elsewhere it is legitimately skipped.
+          echo "$NEEDS" | jq -e --arg event "$EVENT" '
+            to_entries | all(
+              .value.result == "success"
+              or (.key == "branch-freshness" and .value.result == "skipped" and $event != "pull_request"))
+          ' > /dev/null || { echo "::error::A required job did not succeed"; exit 1; }
