@@ -8,7 +8,6 @@ struct FolderPicker: View {
     /// Grows with Dynamic Type so the title is not truncated at accessibility sizes.
     @ScaledMetric(relativeTo: .subheadline) private var compactMaxWidth: CGFloat = 220
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(FolderLibraryStore.self) private var library
     @State private var showFolders = false
     @State private var showCreateFolder = false
@@ -285,7 +284,7 @@ struct FolderPicker: View {
 
     private func refresh() {
         do {
-            try library.load(context: modelContext)
+            try library.load()
             reconcileSelection()
             creationError = nil
         } catch { creationError = error.localizedDescription }
@@ -300,14 +299,14 @@ struct FolderPicker: View {
     private func deleteFolder(_ folder: FolderLibraryStore.Option) {
         pendingDeletion = nil
         do {
-            try library.delete(id: folder.id, context: modelContext)
+            try library.delete(id: folder.id)
             reconcileSelection()
         } catch { deletionError = error.localizedDescription }
     }
 
     private func createFolder() {
         do {
-            selectedFolderID = try library.create(name: folderName, context: modelContext)
+            selectedFolderID = try library.create(name: folderName)
             creationError = nil
             showCreateFolder = false
             showFolders = false
@@ -318,13 +317,13 @@ struct FolderPicker: View {
         var ids = library.options.map(\.id)
         ids.move(fromOffsets: source, toOffset: destination)
         do {
-            try library.reorder(ids: ids, context: modelContext)
+            try library.reorder(ids: ids)
         } catch { managementError = error.localizedDescription }
     }
 
     private func renameFolder(_ folder: FolderLibraryStore.Option) {
         do {
-            try library.rename(id: folder.id, name: renameName, context: modelContext)
+            try library.rename(id: folder.id, name: renameName)
             renameError = nil
             folderToRename = nil
         } catch { renameError = error.localizedDescription }

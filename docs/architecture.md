@@ -12,6 +12,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | --- | --- |
 | Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder, daily-study and achievement stores, and presents `RootTabView`. |
 | Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs (Achievements is pushed from Training), root `AppleTranslationHost`, `AchievementTracker` and `achievementBanner()`. |
+| Data access | Protocols `VocabularyRepository`/`FolderRepository` (`Services/DataRepositories.swift`) and `AchievementStateRepository`/`DailyActivityRepository` (`Services/ProgressRepositories.swift`). SwiftData implementations (`Services/SwiftDataRepositories.swift`, over `ScanWordStore`/`FolderStore`) and UserDefaults implementations are built in `AppResources`. Views write through `Stores/VocabularyStore.swift` and `Stores/FolderLibraryStore.swift`; `Services/WordIdentityBackfill.swift` assigns `Word.uuid`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
@@ -29,14 +30,20 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 `PersistentIdentifier` values requires those entity types to be registered first;
 SwiftData can terminate the process rather than throw when that precondition fails.
 The app injects that same container into its scene. Previews use ordered in-memory
-resources with separate defaults, never the user's daily activity.
+resources with separate defaults, never the user's daily activity. After the
+container opens, `WordIdentityBackfill.run` assigns a unique `Word.uuid` to rows that
+lack one (earliest `createdAt` keeps a duplicated uuid); failures are logged and
+`VocabularyStore` retries lazily through `ensureIdentity` before a word-targeted write.
 
-**Deletion:** dictionary rows expose a red «Удалить» swipe action, which removes
-the exact word record globally through `ScanWordStore.delete` in an isolated,
-explicitly saved context. Errors remain at screen level. Custom folder rows in
+**Deletion:** dictionary rows expose a red «Удалить» swipe action, which soft-deletes
+the exact word globally (`VocabularyStore` → repository → `ScanWordStore.delete`,
+setting `deletedAt`/`updatedAt` in an isolated, explicitly saved context). Tombstones
+stay in the store and are excluded in memory by `isActive`; re-adding the same pair
+inserts a new row with a new `uuid` and clean progress. Errors remain at screen level. Custom folder rows in
 the shared picker expose the same action followed by a named confirmation;
 `FolderLibraryStore.delete` refreshes the catalog and clears invalid selections.
-Removing a folder preserves vocabulary, SRS and other folder memberships.
+Removing a folder soft-deletes it, strips its id from every word and preserves
+vocabulary, SRS and other folder memberships.
 
 **Adding:** input → `LanguageDetector` → `Translator` → editable translation →
 `Word` → SwiftData → dictionary/training `@Query` updates. Pair fields always
@@ -44,7 +51,8 @@ follow their languages regardless of input direction. After the debounce, gated 
 (one line, at most 4 words and 60 characters) also fetches alternatives in parallel
 (Google `dt=bd/at`, MyMemory `matches`); they appear as «Варианты» chips, never delay or
 replace the primary translation and are not persisted. These screens use the
-SwiftData context and autosaving, without a repository layer or explicit `save()`.
+views through `VocabularyStore` → `VocabularyRepository` → `ScanWordStore`, which saves explicitly
+in an isolated context.
 
 **Voice input:** Add Word starts `SpeechRecognitionService` only from its
 microphone button. Native Speech/AVAudioEngine recognition uses Polish (`pl-PL`)
@@ -165,7 +173,8 @@ the current order, and deletion keeps the relative order of the remaining folder
 `Word.folderIDs` is an additive array defaulting to empty: one vocabulary entry can
 belong to multiple folders, sharing its SRS progress. Categories remain independent.
 `Services/FolderStore.swift` validates folder names, prevents case-equivalent duplicates,
-changes memberships and deletes folders without deleting vocabulary or SRS.
+changes memberships and soft-deletes folders (`FolderLibraryStore` over `FolderRepository`)
+without deleting vocabulary or SRS.
 `Stores/FolderLibraryStore.swift` is the single app-scoped observable catalog, injected through
 SwiftUI's environment at MojSlownikApp. All selectors and dictionary folder menus
 read its options; creation and deletion actions refresh the same catalog. SwiftData
@@ -250,6 +259,12 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 - Tokenization preserves punctuation. Alphanumeric characters, apostrophes and
   hyphens belong to words. Only tokens longer than one character are selectable
   in text and chips; repeated words are preserved.
+- Words and folders are soft-deleted (`deletedAt`). Every read filters `isActive` in memory
+  (`@Query` is stored as `stored…` plus a filtered computed property); no `#Predicate`.
+  A write sets `updatedAt` only when a persisted field changed; `DailyStudyStore.review`
+  and `recordPracticeAnswer` bump it unconditionally. Legacy `updatedAt == nil` reads as
+  `createdAt` (`lastModifiedAt`). `achievements.v1` and `dailyStudyActivity.v1` formats are
+  owned by `ProgressRepositories.swift` and must stay byte-compatible.
 - Due words and search results are filtered in memory after `@Query`. Flashcards
   use all due words, or up to 10 random words if none are due. Again sets `dueDate`
   to 10 minutes later and also appends the word to the current session.
@@ -271,6 +286,22 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 Regenerate with `xcodegen generate` after adding source files or changing project
 configuration. Build and verification instructions: [AGENTS.md](../AGENTS.md).
 Personal iPhone installation: [README.md](../README.md).
+
+## Backend Readiness
+
+The local data layer is sync-shaped (stable `Word.uuid`/`WordFolder.id`, `updatedAt`,
+tombstones, one write seam) but not sync-ready. Local SwiftData stays the source of truth
+(offline-first); a future sync engine would exchange rows by id, `updatedAt` and `deletedAt`.
+Remaining gaps:
+
+- **A.** No change signal for the folder catalog after sync-applied changes.
+- **B.** `updatedAt` uses the device clock; LWW needs server time or an HLC.
+- **C.** Tombstones are never purged; purging needs server acknowledgement.
+- **D.** Daily activity is keyed by `PersistentIdentifier`; move to `Word.uuid` if it ever syncs.
+- **E.** `folderIDs` conflicts at whole-array granularity.
+- **F.** SRS state merge semantics.
+- **G.** Achievement counters cannot be merged without an event log or per-device counters.
+- **H.** Server-side uniqueness, `user_id`/RLS and category encoding.
 
 ## Tests and CI
 

@@ -7,7 +7,8 @@ struct QuizView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
-    @Query private var allWords: [Word]
+    @Query private var storedAllWords: [Word]
+    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
 
     @State private var questions: [QuizQuestion] = []
     @State private var currentIndex = 0
@@ -296,7 +297,8 @@ struct QuizQuestion {
         QuizView()
     }
     .modelContainer(resources.container)
-        .environment(FolderLibraryStore())
+        .environment(resources.folders)
+        .environment(resources.vocabulary)
         .environment(resources.dailyStudy)
     .environment(resources.achievements)
 }

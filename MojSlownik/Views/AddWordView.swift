@@ -3,7 +3,7 @@ import SwiftData
 
 struct AddWordView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(VocabularyStore.self) private var vocabulary
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -298,16 +298,19 @@ struct AddWordView: View {
         let text = draft.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = draft.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try ScanWordStore.add(source: text, translation: translation, category: selectedCategory,
-                                  folderID: selectedFolderID, container: modelContext.container)
+            try vocabulary.add(source: text, translation: translation, category: selectedCategory,
+                               folderID: selectedFolderID)
             dismiss()
         } catch { saveError = error.localizedDescription }
     }
 }
 
 #Preview {
+    let resources = AppResources.preview
     AddWordView()
-        .modelContainer(for: [Word.self, WordFolder.self], inMemory: true)
-        .environment(FolderLibraryStore())
-        .environment(AppResources.preview.achievements)
+        .modelContainer(resources.container)
+        .environment(resources.folders)
+        .environment(resources.vocabulary)
+        .environment(resources.dailyStudy)
+        .environment(resources.achievements)
 }

@@ -227,9 +227,10 @@ struct ScanResultView: View {
     let scannedText: String
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(VocabularyStore.self) private var vocabulary
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Query private var savedWords: [Word]
+    @Query private var storedSavedWords: [Word]
+    private var savedWords: [Word] { storedSavedWords.filter(\.isActive) }
     @State private var draft: ScanResultDraft
     @State private var selectedWord: SelectedWord?
     @State private var saveErrors: [String: String] = [:]
@@ -485,8 +486,7 @@ struct ScanResultView: View {
             return
         }
         do {
-            try ScanWordStore.changeCategory(category, source: word, translation: translation,
-                                             container: modelContext.container)
+            try vocabulary.changeCategory(category, source: word, translation: translation)
             categoryOverrides[word] = category
             saveErrors[word] = nil
         } catch {
@@ -557,9 +557,9 @@ struct ScanResultView: View {
         let selectedCategory = categoryOverrides[text] ?? existingWord(text)?.category
             ?? category(text, translation: translation)
         do {
-            savedOverrides[text] = try ScanWordStore.toggle(
+            savedOverrides[text] = try vocabulary.toggleScanned(
                 source: text, translation: translation, category: selectedCategory,
-                folderID: selectedFolderID, container: modelContext.container
+                folderID: selectedFolderID
             )
             categoryOverrides[text] = selectedCategory
             saveErrors[text] = nil

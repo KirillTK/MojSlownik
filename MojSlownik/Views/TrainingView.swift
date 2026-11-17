@@ -7,7 +7,8 @@ struct TrainingView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Query private var allWords: [Word]
+    @Query private var storedAllWords: [Word]
+    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
     @State private var selectedFolderID: UUID?
     @State private var refreshDate = Date.now
     @ScaledMetric(relativeTo: .largeTitle) private var heroNumber: CGFloat = 40
@@ -313,7 +314,8 @@ private struct ModeTile: View {
     let resources = AppResources.preview
     TrainingView()
         .modelContainer(resources.container)
-        .environment(FolderLibraryStore())
+        .environment(resources.folders)
+        .environment(resources.vocabulary)
         .environment(resources.dailyStudy)
         .environment(resources.achievements)
 }

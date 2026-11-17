@@ -6,29 +6,7 @@ import SwiftUI
 @MainActor
 @Observable
 final class AchievementStore {
-    private struct Stored: Codable {
-        var unlocked: [String: Date] = [:]
-        var ledger = AchievementLedger()
-        var didInitialSync = false
-
-        init(unlocked: [String: Date] = [:], ledger: AchievementLedger = AchievementLedger(),
-             didInitialSync: Bool = false) {
-            self.unlocked = unlocked
-            self.ledger = ledger
-            self.didInitialSync = didInitialSync
-        }
-
-        // Missing keys decode to defaults so later additions never drop stored unlocks.
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            unlocked = try container.decodeIfPresent([String: Date].self, forKey: .unlocked) ?? [:]
-            ledger = try container.decodeIfPresent(AchievementLedger.self, forKey: .ledger) ?? AchievementLedger()
-            didInitialSync = try container.decodeIfPresent(Bool.self, forKey: .didInitialSync) ?? false
-        }
-    }
-
-    private static let storageKey = "achievements.v1"
-    private let defaults: UserDefaults
+    private let repository: any AchievementStateRepository
     private let calendar: Calendar
     private var didInitialSync: Bool
 
@@ -42,15 +20,21 @@ final class AchievementStore {
     @ObservationIgnored private(set) var announcedIDs: Set<String> = []
     @ObservationIgnored private var isSceneActive = true
 
-    init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent,
+    convenience init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent,
+                     catalog: [AchievementDefinition] = AchievementCatalog.all,
+                     displayDuration: Duration = .seconds(4)) {
+        self.init(repository: UserDefaultsAchievementStateRepository(defaults: defaults), calendar: calendar,
+                  catalog: catalog, displayDuration: displayDuration)
+    }
+
+    init(repository: any AchievementStateRepository, calendar: Calendar = .autoupdatingCurrent,
          catalog: [AchievementDefinition] = AchievementCatalog.all,
          displayDuration: Duration = .seconds(4)) {
-        self.defaults = defaults
+        self.repository = repository
         self.calendar = calendar
         self.catalog = catalog
         self.displayDuration = displayDuration
-        let stored = defaults.data(forKey: Self.storageKey)
-            .flatMap { try? JSONDecoder().decode(Stored.self, from: $0) } ?? Stored()
+        let stored = repository.load()
         unlocked = stored.unlocked
         ledger = stored.ledger
         didInitialSync = stored.didInitialSync
@@ -102,9 +86,9 @@ final class AchievementStore {
     }
 
     private func persist() {
-        let stored = Stored(unlocked: unlocked, ledger: ledger, didInitialSync: didInitialSync)
+        let state = AchievementState(unlocked: unlocked, ledger: ledger, didInitialSync: didInitialSync)
         do {
-            defaults.set(try JSONEncoder().encode(stored), forKey: Self.storageKey)
+            try repository.save(state)
         } catch {
             assertionFailure("Unable to save achievements: \(error)")
         }

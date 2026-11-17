@@ -10,6 +10,24 @@ final class WordTests: XCTestCase {
         XCTAssertEqual(word.sourceLanguageCode, "pl")
     }
 
+    func testNewWordsHaveDistinctUUIDsAndUpdatedAtEqualsCreatedAt() {
+        let created = Date(timeIntervalSince1970: 100)
+        let first = Word(russian: "вода", polish: "woda", sourceLanguage: .polish, createdAt: created)
+        let second = Word(russian: "вода", polish: "woda", sourceLanguage: .polish, createdAt: created)
+        XCTAssertNotNil(first.uuid)
+        XCTAssertNotEqual(first.uuid, second.uuid)
+        XCTAssertEqual(first.updatedAt, created)
+        XCTAssertNil(first.deletedAt)
+        XCTAssertTrue(first.isActive)
+        first.updatedAt = nil
+        XCTAssertEqual(first.lastModifiedAt, created)
+        let deleted = Date(timeIntervalSince1970: 200)
+        first.markDeleted(now: deleted)
+        XCTAssertFalse(first.isActive)
+        XCTAssertEqual(first.updatedAt, deleted)
+        XCTAssertEqual(first.deletedAt, deleted)
+    }
+
     func testNewWordAutomaticallyCategorizesPair() {
         let word = Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .russian)
         XCTAssertEqual(word.category, .food)

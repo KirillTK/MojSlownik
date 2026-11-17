@@ -21,47 +21,35 @@ final class DailyStudyStore {
         var total: Int { correct + incorrect }
     }
 
-    private struct Answer: Codable {
-        let wordID: PersistentIdentifier
-        let isCorrect: Bool
-    }
-
-    private struct Activity: Codable {
-        var day: Date
-        // Decoded SwiftData IDs can be equal to live IDs but have different hashes.
-        // Arrays keep equality-based matching and decode the previous Set JSON arrays.
-        var completedIDs: [PersistentIdentifier] = []
-        var pendingIDs: [PersistentIdentifier] = []
-        // Optional additions preserve the existing v1 daily activity on upgrade.
-        var quizCompletedIDs: [PersistentIdentifier]?
-        var answers: [Answer]?
-    }
-
-    private static let storageKey = "dailyStudyActivity.v1"
-    private let defaults: UserDefaults
+    private let repository: any DailyActivityRepository
     private let calendar: Calendar
-    private var activity: Activity
+    private var activity: DailyActivity
 
-    init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent, now: Date = .now) {
-        self.defaults = defaults
+    convenience init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent,
+                     now: Date = .now) {
+        self.init(repository: UserDefaultsDailyActivityRepository(defaults: defaults),
+                  calendar: calendar, now: now)
+    }
+
+    init(repository: any DailyActivityRepository, calendar: Calendar = .autoupdatingCurrent, now: Date = .now) {
+        self.repository = repository
         self.calendar = calendar
-        if let data = defaults.data(forKey: Self.storageKey),
-           let stored = try? JSONDecoder().decode(Activity.self, from: data),
-           calendar.isDate(stored.day, inSameDayAs: now) {
+        if let stored = repository.load(), calendar.isDate(stored.day, inSameDayAs: now) {
             activity = stored
         } else {
-            activity = Activity(day: now)
+            activity = DailyActivity(day: now)
         }
     }
 
     func refresh(now: Date = .now) {
         guard !calendar.isDate(activity.day, inSameDayAs: now) else { return }
-        activity = Activity(day: now)
-        defaults.removeObject(forKey: Self.storageKey)
+        activity = DailyActivity(day: now)
+        repository.clear()
     }
 
     /// A quiz success completes today's practice without changing the SRS schedule.
     func progress(for words: [Word], now: Date = .now) -> Summary {
+        let words = words.filter(\.isActive)
         let completedIDs = calendar.isDate(activity.day, inSameDayAs: now) ? activity.completedIDs : []
         let existingIDs = Set(words.map(\.persistentModelID))
         let dueIDs = Set(reviewWords(for: words, now: now).map(\.persistentModelID))
@@ -71,6 +59,7 @@ final class DailyStudyStore {
 
     /// Keep "Не помню" retries visible even during their ten-minute SRS delay.
     func reviewWords(for words: [Word], now: Date = .now) -> [Word] {
+        let words = words.filter(\.isActive)
         let isToday = calendar.isDate(activity.day, inSameDayAs: now)
         let pendingIDs = isToday ? activity.pendingIDs : []
         let quizCompletedIDs = isToday ? activity.quizCompletedIDs ?? [] : []
@@ -81,6 +70,7 @@ final class DailyStudyStore {
     }
 
     func answerTotals(for words: [Word], now: Date = .now) -> AnswerTotals {
+        let words = words.filter(\.isActive)
         guard calendar.isDate(activity.day, inSameDayAs: now) else {
             return AnswerTotals(correct: 0, incorrect: 0)
         }
@@ -92,9 +82,9 @@ final class DailyStudyStore {
 
     func recordQuizAnswer(wordID: PersistentIdentifier, isCorrect: Bool, now: Date = .now) throws {
         let next = nextActivity(wordID: wordID, isCorrect: isCorrect, isQuiz: true, now: now)
-        let data = try JSONEncoder().encode(next)
+        let commit = try repository.prepareSave(next)
         activity = next
-        defaults.set(data, forKey: Self.storageKey)
+        commit()
     }
 
     @discardableResult
@@ -102,49 +92,55 @@ final class DailyStudyStore {
                               isQuiz: Bool = false, now: Date = .now) throws -> KnowledgeProgressService.Assessment {
         let isCorrect = KnowledgeProgressService.isCorrect(answer)
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: isCorrect, isQuiz: isQuiz, now: now)
-        let data = try JSONEncoder().encode(next)
+        let commit = try repository.prepareSave(next)
         let previous = (word.knowledgeTier, word.consecutiveSoftMisses)
+        let previousUpdatedAt = word.updatedAt
         let assessment = KnowledgeProgressService.apply(answer, to: word)
+        word.updatedAt = now
         do {
             try context.save()
         } catch {
             (word.knowledgeTier, word.consecutiveSoftMisses) = previous
+            word.updatedAt = previousUpdatedAt
             throw error
         }
         activity = next
-        defaults.set(data, forKey: Self.storageKey)
+        commit()
         return assessment
     }
 
     func record(wordID: PersistentIdentifier, grade: ReviewGrade, now: Date = .now) throws {
         let next = nextActivity(wordID: wordID, isCorrect: grade != .again, isQuiz: false, now: now)
-        let data = try JSONEncoder().encode(next)
+        let commit = try repository.prepareSave(next)
         activity = next
-        defaults.set(data, forKey: Self.storageKey)
+        commit()
     }
 
     /// Save the schedule before publishing completion. Restore only this word on failure.
     func review(_ grade: ReviewGrade, to word: Word, context: ModelContext, now: Date = .now) throws {
         // Encoding is prepared first so a serialization failure cannot leave a half-recorded review.
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: grade != .again, isQuiz: false, now: now)
-        let data = try JSONEncoder().encode(next)
+        let commit = try repository.prepareSave(next)
         let previous = (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue)
         let previousKnowledge = (word.knowledgeTier, word.consecutiveSoftMisses)
+        let previousUpdatedAt = word.updatedAt
         KnowledgeProgressService.setTier(from: grade, on: word)
         SRSEngine.apply(grade, to: word, now: now)
+        word.updatedAt = now
         do {
             try context.save()
         } catch {
             (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue) = previous
             (word.knowledgeTier, word.consecutiveSoftMisses) = previousKnowledge
+            word.updatedAt = previousUpdatedAt
             throw error
         }
         activity = next
-        defaults.set(data, forKey: Self.storageKey)
+        commit()
     }
 
-    private func nextActivity(wordID: PersistentIdentifier, isCorrect: Bool, isQuiz: Bool, now: Date) -> Activity {
-        var next = calendar.isDate(activity.day, inSameDayAs: now) ? activity : Activity(day: now)
+    private func nextActivity(wordID: PersistentIdentifier, isCorrect: Bool, isQuiz: Bool, now: Date) -> DailyActivity {
+        var next = calendar.isDate(activity.day, inSameDayAs: now) ? activity : DailyActivity(day: now)
         var quizCompletedIDs = next.quizCompletedIDs ?? []
         quizCompletedIDs.removeAll { $0 == wordID }
         next.completedIDs.removeAll { $0 == wordID }
@@ -157,7 +153,7 @@ final class DailyStudyStore {
         }
         next.quizCompletedIDs = quizCompletedIDs
         var answers = next.answers ?? []
-        answers.append(Answer(wordID: wordID, isCorrect: isCorrect))
+        answers.append(DailyActivityAnswer(wordID: wordID, isCorrect: isCorrect))
         next.answers = answers
         return next
     }
