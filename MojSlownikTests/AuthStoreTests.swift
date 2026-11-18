@@ -81,8 +81,18 @@ private final class GatedFlushLogger: AppLogging {
 final class AuthStoreTests: XCTestCase {
     private let account = AuthAccount(userID: UUID(), email: "me@example.com", provider: .apple)
 
-    private func settle() async {
-        for _ in 0..<10 { await Task.yield() }
+    /// Polls until `condition` holds (fails after `timeout`). A fixed number of `Task.yield()`s
+    /// was not enough for the session stream on a loaded CI runner (flaked on CI).
+    private func waitUntil(_ what: String, timeout: Duration = .seconds(5),
+                           file: StaticString = #filePath, line: UInt = #line,
+                           _ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + timeout
+        while !condition() {
+            guard ContinuousClock.now < deadline else {
+                return XCTFail("timed out waiting for \(what)", file: file, line: line)
+            }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     /// Only a fresh sign-in closes the account sheet; a restored session or refresh does not.
@@ -99,12 +109,12 @@ final class AuthStoreTests: XCTestCase {
         let store = AuthStore(backend: StaticAuthBackend())
         XCTAssertEqual(store.state, .unknown)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         XCTAssertEqual(store.state, .signedOut)
 
         let signedIn = AuthStore(backend: StaticAuthBackend(account: account))
         signedIn.start()
-        await settle()
+        await waitUntil("session") { signedIn.state != .unknown }
         XCTAssertEqual(signedIn.state, .signedIn(account))
         XCTAssertTrue(signedIn.isSignedIn)
     }
@@ -114,9 +124,9 @@ final class AuthStoreTests: XCTestCase {
         let store = AuthStore(backend: backend)
         store.start()
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .google)
-        await settle()
+        await waitUntil("signed in") { store.isSignedIn }
         XCTAssertEqual(store.account?.provider, .google)
     }
 
@@ -124,9 +134,9 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: StaticAuthBackend(), logger: spy)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .google)
-        await settle()
+        await waitUntil("signed in") { store.isSignedIn }
         XCTAssertEqual(store.account?.provider, .google)
         XCTAssertNil(store.errorMessage)
         XCTAssertNil(store.pendingProvider)
@@ -141,7 +151,7 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: backend, logger: spy)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .apple)
         XCTAssertEqual(store.state, .signedOut)
         XCTAssertNil(store.errorMessage)
@@ -154,7 +164,7 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: backend, logger: spy)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .google)
         XCTAssertEqual(store.state, .signedOut)
         XCTAssertEqual(store.errorMessage, "Не удалось войти. Попробуйте ещё раз.")
@@ -168,11 +178,11 @@ final class AuthStoreTests: XCTestCase {
         backend.signInError = ScriptedAuthBackend.Failed()
         let store = AuthStore(backend: backend)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .google)
         backend.signInError = nil
         await store.signIn(with: .google)
-        await settle()
+        await waitUntil("signed in") { store.isSignedIn }
         XCTAssertNil(store.errorMessage)
         XCTAssertTrue(store.isSignedIn)
     }
@@ -182,9 +192,9 @@ final class AuthStoreTests: XCTestCase {
         backend.holdSignIn = true
         let store = AuthStore(backend: backend)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         let first = Task { await store.signIn(with: .apple) }
-        await settle()
+        await waitUntil("sign-in pending") { store.pendingProvider != nil }
         XCTAssertEqual(store.pendingProvider, .apple)
         XCTAssertTrue(store.isBusy)
         await store.signIn(with: .google)
@@ -200,10 +210,10 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: StaticAuthBackend(account: account), logger: spy)
         store.start()
-        await settle()
+        await waitUntil("launch flush") { spy.flushCount >= 1 }
         XCTAssertEqual(spy.flushCount, 1, "an existing session at launch uploads pending logs")
         await store.signOut()
-        await settle()
+        await waitUntil("signed out") { store.state == .signedOut }
         XCTAssertEqual(store.state, .signedOut)
         XCTAssertEqual(spy.flushCount, 2, "sign-out uploads while the session still exists")
         XCTAssertEqual(spy.events, [.authSignedOut])
@@ -217,7 +227,7 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: backend, logger: spy)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signOut()
         XCTAssertNil(store.errorMessage)
         XCTAssertFalse(store.isSigningOut)
@@ -231,7 +241,7 @@ final class AuthStoreTests: XCTestCase {
         backend.signInError = ScriptedAuthBackend.Failed()
         let store = AuthStore(backend: backend)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .google)
         XCTAssertNotNil(store.errorMessage)
         store.dismissError()
@@ -241,7 +251,7 @@ final class AuthStoreTests: XCTestCase {
         XCTAssertNotNil(store.errorMessage)
         backend.signInError = nil
         backend.emit(account)
-        await settle()
+        await waitUntil("signed in") { store.isSignedIn }
         XCTAssertTrue(store.isSignedIn)
         XCTAssertNil(store.errorMessage, "a session arriving later clears the stale failure")
     }
@@ -252,10 +262,10 @@ final class AuthStoreTests: XCTestCase {
         let store = AuthStore(backend: StaticAuthBackend(account: account), logger: logger,
                               signOutFlushTimeout: .milliseconds(50))
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         XCTAssertTrue(store.isSignedIn, "the session update was not blocked by the hanging flush")
         await store.signOut()
-        await settle()
+        await waitUntil("signed out") { store.state == .signedOut }
         XCTAssertEqual(store.state, .signedOut)
         XCTAssertGreaterThanOrEqual(logger.flushesStarted, 2)
         XCTAssertEqual(logger.flushesFinished, 0, "uploads were still in flight")
@@ -292,7 +302,7 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: backend, logger: spy)
         store.start()
-        await settle()
+        await waitUntil("launch flush") { spy.flushCount >= 1 }
         let flushesBefore = spy.flushCount
         var flushesAtSignOut = -1
         backend.onSignOut = { flushesAtSignOut = spy.flushCount }
@@ -306,7 +316,7 @@ final class AuthStoreTests: XCTestCase {
         let spy = AppLogSpy()
         let store = AuthStore(backend: backend, logger: spy)
         store.start()
-        await settle()
+        await waitUntil("session") { store.state != .unknown }
         var eventsAtSignOut: [LogEvent] = []
         backend.onSignOut = { eventsAtSignOut = spy.events }
         await store.signOut()
@@ -327,13 +337,13 @@ final class AuthStoreTests: XCTestCase {
     func testUITestBackendsMatchStates() async {
         let failing = AuthStore(backend: UITestAuthState.failing.makeBackend())
         failing.start()
-        await settle()
+        await waitUntil("session") { failing.state != .unknown }
         await failing.signIn(with: .apple)
         XCTAssertNotNil(failing.errorMessage)
 
         let signedIn = AuthStore(backend: UITestAuthState.signedIn.makeBackend())
         signedIn.start()
-        await settle()
+        await waitUntil("session") { signedIn.state != .unknown }
         XCTAssertEqual(signedIn.account, StaticAuthBackend.testAccount)
     }
 }

@@ -408,7 +408,10 @@ final class AppLogQueueTests: XCTestCase {
         uploader.alwaysFailTransiently = true
         let queue = makeQueue(uploader: uploader, account: userA)
         fill(queue, count: AppLogQueue.flushThreshold + 5)
-        for _ in 0..<50 { await Task.yield() }
+        // Wait for the first attempt (not a fixed yield count: slow CI), then give any extra
+        // spawned flushes time to run.
+        for _ in 0..<500 where uploader.attempts == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(uploader.attempts, 1)
     }
 
