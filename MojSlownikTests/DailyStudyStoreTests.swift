@@ -60,7 +60,7 @@ final class DailyStudyStoreTests: XCTestCase {
 
             try store.recordPracticeAnswer(word: word,
                                           answer: .typed(expected: "słowo", submitted: "słowx"),
-                                          context: container.mainContext, now: now)
+                                          context: container.mainContext, mode: .flashcards, now: now)
 
             XCTAssertEqual(word.consecutiveSoftMisses, 1)
             XCTAssertEqual(word.knowledgeTier, 3)
@@ -75,7 +75,7 @@ final class DailyStudyStoreTests: XCTestCase {
             XCTAssertEqual(reloadedWord.consecutiveSoftMisses, 1)
             try store.recordPracticeAnswer(word: reloadedWord,
                                           answer: .typed(expected: "słowo", submitted: "słowx"),
-                                          context: reloadedContext, now: now)
+                                          context: reloadedContext, mode: .flashcards, now: now)
             XCTAssertEqual(reloadedWord.consecutiveSoftMisses, 0)
             XCTAssertEqual(reloadedWord.knowledgeTier, 2)
         }
@@ -372,11 +372,24 @@ final class DailyStudyStoreTests: XCTestCase {
             let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
             try store.review(.good, to: words[0], context: container.mainContext, now: later)
             try store.recordPracticeAnswer(word: words[1], answer: .typed(expected: "słowo", submitted: "słowo"),
-                                           context: container.mainContext, now: later)
+                                           context: container.mainContext, mode: .flashcards, now: later)
             let fresh = try ModelContext(container).fetch(FetchDescriptor<Word>())
             XCTAssertEqual(fresh.count, 2)
             XCTAssertTrue(fresh.allSatisfy { $0.updatedAt == later })
         }
+    }
+
+    /// Review finding: quiz completion is derived from the mode, so a caller cannot log
+    /// mode=quiz without recording quiz completion (or the reverse).
+    func testQuizCompletionFollowsPracticeMode() throws {
+        let (container, words) = try makeWords(3)
+        let repository = InMemoryDailyActivityRepository()
+        let store = DailyStudyStore(repository: repository, now: now)
+        for (word, mode) in zip(words, [PracticeMode.quiz, .listening, .flashcards]) {
+            try store.recordPracticeAnswer(word: word, answer: .choice(isCorrect: true),
+                                           context: container.mainContext, mode: mode, now: now)
+        }
+        XCTAssertEqual(repository.stored?.quizCompletedIDs, words.prefix(2).map(\.persistentModelID))
     }
 
     private func makeWords(_ count: Int) throws -> (ModelContainer, [Word]) {

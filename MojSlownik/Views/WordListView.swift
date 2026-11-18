@@ -14,6 +14,7 @@ struct WordListView: View {
     @State private var selectedCategory: WordCategory?
     @State private var searchText = ""
     @State private var showAddSheet = false
+    @State private var showAccount = false
     @State private var showScanner = false
     @State private var scannedResult: ScannedText?
     @State private var didHandleTestPrefill = false
@@ -90,6 +91,14 @@ struct WordListView: View {
                         Button("Удалить папку", systemImage: "folder.badge.minus") { showDeleteFolder = true }
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Аккаунт", systemImage: "person.crop.circle") { showAccount = true }
+                        .tint(Color.appAccentText)
+                        .accessibilityIdentifier("accountButton")
+                }
+            }
+            .sheet(isPresented: $showAccount) {
+                AccountView()
             }
             .sensoryFeedback(.selection, trigger: selectedCategory)
             .sensoryFeedback(trigger: words.count) { old, new in
@@ -405,4 +414,5 @@ private struct WordRow: View {
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)
         .environment(resources.achievements)
+        .environment(resources.auth)
 }

@@ -156,7 +156,7 @@ struct QuizView: View {
         }
         do {
             try dailyStudy.recordPracticeAnswer(word: word, answer: .choice(isCorrect: isCorrect),
-                                                context: modelContext, isQuiz: true)
+                                                context: modelContext, mode: .quiz)
         } catch {
             answerError = error.localizedDescription
             return

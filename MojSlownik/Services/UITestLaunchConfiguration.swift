@@ -6,16 +6,22 @@ import Foundation
 struct UITestLaunchConfiguration: Equatable, Sendable {
     static let fixtureKey = "UITEST_FIXTURE"
     static let prefillKey = "UITEST_PREFILL"
+    static let authKey = "UITEST_AUTH"
     static let defaultsSuite = "MojSlownik.UITest"
 
     let fixture: UITestFixture
     let prefill: String?
+    var auth: UITestAuthState = .signedOut
 
     enum ParseError: LocalizedError, Equatable {
         case unknownFixture(String)
+        case unknownAuthState(String)
 
         var errorDescription: String? {
             switch self {
+            case .unknownAuthState(let name):
+                let known = UITestAuthState.allCases.map(\.rawValue).joined(separator: ", ")
+                return "Unknown UITEST_AUTH '\(name)'. Known: \(known)"
             case .unknownFixture(let name):
                 let known = UITestFixture.allCases.map(\.rawValue).joined(separator: ", ")
                 return "Unknown UITEST_FIXTURE '\(name)'. Known: \(known)"
@@ -23,12 +29,20 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
         }
     }
 
-    /// nil when neither key is set (empty strings count as unset).
-    /// Prefill without a fixture implies fixture `.empty`. An unknown fixture name throws.
+    /// nil when no key is set (empty strings count as unset).
+    /// Prefill or auth without a fixture implies fixture `.empty`. Unknown names throw.
     static func parse(_ environment: [String: String]) throws -> UITestLaunchConfiguration? {
         let fixtureName = environment[fixtureKey].flatMap { $0.isEmpty ? nil : $0 }
         let prefill = environment[prefillKey].flatMap { $0.isEmpty ? nil : $0 }
-        guard fixtureName != nil || prefill != nil else { return nil }
+        let authName = environment[authKey].flatMap { $0.isEmpty ? nil : $0 }
+        guard fixtureName != nil || prefill != nil || authName != nil else { return nil }
+        var auth = UITestAuthState.signedOut
+        if let authName {
+            guard let known = UITestAuthState(rawValue: authName) else {
+                throw ParseError.unknownAuthState(authName)
+            }
+            auth = known
+        }
         let fixture: UITestFixture
         if let fixtureName {
             guard let known = UITestFixture(rawValue: fixtureName) else {
@@ -38,13 +52,29 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
         } else {
             fixture = .empty
         }
-        return UITestLaunchConfiguration(fixture: fixture, prefill: prefill)
+        return UITestLaunchConfiguration(fixture: fixture, prefill: prefill, auth: auth)
     }
 
     /// Cached for non-throwing call sites (Translator, WordListView). App launch calls
     /// parse(ProcessInfo.processInfo.environment) itself so errors surface.
     static let current: UITestLaunchConfiguration? =
         try? parse(ProcessInfo.processInfo.environment)
+}
+
+/// Account state for UI tests; always a network-free StaticAuthBackend.
+enum UITestAuthState: String, CaseIterable, Sendable {
+    case signedOut, signedIn
+    /// Signed out, and every sign-in attempt fails (error message path).
+    case failing
+
+    @MainActor
+    func makeBackend() -> StaticAuthBackend {
+        switch self {
+        case .signedOut: StaticAuthBackend()
+        case .signedIn: StaticAuthBackend(account: StaticAuthBackend.testAccount)
+        case .failing: StaticAuthBackend(failsSignIn: true)
+        }
+    }
 }
 
 /// Deterministic, network-free translation used in UI-test mode.

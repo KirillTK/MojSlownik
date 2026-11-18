@@ -72,6 +72,23 @@
   чтобы показать варианты перевода — даже при офлайн-переводе Apple.
 - Перевод всегда можно отредактировать перед сохранением.
 
+## Аккаунт (Supabase)
+
+Вход необязателен: словарь всегда хранится на iPhone. После входа через Apple или Google
+приложение отправляет в Supabase обезличенные события и ошибки — без слов, переводов,
+почты и текстов ошибок. Один раз настройте проект в Supabase Dashboard:
+
+1. **Authentication → URL Configuration → Redirect URLs:** добавьте
+   `com.kirill.personal.mojslownik://auth-callback`.
+2. **Authentication → Providers → Google:** включите, укажите Client ID и Client Secret
+   OAuth-клиента типа «Web application» из Google Cloud Console; в нём в
+   «Authorized redirect URIs» — `https://bjwptrfbtcmxlhjaxiip.supabase.co/auth/v1/callback`.
+3. **Authentication → Providers → Apple:** включите, укажите Services ID, Team ID, Key ID и
+   ключ `.p8` (нужен платный Apple Developer Program; само приложение для этого входа
+   entitlement не требует). Return URL Services ID — тот же `…/auth/v1/callback`.
+
+Логи читаются в Supabase: Table Editor → `app_logs` (через API их прочитать нельзя).
+
 ## Разработка
 
 Архитектура описана в [AGENTS.md](AGENTS.md). Проект генерируется XcodeGen

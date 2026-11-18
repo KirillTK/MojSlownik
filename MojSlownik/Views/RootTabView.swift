@@ -24,4 +24,5 @@ struct RootTabView: View {
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)
         .environment(resources.achievements)
+        .environment(resources.auth)
 }

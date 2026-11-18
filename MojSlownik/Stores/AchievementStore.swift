@@ -8,6 +8,7 @@ import SwiftUI
 final class AchievementStore {
     private let repository: any AchievementStateRepository
     private let calendar: Calendar
+    private let logger: any AppLogging
     private var didInitialSync: Bool
 
     let catalog: [AchievementDefinition]
@@ -29,8 +30,9 @@ final class AchievementStore {
 
     init(repository: any AchievementStateRepository, calendar: Calendar = .autoupdatingCurrent,
          catalog: [AchievementDefinition] = AchievementCatalog.all,
-         displayDuration: Duration = .seconds(4)) {
+         displayDuration: Duration = .seconds(4), logger: (any AppLogging)? = nil) {
         self.repository = repository
+        self.logger = logger ?? NoopAppLogger()
         self.calendar = calendar
         self.catalog = catalog
         self.displayDuration = displayDuration
@@ -80,6 +82,8 @@ final class AchievementStore {
         didInitialSync = true
         persist()
         if announce {
+            // Catalog ids are static identifiers (e.g. "vocabulary.words.50"), not user content.
+            for id in ids { logger.log(.achievementUnlocked, [.achievement: .name(id)]) }
             pendingAnnouncements.append(contentsOf: ids.compactMap { id in catalog.first { $0.id == id } })
             presentNextIfNeeded()
         }
@@ -88,7 +92,7 @@ final class AchievementStore {
     private func persist() {
         let state = AchievementState(unlocked: unlocked, ledger: ledger, didInitialSync: didInitialSync)
         do {
-            try repository.save(state)
+            try logger.logged("achievements.save") { try repository.save(state) }
         } catch {
             assertionFailure("Unable to save achievements: \(error)")
         }

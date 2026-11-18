@@ -35,3 +35,25 @@ enum WordCategory: String, CaseIterable, Identifiable {
         (.health, Set("врач|больница|аптека|лекарство|здоровье|боль|голова|рука|нога|сердце|зуб|lekarz|szpital|apteka|lek|zdrowie|ból|głowa|ręka|noga|serce|ząb".components(separatedBy: "|")))
     ]
 }
+
+extension WordCategory {
+    /// Language-neutral id persisted on the server and used in logs. Explicit on purpose: never
+    /// derive it from case names or titles, which may be renamed. Never change an existing id.
+    var stableID: String {
+        switch self {
+        case .food: "food"
+        case .home: "home"
+        case .travel: "travel"
+        case .nature: "nature"
+        case .people: "people"
+        case .work: "work"
+        case .health: "health"
+        case .other: "other"
+        }
+    }
+
+    init?(stableID: String) {
+        guard let match = Self.allCases.first(where: { $0.stableID == stableID }) else { return nil }
+        self = match
+    }
+}

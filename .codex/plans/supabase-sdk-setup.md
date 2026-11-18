@@ -107,7 +107,7 @@ In `targets.MojSlownik`, add:
 Do not add the package to `MojSlownikTests` or `MojSlownikUITests`. The hosted unit tests use
 `@testable import MojSlownik` and never `import Supabase` (see Risks R3 for the fallback). Change nothing else.
 
-### 2. New `MojSlownik/Services/SupabaseConfiguration.swift` (Foundation only, no `import Supabase`)
+### 2. New `MojSlownik/Backend/SupabaseConfiguration.swift` (Foundation only, no `import Supabase`)
 ```swift
 struct SupabaseConfiguration: Equatable, Sendable {
     let url: URL
@@ -135,7 +135,7 @@ struct SupabaseConfiguration: Equatable, Sendable {
 - Why a source constant rather than Info.plist or xcconfig: there is one environment, and the key is public. A constant is
   the smallest change, and it is fully unit-testable. OD-4 records the alternative.
 
-### 3. New `MojSlownik/Services/SupabaseClientProvider.swift` (the only file with `import Supabase`)
+### 3. New `MojSlownik/Backend/SupabaseClientProvider.swift` (the only file with `import Supabase`)
 ```swift
 import Foundation
 import Supabase
@@ -181,7 +181,7 @@ None.
 ### 6. `AGENTS.md`
 Replace "No backend, accounts or synchronization." with:
 "No accounts or synchronization yet; the Supabase SDK is linked and configured
-(Services/SupabaseClientProvider.swift) but nothing calls it."
+(Backend/SupabaseClientProvider.swift) but nothing calls it."
 No other edits.
 
 ### 7. `docs/architecture.md`
@@ -189,8 +189,8 @@ No other edits.
 - Application Map, **Build** row: append "Swift package `supabase-swift` (product `Supabase`, exact
   2.55.7; needs Xcode 16.3+)."
 - **Backend Readiness**: add a paragraph before the gaps list:
-  "`Services/SupabaseConfiguration.swift` holds the project URL and publishable key (public;
-  secret keys never ship in the app). `Services/SupabaseClientProvider.swift` creates one
+  "`Backend/SupabaseConfiguration.swift` holds the project URL and publishable key (public;
+  secret keys never ship in the app). `Backend/SupabaseClientProvider.swift` creates one
   `SupabaseClient` lazily, owned by `AppResources` and not placed in the environment. Nothing calls it, and
   launch, UI-test mode and previews never create it. Remote schema, RLS, auth and sync are not implemented (Gap H)."
 

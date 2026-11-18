@@ -9,6 +9,11 @@ class E2ETestCase: XCTestCase {
         case empty, basicVocabulary, dueForReview, foldersOrdered
     }
 
+    /// Mirrors the app-side `UITestAuthState` (a network-free auth backend).
+    enum AuthState: String {
+        case signedOut, signedIn, failing
+    }
+
     var app: XCUIApplication!
 
     override func setUpWithError() throws {
@@ -17,9 +22,12 @@ class E2ETestCase: XCTestCase {
 
     @MainActor
     @discardableResult
-    func launch(_ fixture: Fixture, prefill: String? = nil) -> XCUIApplication {
+    func launch(_ fixture: Fixture, prefill: String? = nil, auth: AuthState? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_FIXTURE"] = fixture.rawValue
+        if let auth {
+            app.launchEnvironment["UITEST_AUTH"] = auth.rawValue
+        }
         if let prefill {
             app.launchEnvironment["UITEST_PREFILL"] = prefill
         }

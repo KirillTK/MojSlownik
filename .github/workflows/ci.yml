@@ -49,6 +49,7 @@ jobs:
             -scheme MojSlownik \
             -destination '${{ steps.sim.outputs.destination }}' \
             -derivedDataPath DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
 
@@ -60,6 +61,7 @@ jobs:
             -scheme MojSlownikUnitTests \
             -destination '${{ steps.sim.outputs.destination }}' \
             -derivedDataPath DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
@@ -126,6 +128,7 @@ jobs:
             -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
             -destination '${{ steps.sim.outputs.destination }}' \
             -derivedDataPath DerivedData \
+            -onlyUsePackageVersionsFromResolvedFile \
             -resultBundlePath E2E-${{ matrix.shard.name }}.xcresult \
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES -maximum-test-execution-time-allowance 300 \
@@ -139,6 +142,31 @@ jobs:
           name: E2E-${{ matrix.shard.name }}
           path: E2E-${{ matrix.shard.name }}.xcresult
           retention-days: 7
+
+  # Applies supabase/migrations to a throwaway Postgres (with a stub of Supabase's auth schema)
+  # and runs the RLS tests as the anon/authenticated API roles. No Supabase project, no secrets.
+  backend-checks:
+    name: Backend (secrets & RLS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Scan for Supabase secrets
+        run: scripts/check-secrets.sh
+
+      - name: Apply migrations and run RLS tests
+        run: scripts/test-db.sh "postgresql://postgres@localhost:5432/postgres"
 
   # Fails a PR that is more than MAX_BEHIND_COMMITS commits behind its base branch.
   # Evaluated when CI runs; it is not re-evaluated when the base branch advances later.
@@ -169,7 +197,7 @@ jobs:
   ci-passed:
     name: ci-passed
     if: always()
-    needs: [build-and-test, e2e, branch-freshness]
+    needs: [build-and-test, e2e, backend-checks, branch-freshness]
     runs-on: ubuntu-latest
     steps:
       - name: Require all jobs to succeed

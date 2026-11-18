@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Full-width primary action. `.accent` is the yellow fill; `.inverse` is only for use inside the yellow hero.
+/// `.ink` and `.card` are the non-accent sign-in buttons of the account sheet (Apple / Google).
 struct PrimaryButtonStyle: ButtonStyle {
-    enum Kind { case accent, inverse }
+    enum Kind { case accent, inverse, ink, card }
 
     var kind: Kind = .accent
 
@@ -23,6 +24,16 @@ private struct PrimaryButtonBody: View {
         case (.accent, false): .appSecondarySurface
         case (.inverse, true): .appInverseSurface
         case (.inverse, false): Color.appOnAccent.opacity(0.12)
+        case (.ink, _): .appInverseSurface
+        case (.card, _): .cardBackground
+        }
+    }
+
+    private var edge: Color? {
+        switch kind {
+        case .ink: .appInverseEdge
+        case .card: .appCardEdge
+        case .accent, .inverse: nil
         }
     }
 
@@ -32,6 +43,16 @@ private struct PrimaryButtonBody: View {
         case (.accent, false): .subtleText
         case (.inverse, true): .appAccent
         case (.inverse, false): Color.appOnAccent.opacity(0.5)
+        case (.ink, _): .appOnInverse
+        case (.card, _): .appInk
+        }
+    }
+
+    /// Kinds without a dedicated disabled colour dim instead.
+    private var disabledOpacity: Double {
+        switch kind {
+        case .ink, .card: isEnabled ? 1 : 0.5
+        case .accent, .inverse: 1
         }
     }
 
@@ -40,12 +61,18 @@ private struct PrimaryButtonBody: View {
             .font(.body.weight(.bold))
             .multilineTextAlignment(.center)
             .foregroundStyle(foreground)
+            .tint(foreground)  // spinners inside the label match the text colour
             .frame(maxWidth: .infinity, minHeight: 50)
             .padding(.horizontal, AppSpacing.m)
             .background(background, in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+            .overlay {
+                if let edge {
+                    RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous).strokeBorder(edge, lineWidth: 1)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
+            .opacity((configuration.isPressed ? 0.9 : 1) * disabledOpacity)
             .animation(.snappy(duration: 0.2), value: configuration.isPressed)
     }
 }

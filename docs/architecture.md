@@ -1,8 +1,8 @@
 # Mój Słownik Architecture
 
 Personal ru ↔ pl dictionary for iPhone, using SwiftUI and SwiftData on iOS 17+.
-No accounts or synchronization yet; the Supabase SDK is linked and configured
-(Services/SupabaseClientProvider.swift) but nothing calls it. Vocabulary is stored locally; web
+Optional Supabase account (Apple/Google); no synchronization yet. Signed-in users upload
+content-free diagnostics. Vocabulary is stored locally; web
 translation sends entered or recognized text to an external service.
 
 ## Application Map
@@ -22,6 +22,8 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
 | Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue; `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
+| Backend | `Backend/`: remote backend code, kept apart from `Services/`; the only place that imports `Supabase`. `SupabaseConfiguration.swift` (URL, publishable key, OAuth redirect), `SupabaseClientProvider.swift` (lazy client, no SDK logger), `SupabaseAuthBackend.swift` (native SDK OAuth), `SupabaseLogUploader.swift` (app_logs inserts), `RemoteRecords.swift`/`RemoteMergePolicy.swift` (sync seam). Schema: `supabase/migrations`, tests: `supabase/tests`. |
+| Account and logs | `Stores/AuthStore.swift` over `Services/Auth.swift` (`AuthBackend`; `StaticAuthBackend` for previews/UI tests); `Views/AccountView.swift` from the Словарь toolbar. `Services/AppLog.swift` (typed events) and `Services/AppLogQueue.swift` (on-disk queue, uploads while signed in, flush on threshold/sign-in/sign-out/background). Stores take an `AppLogging`; static services use `AppLog.shared`. |
 | Build | Root `project.yml`: XcodeGen, application, `MojSlownikTests` and `MojSlownikUITests`, iOS 17.0, Swift 5.9. Schemes: `MojSlownik` (app), `MojSlownikUnitTests` and `MojSlownikE2E` (UI tests, parallel classes). CI: `.github/workflows/ci.yml`. Swift package `supabase-swift` (product `Supabase`, exact 2.55.7; needs Xcode 16.3+). |
 
 ## Data Flows
@@ -294,11 +296,22 @@ The local data layer is sync-shaped (stable `Word.uuid`/`WordFolder.id`, `update
 tombstones, one write seam) but not sync-ready. Local SwiftData stays the source of truth
 (offline-first); a future sync engine would exchange rows by id, `updatedAt` and `deletedAt`.
 
-`Services/SupabaseConfiguration.swift` holds the project URL and publishable key (public;
-secret keys never ship in the app). `Services/SupabaseClientProvider.swift` creates one
-`SupabaseClient` lazily, owned by `AppResources` and not placed in the environment. Nothing
-calls it, and launch, UI-test mode and previews never create it. Remote schema, RLS, auth and
-sync are not implemented (Gap H).
+`Backend/SupabaseConfiguration.swift` holds the project URL, publishable key (public;
+secret keys never ship in the app) and OAuth redirect. `Backend/SupabaseClientProvider.swift`
+creates one `SupabaseClient` lazily, owned by `AppResources`; `AuthStore.start()` creates it at
+launch in production only (UI tests, previews and the unit-test host use `StaticAuthBackend`).
+
+Auth: `signInWithOAuth` (PKCE, ASWebAuthenticationSession, no entitlement, so it works with a
+free Personal Team). The redirect `com.kirill.personal.mojslownik://auth-callback` must be in
+Supabase → Authentication → URL Configuration; Apple and Google providers are configured in the
+Supabase dashboard (README). The session lives in the SDK's Keychain storage.
+
+Remote schema (`supabase/migrations`): `words` is a language-neutral pair (`term` +
+`term_language`, `translation` + `translation_language`, BCP 47; `entered_language` is one of
+them; `category` is `WordCategory.stableID`), `folders`, and write-only `app_logs`. All RLS-scoped
+to `user_id`; `anon` has no grants. The local `Word` is still ru/pl (`polish` → `term`,
+`russian` → `translation`); a multi-language local model needs its own SwiftData migration.
+Nothing syncs yet (Gap H); `RemoteRecordValidator` and `RemoteMergePolicy` are the seam.
 
 Remaining gaps:
 
