@@ -109,7 +109,7 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 
 | Component | Spec |
 |---|---|
-| Primary button | `PrimaryButtonStyle(kind:)`: full width, min height 50, radius button, `.body.bold`. `.accent`: yellow + `appOnAccent`; `.inverse` (inside the yellow hero only): ink + yellow. Disabled `.accent`: `appSecondarySurface` + `subtleText`. Pressed: scale 0.97 + opacity 0.9 (opacity only with Reduce Motion) |
+| Primary button | `PrimaryButtonStyle(kind:)`: full width, min height 50, radius button, `.body.bold`. `.accent`: yellow + `appOnAccent`; `.inverse` (inside the yellow hero only): ink + yellow; `.ink` (Apple sign-in): `appInverseSurface` + `appOnInverse` + 1 pt `appInverseEdge`; `.card` (Google sign-in): `cardBackground` + `appInk` + 1 pt `appCardEdge`; `.ink`/`.card` disabled: opacity 0.5. Disabled `.accent`: `appSecondarySurface` + `subtleText`. Pressed: scale 0.97 + opacity 0.9 (opacity only with Reduce Motion) |
 | Secondary actions | No custom secondary button; text actions are system `Button` with `appAccentText` tint |
 | Chip | `chipStyle(isSelected:)`: padding 14, visible capsule min height 36, 44 pt hit frame. Selected yellow + `appOnAccent`, else `appSecondarySurface` + `appInk`. Callers set no colours on the label |
 | Progress bar | `MarkerProgressBar(value:track:fill:height:)`: capsule, value clamped 0…1, `.snappy` change (none with Reduce Motion), hidden from accessibility; callers supply label/value |
@@ -126,6 +126,7 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 | Floating add/scan | bottom-trailing pair; add = yellow, scan = card; size scaled, capped at 72 |
 | Pronounce button | 44 pt circle, `appSecondarySurface`, ink `speaker.wave.2` |
 | Flip card | one `Button` with two faces; the pronounce button is a sibling overlay |
+| Account sheet | `.sheet` + inline "Аккаунт", "Готово" (`appAccentText`). Signed out: 64 pt `appAccentSoft` tile, `.title3.bold` title, Apple (`PrimaryButtonStyle(kind: .ink)`, `apple.logo`) and Google (`.card`, official multicolour `GoogleLogo` asset at body size, never tinted) buttons, no yellow; failure is the calm `info.circle` footnote; a successful sign-in closes the sheet. Signed in: card with email and provider (`subtleText`), "Выйти" text button |
 
 ### Patterns
 
@@ -162,6 +163,7 @@ Mode and achievements icons sit on `appAccentSoft` tiles with an ink glyph.
 | Session result | `flag.checkered` (perfect: `trophy`) |
 | Navigation / menu affordance | `chevron.right` / `chevron.down` |
 | Close camera / retry / edit / delete | `xmark` / `arrow.clockwise` / `pencil` / `trash` |
+| Account / Sign in with Apple | `person.crop.circle` / `apple.logo` |
 | Network error / inline error | `wifi.exclamationmark` / `exclamationmark.circle` |
 | Search empty / camera unavailable / translate selection | `magnifyingglass` / `camera` / `text.magnifyingglass` |
 

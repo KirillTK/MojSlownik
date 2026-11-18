@@ -1,14 +1,27 @@
 # Mój Słownik
 
 Personal iPhone dictionary and practice app for Russian speakers learning Polish.
-SwiftUI, SwiftData, Swift 5.9, iOS 17+. No backend, accounts or synchronization.
-All vocabulary is local; web translation sends entered/scanned text to external services.
+SwiftUI, SwiftData, Swift 5.9, iOS 17+. Optional Supabase account (Apple/Google via the SDK's
+OAuth); no synchronization yet. All vocabulary is local; web translation sends entered/scanned
+text to external services; signed-in users upload content-free diagnostics (app_logs).
 UI copy is Russian; code, file names and project instructions are English.
 
 ## Invariants
 
 - Persistence and business logic live in Stores/ and Services/, not in Views.
   Reuse existing services and Theme/Theme.swift; make the smallest complete change.
+- Remote backend (Supabase) code lives in Backend/, separate from Services/; in the app only
+  Backend/ may `import Supabase` (in tests only MojSlownikTests/SupabaseAdapterTests.swift). Auth uses supabase-swift's native API only (no custom token code).
+- Supabase: only the publishable key ships; never commit `sb_secret_`/service-role keys or DB
+  passwords (`scripts/check-secrets.sh`, CI). Schema changes are new files in
+  supabase/migrations (never edit an applied one); every table gets RLS scoped by
+  `(select auth.uid()) = user_id`, WITH CHECK on INSERT/UPDATE, no `anon` grants, and a
+  rolled-back test in supabase/tests (`scripts/test-db.sh`, CI). After applying a migration
+  run Supabase security advisors. Avoid SECURITY DEFINER functions in `public`.
+- Server rows are untrusted: validate with Backend/RemoteRecords.swift before touching
+  SwiftData; Backend/RemoteMergePolicy.swift never hard-deletes local words.
+- Logging (Services/AppLog.swift): events/keys are enums, values Int/Bool/ASCII ids; never
+  log user text, emails, tokens or error messages (domain/code only). No SDK logger.
 - Before any UI/visual work read [DESIGN.md](DESIGN.md) (tokens, components, icons, a11y).
 - Stores/FolderLibraryStore.swift is injected once at the app root via environment;
   views keep only local selection/presentation state.
@@ -30,7 +43,9 @@ UI copy is Russian; code, file names and project instructions are English.
 ## Verification
 
 - After adding source files or changing project.yml, run `xcodegen generate`
-  (the generated .xcodeproj is not tracked).
+  (the generated .xcodeproj is not tracked, except its committed Package.resolved;
+  build with `-onlyUsePackageVersionsFromResolvedFile` like CI).
+- Database: `scripts/test-db.sh <URL of an empty Postgres>` (CI does this in a container).
 - Pick `<device>` from `xcrun simctl list devices available`. If CommandLineTools is
   active, set DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer.
 - Filter output: `| grep -E 'error:|warning:|SUCCEEDED|FAILED|Executed'`.
@@ -60,11 +75,26 @@ xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
 - Done = clean build + green unit tests + green E2E for changed flows + a list of
   manual checks you could not run.
 
+## Skills
+
+Use the skill that matches the task; several can apply at once (a feature with a new screen
+and a table uses all three groups).
+
+| When | Skill | What it does |
+|---|---|---|
+| New feature or user-facing change across several files | Claude Code `/ios-feature-flow [--lite] <context>` (`.claude/skills/ios-feature-flow`); Codex `$feature-flow <context>` (`.agents/skills/feature-flow`) | Plan → critique → implement → verify (build, unit, fixture-based E2E) → review, with project subagents. `--lite` for small tasks; a plan path resumes an approved plan. |
+| Any UI or visual work: new screen, restyle, component, design review | `/mobile-ios-design` (`.claude/skills/mobile-ios-design`) | Design process (HTML mockups → spec → simulator screenshots for approval) and the review bar; values live in DESIGN.md and Theme/Theme.swift. |
+| Backend: Supabase auth, client SDK, RLS, Edge Functions, debugging Supabase errors | `supabase` (`.claude/skills/supabase`) | Supabase product, auth and security guidance, CLI/MCP usage. |
+| Database: tables, columns, migrations, RLS policies and their tests, indexes, functions, slow queries | `supabase-postgres-best-practices` (`.claude/skills/supabase-postgres-best-practices`) | Postgres schema, migration, security and performance rules. Load before writing SQL. |
+
+Skill rules never override the invariants above (e.g. Supabase migrations still follow the
+RLS/test rules here). Supabase skills are pinned in skills-lock.json
+(update with `npx skills add supabase/agent-skills`).
+
 ## Boundaries and workflow
 
 - Do not commit/push without authorization or discard existing user changes.
 - `main` is protected: merge only via PR with a green `ci-passed` check.
-- Feature workflow (only when requested): Codex `$feature-flow <context>`
-  (.agents/skills/feature-flow); Claude Code: see CLAUDE.md. Plans live in .codex/plans/.
+- Plans live in .codex/plans/.
 - Keep this file concise: details go to docs/architecture.md, procedures to skills,
   task history to plans.

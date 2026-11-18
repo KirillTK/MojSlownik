@@ -23,6 +23,7 @@ final class DailyStudyStore {
 
     private let repository: any DailyActivityRepository
     private let calendar: Calendar
+    private let logger: any AppLogging
     private var activity: DailyActivity
 
     convenience init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent,
@@ -31,8 +32,11 @@ final class DailyStudyStore {
                   calendar: calendar, now: now)
     }
 
-    init(repository: any DailyActivityRepository, calendar: Calendar = .autoupdatingCurrent, now: Date = .now) {
-        self.repository = repository
+    init(repository: any DailyActivityRepository, calendar: Calendar = .autoupdatingCurrent, now: Date = .now,
+         logger: (any AppLogging)? = nil) {
+        let logger = logger ?? NoopAppLogger()
+        self.logger = logger
+        self.repository = LoggingDailyActivityRepository(repository, logger: logger)
         self.calendar = calendar
         if let stored = repository.load(), calendar.isDate(stored.day, inSameDayAs: now) {
             activity = stored
@@ -85,11 +89,15 @@ final class DailyStudyStore {
         let commit = try repository.prepareSave(next)
         activity = next
         commit()
+        logAnswer(.quiz, isCorrect: isCorrect)
     }
 
     @discardableResult
     func recordPracticeAnswer(word: Word, answer: KnowledgeAnswer, context: ModelContext,
-                              isQuiz: Bool = false, now: Date = .now) throws -> KnowledgeProgressService.Assessment {
+                              mode: PracticeMode,
+                              now: Date = .now) throws -> KnowledgeProgressService.Assessment {
+        // Quiz and listening count toward quiz completion; derived so the two cannot disagree.
+        let isQuiz = mode != .flashcards
         let isCorrect = KnowledgeProgressService.isCorrect(answer)
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: isCorrect, isQuiz: isQuiz, now: now)
         let commit = try repository.prepareSave(next)
@@ -98,7 +106,7 @@ final class DailyStudyStore {
         let assessment = KnowledgeProgressService.apply(answer, to: word)
         word.updatedAt = now
         do {
-            try context.save()
+            try logger.logged("word_progress.save") { try context.save() }
         } catch {
             (word.knowledgeTier, word.consecutiveSoftMisses) = previous
             word.updatedAt = previousUpdatedAt
@@ -106,6 +114,7 @@ final class DailyStudyStore {
         }
         activity = next
         commit()
+        logAnswer(mode, isCorrect: isCorrect)
         return assessment
     }
 
@@ -114,6 +123,7 @@ final class DailyStudyStore {
         let commit = try repository.prepareSave(next)
         activity = next
         commit()
+        logAnswer(.flashcards, isCorrect: grade != .again, grade: grade)
     }
 
     /// Save the schedule before publishing completion. Restore only this word on failure.
@@ -128,7 +138,7 @@ final class DailyStudyStore {
         SRSEngine.apply(grade, to: word, now: now)
         word.updatedAt = now
         do {
-            try context.save()
+            try logger.logged("word_progress.save") { try context.save() }
         } catch {
             (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue) = previous
             (word.knowledgeTier, word.consecutiveSoftMisses) = previousKnowledge
@@ -137,6 +147,14 @@ final class DailyStudyStore {
         }
         activity = next
         commit()
+        logAnswer(.flashcards, isCorrect: grade != .again, grade: grade)
+    }
+
+    /// Practice screen and result only (never the word); listening also counts toward quiz completion.
+    private func logAnswer(_ mode: PracticeMode, isCorrect: Bool, grade: ReviewGrade? = nil) {
+        var properties: [LogKey: LogValue] = [.mode: .name(mode), .correct: .bool(isCorrect)]
+        if let grade { properties[.grade] = .name(grade) }
+        logger.log(.practiceAnswered, properties)
     }
 
     private func nextActivity(wordID: PersistentIdentifier, isCorrect: Bool, isQuiz: Bool, now: Date) -> DailyActivity {

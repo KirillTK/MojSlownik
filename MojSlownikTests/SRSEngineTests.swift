@@ -50,4 +50,16 @@ final class SRSEngineTests: XCTestCase {
         XCTAssertEqual(easy.repetitions, 1)
         XCTAssertEqual(easy.dueDate, now.addingTimeInterval(easy.intervalDays * 86_400))
     }
+
+    /// Review finding: repeated "Легко" grew the interval without bound (~160k days after
+    /// eight reviews), which sync validation would reject; schedules are capped at 100 years.
+    func testRepeatedEasyStaysWithinBounds() {
+        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        for _ in 0..<80 { SRSEngine.apply(.easy, to: word, now: now) }
+        XCTAssertEqual(word.intervalDays, SRSEngine.maxIntervalDays)
+        XCTAssertEqual(word.easeFactor, SRSEngine.maxEaseFactor)
+        XCTAssertEqual(word.dueDate, now.addingTimeInterval(SRSEngine.maxIntervalDays * 86_400))
+        SRSEngine.apply(.good, to: word, now: now)
+        XCTAssertEqual(word.intervalDays, SRSEngine.maxIntervalDays, "good on a capped word stays capped")
+    }
 }

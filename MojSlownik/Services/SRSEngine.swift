@@ -25,18 +25,33 @@ enum ReviewGrade: String, CaseIterable {
 
 /// Упрощённый SM-2 (как в Anki): каждый ответ двигает интервал и дату следующего показа.
 enum SRSEngine {
+    static let minEaseFactor = 1.3
+    /// Upper bounds keep every schedule representable and inside what sync accepts
+    /// (Backend/RemoteRecords.swift validates against these): 100 years is "learned".
+    static let maxEaseFactor = 10.0
+    static let maxIntervalDays = 36_500.0
+
     static func apply(_ grade: ReviewGrade, to word: Word, now: Date = .now) {
+        schedule(grade, word: word, now: now)
+        word.easeFactor = min(maxEaseFactor, word.easeFactor)
+        if word.intervalDays > maxIntervalDays {
+            word.intervalDays = maxIntervalDays
+            word.dueDate = now.addingTimeInterval(maxIntervalDays * 86_400)
+        }
+    }
+
+    private static func schedule(_ grade: ReviewGrade, word: Word, now: Date) {
         word.lastReviewGradeRawValue = grade.rawValue
         switch grade {
         case .again:
             word.repetitions = 0
-            word.easeFactor = max(1.3, word.easeFactor - 0.2)
+            word.easeFactor = max(minEaseFactor, word.easeFactor - 0.2)
             word.intervalDays = 0
             word.dueDate = now.addingTimeInterval(10 * 60) // показать ещё раз через 10 минут
 
         case .hard:
             word.repetitions += 1
-            word.easeFactor = max(1.3, word.easeFactor - 0.15)
+            word.easeFactor = max(minEaseFactor, word.easeFactor - 0.15)
             word.intervalDays = max(1, (word.intervalDays * 1.2).rounded())
             word.dueDate = now.addingTimeInterval(word.intervalDays * 86_400)
 

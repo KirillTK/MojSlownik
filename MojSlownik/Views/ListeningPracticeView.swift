@@ -271,7 +271,7 @@ struct ListeningPracticeView: View {
         let isCorrect = KnowledgeProgressService.isCorrect(knowledgeAnswer)
         do {
             try dailyStudy.recordPracticeAnswer(word: word, answer: knowledgeAnswer,
-                                                context: modelContext, isQuiz: true)
+                                                context: modelContext, mode: .listening)
         } catch {
             answerError = error.localizedDescription
             return

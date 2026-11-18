@@ -42,12 +42,30 @@ enum Translator {
             }
         }
         #endif
+        return try await webFallback(from: source, to: target,
+                                     primary: { try await GoogleWebTranslator().translate(text, from: source, to: target) },
+                                     fallback: { try await MyMemoryTranslator().translate(text, from: source, to: target) })
+    }
+
+    /// Google, then MyMemory. Logs `translation.failed` only when both fail and the request was
+    /// not cancelled; the text itself is never logged (languages and error code only).
+    static func webFallback(from source: AppLanguage, to target: AppLanguage,
+                            primary: () async throws -> String,
+                            fallback: () async throws -> String) async throws -> String {
         do {
-            return try await GoogleWebTranslator().translate(text, from: source, to: target)
+            return try await primary()
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            return try await MyMemoryTranslator().translate(text, from: source, to: target)
+            do {
+                return try await fallback()
+            } catch {
+                if !Task.isCancelled {
+                    await AppLog.record(.translationFailed, error: error,
+                                        [.language: .name(source), .targetLanguage: .name(target)])
+                }
+                throw error
+            }
         }
     }
 

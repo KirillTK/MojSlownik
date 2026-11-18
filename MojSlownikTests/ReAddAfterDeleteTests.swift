@@ -104,7 +104,7 @@ final class ReAddAfterDeleteTests: XCTestCase {
             let word = try XCTUnwrap(context.fetch(FetchDescriptor<Word>()).first)
             if isQuiz {
                 try store.recordPracticeAnswer(word: word, answer: .typed(expected: "woda", submitted: "xxxx"),
-                                               context: context, isQuiz: true, now: t1)
+                                               context: context, mode: .quiz, now: t1)
             } else {
                 try store.review(.again, to: word, context: context, now: t1)
             }
