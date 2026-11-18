@@ -75,11 +75,26 @@ xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
 - Done = clean build + green unit tests + green E2E for changed flows + a list of
   manual checks you could not run.
 
+## Skills
+
+Use the skill that matches the task; several can apply at once (a feature with a new screen
+and a table uses all three groups).
+
+| When | Skill | What it does |
+|---|---|---|
+| New feature or user-facing change across several files | Claude Code `/ios-feature-flow [--lite] <context>` (`.claude/skills/ios-feature-flow`); Codex `$feature-flow <context>` (`.agents/skills/feature-flow`) | Plan → critique → implement → verify (build, unit, fixture-based E2E) → review, with project subagents. `--lite` for small tasks; a plan path resumes an approved plan. |
+| Any UI or visual work: new screen, restyle, component, design review | `/mobile-ios-design` (`.claude/skills/mobile-ios-design`) | Design process (HTML mockups → spec → simulator screenshots for approval) and the review bar; values live in DESIGN.md and Theme/Theme.swift. |
+| Backend: Supabase auth, client SDK, RLS, Edge Functions, debugging Supabase errors | `supabase` (`.claude/skills/supabase`) | Supabase product, auth and security guidance, CLI/MCP usage. |
+| Database: tables, columns, migrations, RLS policies and their tests, indexes, functions, slow queries | `supabase-postgres-best-practices` (`.claude/skills/supabase-postgres-best-practices`) | Postgres schema, migration, security and performance rules. Load before writing SQL. |
+
+Skill rules never override the invariants above (e.g. Supabase migrations still follow the
+RLS/test rules here). Supabase skills are pinned in skills-lock.json
+(update with `npx skills add supabase/agent-skills`).
+
 ## Boundaries and workflow
 
 - Do not commit/push without authorization or discard existing user changes.
 - `main` is protected: merge only via PR with a green `ci-passed` check.
-- Feature workflow (only when requested): Codex `$feature-flow <context>`
-  (.agents/skills/feature-flow); Claude Code: see CLAUDE.md. Plans live in .codex/plans/.
+- Plans live in .codex/plans/.
 - Keep this file concise: details go to docs/architecture.md, procedures to skills,
   task history to plans.
