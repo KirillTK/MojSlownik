@@ -16,6 +16,10 @@ class E2ETestCase: XCTestCase {
 
     var app: XCUIApplication!
 
+    /// Default wait for helpers. Shared CI runners are slow (the first launch on a cold
+    /// simulator took over a minute and a screen missed a 10 s wait), so allow more.
+    static let defaultTimeout: TimeInterval = 20
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -32,6 +36,7 @@ class E2ETestCase: XCTestCase {
             app.launchEnvironment["UITEST_PREFILL"] = prefill
         }
         app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 60), "App did not reach the foreground")
         self.app = app
         return app
     }
@@ -42,7 +47,7 @@ class E2ETestCase: XCTestCase {
     }
 
     @MainActor
-    func waitFor(_ element: XCUIElement, _ format: String, timeout: TimeInterval = 10,
+    func waitFor(_ element: XCUIElement, _ format: String, timeout: TimeInterval = E2ETestCase.defaultTimeout,
                  _ message: @autoclosure () -> String, file: StaticString = #filePath, line: UInt = #line) {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: element)
         let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
@@ -50,7 +55,7 @@ class E2ETestCase: XCTestCase {
     }
 
     @MainActor
-    func waitForHittable(_ element: XCUIElement, timeout: TimeInterval = 10,
+    func waitForHittable(_ element: XCUIElement, timeout: TimeInterval = E2ETestCase.defaultTimeout,
                          file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout),
                       "Element \(element) did not appear", file: file, line: line)
@@ -70,7 +75,7 @@ class E2ETestCase: XCTestCase {
     }
 
     @MainActor
-    func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval = 10,
+    func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval = E2ETestCase.defaultTimeout,
                         file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout),
                       "Element \(element) did not appear", file: file, line: line)
@@ -79,7 +84,7 @@ class E2ETestCase: XCTestCase {
     }
 
     @MainActor
-    func waitForLabel(_ element: XCUIElement, equals expected: String, timeout: TimeInterval = 10,
+    func waitForLabel(_ element: XCUIElement, equals expected: String, timeout: TimeInterval = E2ETestCase.defaultTimeout,
                       file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout),
                       "Element \(element) did not appear", file: file, line: line)
@@ -93,7 +98,7 @@ class E2ETestCase: XCTestCase {
     }
 
     @MainActor
-    func waitForValue(_ element: XCUIElement, equals expected: String, timeout: TimeInterval = 10,
+    func waitForValue(_ element: XCUIElement, equals expected: String, timeout: TimeInterval = E2ETestCase.defaultTimeout,
                       file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout),
                       "Element \(element) did not appear", file: file, line: line)
@@ -110,7 +115,7 @@ class E2ETestCase: XCTestCase {
     @MainActor
     func openTab(_ title: String) {
         let tab = app.tabBars.buttons[title]
-        XCTAssertTrue(tab.waitForExistence(timeout: 10), "Tab \(title) not found")
+        waitForHittable(tab)
         tab.tap()
     }
 
