@@ -54,8 +54,19 @@ class E2ETestCase: XCTestCase {
                          file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout),
                       "Element \(element) did not appear", file: file, line: line)
-        waitFor(element, "isHittable == true", timeout: timeout, "Element \(element) is not hittable",
-                file: file, line: line)
+        // Ask `isHittable` only once the element has a laid-out frame: on an element that
+        // exists but is still mid-layout (a toolbar button right after launch), XCTest records
+        // "Failed to determine hittability … Activation point invalid" as a test failure
+        // instead of returning false (seen on CI).
+        let hittable = NSPredicate { object, _ in
+            guard let element = object as? XCUIElement, element.exists, !element.frame.isEmpty else {
+                return false
+            }
+            return element.isHittable
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: hittable, object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed,
+                       "Element \(element) is not hittable", file: file, line: line)
     }
 
     @MainActor
