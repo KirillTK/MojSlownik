@@ -85,6 +85,16 @@ final class AuthStoreTests: XCTestCase {
         for _ in 0..<10 { await Task.yield() }
     }
 
+    /// Only a fresh sign-in closes the account sheet; a restored session or refresh does not.
+    func testCompletesSignInOnlyFromSignedOut() {
+        let signedIn = AuthStore.State.signedIn(account)
+        XCTAssertTrue(signedIn.completesSignIn(from: .signedOut))
+        XCTAssertFalse(signedIn.completesSignIn(from: .unknown), "session restored at launch")
+        XCTAssertFalse(signedIn.completesSignIn(from: signedIn), "token refresh")
+        XCTAssertFalse(AuthStore.State.signedOut.completesSignIn(from: signedIn))
+        XCTAssertFalse(AuthStore.State.signedOut.completesSignIn(from: .unknown))
+    }
+
     func testStartsUnknownThenFollowsSession() async {
         let store = AuthStore(backend: StaticAuthBackend())
         XCTAssertEqual(store.state, .unknown)

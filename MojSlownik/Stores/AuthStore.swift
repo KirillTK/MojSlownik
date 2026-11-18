@@ -10,6 +10,13 @@ final class AuthStore {
         case unknown
         case signedOut
         case signedIn(AuthAccount)
+
+        /// A sign-in just completed (signed out → signed in). Restoring a session at launch
+        /// (unknown → signed in) and token refreshes do not count.
+        func completesSignIn(from previous: State) -> Bool {
+            guard case .signedOut = previous, case .signedIn = self else { return false }
+            return true
+        }
     }
 
     private(set) var state: State = .unknown

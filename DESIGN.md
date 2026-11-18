@@ -126,7 +126,7 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 | Floating add/scan | bottom-trailing pair; add = yellow, scan = card; size scaled, capped at 72 |
 | Pronounce button | 44 pt circle, `appSecondarySurface`, ink `speaker.wave.2` |
 | Flip card | one `Button` with two faces; the pronounce button is a sibling overlay |
-| Account sheet | `.sheet` + inline "Аккаунт", "Готово" (`appAccentText`). Signed out: 64 pt `appAccentSoft` tile, `.title3.bold` title, Apple (`PrimaryButtonStyle(kind: .ink)`, `apple.logo`) and Google (`.card`) buttons, no yellow; failure is the calm `info.circle` footnote. Signed in: card with email and provider (`subtleText`), "Выйти" text button |
+| Account sheet | `.sheet` + inline "Аккаунт", "Готово" (`appAccentText`). Signed out: 64 pt `appAccentSoft` tile, `.title3.bold` title, Apple (`PrimaryButtonStyle(kind: .ink)`, `apple.logo`) and Google (`.card`, official multicolour `GoogleLogo` asset at body size, never tinted) buttons, no yellow; failure is the calm `info.circle` footnote; a successful sign-in closes the sheet. Signed in: card with email and provider (`subtleText`), "Выйти" text button |
 
 ### Patterns
 

@@ -19,8 +19,17 @@ final class AccountFlowTests: E2ETestCase {
         waitForHittable(element("signIn.google"))
     }
 
+    /// After a successful sign-in the sheet closes by itself, back to the dictionary.
     @MainActor
-    func testSignInWithGoogleThenSignOut() {
+    private func waitForSheetToClose() {
+        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        let sheetGone = NSPredicate(format: "exists == false")
+        let closed = expectation(for: sheetGone, evaluatedWith: app.navigationBars["Аккаунт"])
+        wait(for: [closed], timeout: 10)
+    }
+
+    @MainActor
+    func testSignInWithGoogleClosesSheetThenSignOut() {
         launch(.basicVocabulary, auth: .signedOut)
         openAccount()
 
@@ -29,7 +38,9 @@ final class AccountFlowTests: E2ETestCase {
         waitForHittable(google)
         XCTAssertFalse(element("accountCard").exists)
         google.tap()
+        waitForSheetToClose()
 
+        openAccount()
         let card = element("accountCard")
         XCTAssertTrue(card.waitForExistence(timeout: 10))
         XCTAssertTrue(card.label.contains("tester@example.com"), card.label)
@@ -47,6 +58,8 @@ final class AccountFlowTests: E2ETestCase {
         let apple = element("signIn.apple")
         waitForHittable(apple)
         apple.tap()
+        waitForSheetToClose()
+        openAccount()
         let card = element("accountCard")
         XCTAssertTrue(card.waitForExistence(timeout: 10))
         XCTAssertTrue(card.label.contains("Apple"), card.label)

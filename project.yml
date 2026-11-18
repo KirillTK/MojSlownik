@@ -44,6 +44,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.kirill.personal.mojslownik
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UIUserInterfaceStyle: Automatic
+        # Assets.xcassets holds images only (no app icon yet).
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
   MojSlownikTests:
     type: bundle.unit-test
     platform: iOS

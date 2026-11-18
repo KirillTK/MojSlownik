@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// Account sheet: sign in with Apple or Google (supabase-swift OAuth), or the signed-in account
-/// with sign-out. Signing out never touches local words.
+/// with sign-out. A successful sign-in closes the sheet. Signing out never touches local words.
 struct AccountView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .largeTitle) private var tileSize: CGFloat = 64
+    @ScaledMetric(relativeTo: .body) private var providerLogoSize: CGFloat = 20
 
     var body: some View {
         NavigationStack {
@@ -26,6 +27,10 @@ struct AccountView: View {
             }
             .background(Color.appBackground)
             .onDisappear { auth.dismissError() }
+            // A successful sign-in closes the sheet; opening it while signed in shows the account.
+            .onChange(of: auth.state) { previous, state in
+                if state.completesSignIn(from: previous) { dismiss() }
+            }
             .navigationTitle("Аккаунт")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -57,7 +62,11 @@ struct AccountView: View {
                 Image(systemName: "apple.logo")
             }
             signInButton(.google, title: "Войти через Google", kind: .card) {
-                Text("G").fontWeight(.heavy)
+                // Official multicolour "G" (Google sign-in branding), never tinted.
+                Image("GoogleLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: providerLogoSize, height: providerLogoSize)
             }
 
             errorLabel
