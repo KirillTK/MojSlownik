@@ -86,4 +86,29 @@ final class WordTests: XCTestCase {
         XCTAssertEqual(saved.createdAt, createdAt)
         XCTAssertEqual(saved.dueDate, word.dueDate)
     }
+
+    func testSyncPairKeyNormalizesCanonicalFormCaseAndWhitespace() {
+        let composed = Word(russian: " КОТ ", polish: "Za\u{17C}\u{F3}\u{142}\u{107}", sourceLanguage: .polish)
+        let decomposed = Word(russian: "кот\n", polish: "zaz\u{307}o\u{301}\u{142}c\u{301}", sourceLanguage: .russian)
+        XCTAssertEqual(composed.syncPairKey, decomposed.syncPairKey)
+        XCTAssertNotEqual(composed.syncPairKey,
+                          Word(russian: "кот", polish: "zazolc", sourceLanguage: .polish).syncPairKey,
+                          "diacritics are meaningful")
+        XCTAssertEqual(Word.normalizedText("  ŁÓDŹ \n"), "łódź")
+    }
+
+    func testMatchesBehaviourIsUnchangedByNormalizationExtraction() {
+        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian)
+        XCTAssertTrue(word.matches(source: " KOT ", translation: "Кот", language: .polish))
+        XCTAssertTrue(word.matches(source: "кот", translation: "kot", language: .russian))
+        XCTAssertFalse(word.matches(source: "kot", translation: "пёс", language: .polish))
+    }
+
+    func testNewWordIsSyncDirtyUntilServerTimeEqualsItsModificationTime() {
+        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian)
+        XCTAssertNil(word.serverUpdatedAt)
+        XCTAssertTrue(word.isSyncDirty)
+        word.serverUpdatedAt = word.lastModifiedAt
+        XCTAssertFalse(word.isSyncDirty)
+    }
 }

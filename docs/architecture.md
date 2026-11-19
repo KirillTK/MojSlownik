@@ -1,7 +1,8 @@
 # Mój Słownik Architecture
 
 Personal ru ↔ pl dictionary for iPhone, using SwiftUI and SwiftData on iOS 17+.
-Optional Supabase account (Apple/Google); no synchronization yet. Signed-in users upload
+Optional Supabase account (Apple/Google); words and folders sync with the account
+(offline-first, see Sync). Signed-in users upload
 content-free diagnostics. Vocabulary is stored locally; web
 translation sends entered or recognized text to an external service.
 
@@ -20,10 +21,10 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `TranslationLanguage.swift` is the central descriptor table (provider codes, Apple identifier, expected scripts); `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
-| Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue; `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
+| Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue (`recordNextUnlocksSilently` skips banners for unlocks caused by just-pulled vocabulary); `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
 | Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
-| Backend | `Backend/`: remote backend code, kept apart from `Services/`; the only place that imports `Supabase`. `SupabaseConfiguration.swift` (URL, publishable key, OAuth redirect), `SupabaseClientProvider.swift` (lazy client, no SDK logger), `SupabaseAuthBackend.swift` (native SDK OAuth), `SupabaseLogUploader.swift` (app_logs inserts), `RemoteRecords.swift`/`RemoteMergePolicy.swift` (sync seam). Schema: `supabase/migrations`, tests: `supabase/tests`. |
-| Account and logs | `Stores/AuthStore.swift` over `Services/Auth.swift` (`AuthBackend`; `StaticAuthBackend` for previews/UI tests); `Views/AccountView.swift` from the Словарь toolbar. `Services/AppLog.swift` (typed events) and `Services/AppLogQueue.swift` (on-disk queue, uploads while signed in, flush on threshold/sign-in/sign-out/background). Stores take an `AppLogging`; static services use `AppLog.shared`. |
+| Backend | `Backend/`: remote backend code, kept apart from `Services/`; the only place that imports `Supabase`. `SupabaseConfiguration.swift` (URL, publishable key, OAuth redirect), `SupabaseClientProvider.swift` (lazy client, no SDK logger), `SupabaseAuthBackend.swift` (native SDK OAuth), `SupabaseLogUploader.swift` (app_logs inserts), `SupabaseSyncRemote.swift` (PostgREST transport of the sync engine), `RemoteRecords.swift`/`RemoteMergePolicy.swift` (DTOs, validator, merge rule). Schema: `supabase/migrations`, tests: `supabase/tests`. |
+| Account and logs | `Stores/AuthStore.swift` over `Services/Auth.swift` (`AuthBackend`; `StaticAuthBackend` for previews/UI tests); `Views/AccountView.swift` from the Словарь toolbar. `Services/AppLog.swift` (typed events) and `Services/AppLogQueue.swift` (on-disk queue, uploads while signed in, flush on threshold/sign-in/sign-out/background). Stores take an `AppLogging`; static services use `AppLog.shared`. `Stores/SyncStore.swift` owns sync triggers, status and linking (see Sync). |
 | Build | Root `project.yml`: XcodeGen, application, `MojSlownikTests` and `MojSlownikUITests`, iOS 17.0, Swift 5.9. Schemes: `MojSlownik` (app), `MojSlownikUnitTests` and `MojSlownikE2E` (UI tests, parallel classes). CI: `.github/workflows/ci.yml`. Swift package `supabase-swift` (product `Supabase`, exact 2.55.7; needs Xcode 16.3+). |
 
 ## Data Flows
@@ -159,12 +160,62 @@ later unlocks queue banners. `AchievementTracker` (root) syncs from `@Query` dat
 scene phase. The store owns banner state (queue, one dismiss timer, announce-once), so
 `.achievementBanner()` can be applied on the root, `AddWordView` and `ScanResultView`;
 any new sheet that can save words needs the modifier too.
+`recordNextUnlocksSilently` (set by `SyncStore` after a pull that changed vocabulary) is a
+one-shot, in-memory, 10 s flag: the next `sync` that unlocks something records it without banner
+or log.
 
 To add: an achievement on an existing metric is one `AchievementDefinition` line in
 `AchievementCatalog.all`; a derived metric is a new `AchievementMetric` case plus its
 computation in `AchievementMetrics.vocabulary`; a recorded metric also needs a ledger
 field (decoded with a default), an `AchievementEvent` and a call site; a new criterion
 kind needs an `AchievementCriterion` case, an evaluator branch and a test.
+
+## Sync
+
+Words and folders (with memberships and SRS state) sync with `public.words`/`public.folders`;
+achievements and daily activity stay per device. Local SwiftData is the source of truth and the
+app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/SwiftDataSyncStore.swift`
+(the SwiftData side), `Services/SyncRemote.swift` (transport protocol, cursor), `Services/SyncState.swift`
+(`sync.v1` in UserDefaults), `Backend/SupabaseSyncRemote.swift` (the only Supabase import),
+`Stores/SyncStore.swift` (triggers, status). `InMemorySyncRemote` (DEBUG) serves unit and UI tests.
+
+- **Cycle.** Every cycle pulls folder deltas, pulls word deltas, pushes dirty folders, then pushes
+  dirty words, so a remote tombstone is seen before any push. One cycle runs at a time; a trigger
+  during a run schedules one follow-up. Triggers: sign-in/launch with a restored session, foreground
+  (throttled to 30 s), 5 s after the last local edit (`LocalChangeSignal` from the three stores),
+  background (inside a background task) and before sign-out (inside the 3 s bound), and the
+  manual button in the account sheet.
+- **Wire mapping.** `term` = `polish` (`pl`), `translation` = `russian` (`ru`), `entered_language` =
+  `sourceLanguageCode` (invalid falls back to `pl`), `category` = `WordCategory.stableID`. On pull the
+  side whose language is Russian becomes `russian`. Text length counts Unicode scalars; interior
+  tab/newline are allowed. Every upsert row encodes every key (explicit `null`s).
+- **Dirty tracking.** `serverUpdatedAt` on `Word`/`WordFolder` holds only a server `updated_at`, nil
+  (never synced) or the re-link sentinel `Date.distantPast`; device time is never written to it.
+  `isSyncDirty = serverUpdatedAt != lastModifiedAt` (equality, never ordering). After a push ack or an
+  applied pull both `updatedAt` and `serverUpdatedAt` take the server time; an ack applies only if the
+  row did not change during the request.
+- **Server time.** A trigger (`private.set_server_updated_at`, `clock_timestamp()` truncated to ms, at
+  least previous + 1 ms) assigns `updated_at`; clients never send it. Server hard deletes are revoked:
+  soft delete (`deleted_at`) is the only deletion, tombstones are always pushed.
+- **Cursor.** One cursor per table: `(updated_at millis, id)`. A pull starts 60 s before it
+  (out-of-order commits), filters `user_id`, orders by `(updated_at, id)` and pages by 500 with the
+  keyset filter; the cursor is saved after each applied page. Content-invalid rows are skipped and
+  counted and the cursor moves past them; their ids are held (`SyncState.heldIDs`, max 5 000) so the
+  local copies are not pushed over a newer client's version. A foreign-owner row aborts the cycle.
+  `capabilityVersion` bumps clear cursors and held ids.
+- **Conflict rule** (`RemoteMergePolicy`): no local row inserts (or adopts a duplicate pair/folder name
+  that was never synced); the re-link sentinel lets the server win unless the row was edited after the
+  link (`SyncState.linkedAt`, device clock vs the row's own `updatedAt`); an echo or stale row keeps
+  local; a clean local row follows the server; a dirty local row is kept and pushed (last device to sync
+  wins), except that a remote tombstone beats an active local edit. Nothing hard-deletes a local word.
+- **Linking.** The first signed-in account is linked automatically. Linking resets per-row state
+  (clean synced rows get the sentinel, others nil). A different account pauses sync
+  (`accountMismatch`); «Объединить» in the account sheet re-links after confirmation. Sign-out keeps
+  local data and the link.
+- **After a pull.** Changed folders refresh `FolderLibraryStore.options`; changed vocabulary makes
+  `AchievementStore.recordNextUnlocksSilently` skip banners for the next unlock (10 s, one-shot).
+- **Logging.** `sync.completed/failed/rows_skipped/linked/account_mismatch` with counts, trigger and
+  reason names, error domain/code; never text, ids or emails.
 
 ## Study Folders
 
@@ -292,9 +343,8 @@ Personal iPhone installation: [README.md](../README.md).
 
 ## Backend Readiness
 
-The local data layer is sync-shaped (stable `Word.uuid`/`WordFolder.id`, `updatedAt`,
-tombstones, one write seam) but not sync-ready. Local SwiftData stays the source of truth
-(offline-first); a future sync engine would exchange rows by id, `updatedAt` and `deletedAt`.
+Words and folders sync (see Sync). Local SwiftData stays the source of truth (offline-first);
+rows are exchanged by id, server `updated_at` and `deleted_at`.
 
 `Backend/SupabaseConfiguration.swift` holds the project URL, publishable key (public;
 secret keys never ship in the app) and OAuth redirect. `Backend/SupabaseClientProvider.swift`
@@ -311,18 +361,18 @@ Remote schema (`supabase/migrations`): `words` is a language-neutral pair (`term
 them; `category` is `WordCategory.stableID`), `folders`, and write-only `app_logs`. All RLS-scoped
 to `user_id`; `anon` has no grants. The local `Word` is still ru/pl (`polish` → `term`,
 `russian` → `translation`); a multi-language local model needs its own SwiftData migration.
-Nothing syncs yet (Gap H); `RemoteRecordValidator` and `RemoteMergePolicy` are the seam.
+`RemoteRecordValidator` runs on every pulled row (and on outgoing rows); `RemoteMergePolicy` decides.
 
 Remaining gaps:
 
-- **A.** No change signal for the folder catalog after sync-applied changes.
-- **B.** `updatedAt` uses the device clock; LWW needs server time or an HLC.
+- **A.** Closed: a pull that changes folders refreshes `FolderLibraryStore.options`.
+- **B.** Closed: `updated_at` is server-assigned (trigger); conflicts compare server time only.
 - **C.** Tombstones are never purged; purging needs server acknowledgement.
-- **D.** Daily activity is keyed by `PersistentIdentifier`; move to `Word.uuid` if it ever syncs.
-- **E.** `folderIDs` conflicts at whole-array granularity.
-- **F.** SRS state merge semantics.
-- **G.** Achievement counters cannot be merged without an event log or per-device counters.
-- **H.** Server-side uniqueness, `user_id`/RLS and category encoding.
+- **D.** Device-local by design: daily activity is not synced (keyed by `PersistentIdentifier`; adoption keeps identifiers).
+- **E.** Accepted: `folderIDs` conflicts at whole-array (whole-word) granularity.
+- **F.** Accepted: SRS state merges per whole row (last device to sync wins).
+- **G.** Device-local by design: achievements are not synced; unlocks caused by pulled vocabulary are recorded silently.
+- **H.** RLS and category encoding done; pair uniqueness is intentionally absent on the server, mitigated by duplicate adoption on pull.
 
 ## Tests and CI
 
@@ -335,7 +385,7 @@ Run the isolated `MojSlownikUnitTests` scheme (see AGENTS.md); it does not inclu
 Network translation and physical-camera behavior are not exercised by these tests.
 
 E2E: `MojSlownikUITests/` holds XCUITest classes (AddWordFlow, EditTranslationFlow,
-FlashcardsFlow, QuizFlow, FoldersFlow) on the shared `E2ETestCase`, each launching a
+FlashcardsFlow, QuizFlow, FoldersFlow, AccountFlow, SyncFlow) on the shared `E2ETestCase`, each launching a
 named fixture. Rule: when a user-facing flow changes, add or update E2E scenarios; reuse
 fixtures or add new ones (with unit tests in `UITestSupportTests`) and never seed data
 through UI steps. Typed E2E input must be ASCII; Cyrillic sources arrive via

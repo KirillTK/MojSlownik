@@ -4,11 +4,18 @@ import XCTest
 final class RemoteMergePolicyTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
     private var t1: Date { t0.addingTimeInterval(60) }
+    private var t2: Date { t0.addingTimeInterval(120) }
+    private let sentinel = Date.distantPast
 
     private func decide(local: LocalRecordState?, updatedAt: Date, deletedAt: Date? = nil) -> RemoteMergeDecision {
         RemoteMergePolicy.decide(local: local, remoteUpdatedAt: updatedAt, remoteDeletedAt: deletedAt)
     }
 
+    private func state(_ serverUpdatedAt: Date?, dirty: Bool, deleted: Bool = false) -> LocalRecordState {
+        LocalRecordState(serverUpdatedAt: serverUpdatedAt, isDirty: dirty, isDeleted: deleted)
+    }
+
+    // 1. No local row
     func testNewActiveRemoteRowIsInserted() {
         XCTAssertEqual(decide(local: nil, updatedAt: t1), .insert)
     }
@@ -17,50 +24,115 @@ final class RemoteMergePolicyTests: XCTestCase {
         XCTAssertEqual(decide(local: nil, updatedAt: t1, deletedAt: t1), .keepLocal)
     }
 
-    func testNewerRemoteRowUpdatesLocal() {
-        XCTAssertEqual(decide(local: LocalRecordState(lastModifiedAt: t0, isDeleted: false), updatedAt: t1), .update)
+    // 2. Re-link sentinel: the server wins, newer or older
+    func testSentinelRowTakesTheServerVersionWhateverItsTime() {
+        for remote in [t0, t2] {
+            XCTAssertEqual(decide(local: state(sentinel, dirty: true), updatedAt: remote), .update)
+            XCTAssertEqual(decide(local: state(sentinel, dirty: true, deleted: true), updatedAt: remote), .update,
+                           "a remote active row restores a local tombstone")
+            XCTAssertEqual(decide(local: state(sentinel, dirty: true), updatedAt: remote, deletedAt: remote),
+                           .softDelete(at: remote))
+            XCTAssertEqual(decide(local: state(sentinel, dirty: true, deleted: true), updatedAt: remote, deletedAt: remote),
+                           .acknowledge)
+        }
     }
 
-    func testOlderOrEqualRemoteRowKeepsLocal() {
-        let local = LocalRecordState(lastModifiedAt: t1, isDeleted: false)
+    // 3. Echo or stale row
+    func testEchoAndStaleRowsKeepLocal() {
+        let local = state(t1, dirty: false)
+        XCTAssertEqual(decide(local: local, updatedAt: t1), .keepLocal, "a tie with a real base keeps local")
         XCTAssertEqual(decide(local: local, updatedAt: t0), .keepLocal)
-        XCTAssertEqual(decide(local: local, updatedAt: t1), .keepLocal, "ties keep the local row")
         XCTAssertEqual(decide(local: local, updatedAt: t0, deletedAt: t0), .keepLocal)
+        XCTAssertEqual(decide(local: state(t1, dirty: true), updatedAt: t1, deletedAt: t1), .keepLocal,
+                       "even a dirty row ignores a stale tombstone")
     }
 
-    func testRemoteDeleteOnlySoftDeletes() {
-        let local = LocalRecordState(lastModifiedAt: t0, isDeleted: false)
-        XCTAssertEqual(decide(local: local, updatedAt: t1, deletedAt: t1), .softDelete(at: t1))
+    // 4. Local row not dirty
+    func testCleanLocalRowFollowsNewerRemote() {
+        XCTAssertEqual(decide(local: state(t0, dirty: false), updatedAt: t1), .update)
+        XCTAssertEqual(decide(local: state(t0, dirty: false), updatedAt: t1, deletedAt: t1), .softDelete(at: t1))
+        XCTAssertEqual(decide(local: state(t0, dirty: false, deleted: true), updatedAt: t1, deletedAt: t1), .acknowledge)
+        XCTAssertEqual(decide(local: state(t0, dirty: false, deleted: true), updatedAt: t1), .update,
+                       "a newer active remote row restores a local tombstone")
     }
 
-    func testRemoteDeleteOfAlreadyDeletedRowKeepsLocal() {
-        let local = LocalRecordState(lastModifiedAt: t0, isDeleted: true)
-        XCTAssertEqual(decide(local: local, updatedAt: t1, deletedAt: t1), .keepLocal)
+    // 5. Local row dirty: a true concurrent change
+    func testDirtyLocalRowKeepsLocalAgainstNewerActiveRemote() {
+        XCTAssertEqual(decide(local: state(t0, dirty: true), updatedAt: t1), .keepLocal)
+        XCTAssertEqual(decide(local: state(nil, dirty: true), updatedAt: t1), .keepLocal, "never synced")
     }
 
-    func testNewerActiveRemoteRowRestoresLocalTombstone() {
-        let local = LocalRecordState(lastModifiedAt: t0, isDeleted: true)
-        XCTAssertEqual(decide(local: local, updatedAt: t1), .update)
+    func testRemoteTombstoneBeatsDirtyActiveLocalEdit() {
+        XCTAssertEqual(decide(local: state(t0, dirty: true), updatedAt: t1, deletedAt: t1), .softDelete(at: t1))
+        XCTAssertEqual(decide(local: state(nil, dirty: true), updatedAt: t1, deletedAt: t1), .softDelete(at: t1))
+    }
+
+    func testDirtyLocalTombstoneKeepsLocalAgainstRemoteTombstone() {
+        XCTAssertEqual(decide(local: state(t0, dirty: true, deleted: true), updatedAt: t1, deletedAt: t1), .keepLocal)
+        XCTAssertEqual(decide(local: state(t0, dirty: true, deleted: true), updatedAt: t1), .keepLocal,
+                       "a dirty local delete is pushed, not undone by an older remote edit")
     }
 
     /// The decision type has no hard-delete case; this switch stops compiling if one is added.
     func testNoDecisionHardDeletes() {
-        let all: [RemoteMergeDecision] = [.insert, .update, .softDelete(at: t0), .keepLocal]
+        let all: [RemoteMergeDecision] = [.insert, .update, .softDelete(at: t0), .keepLocal, .acknowledge]
         for decision in all {
             switch decision {
-            case .insert, .update, .softDelete, .keepLocal: break
+            case .insert, .update, .softDelete, .keepLocal, .acknowledge: break
             }
         }
     }
 
     func testLocalStateComesFromWordAndFolder() {
         let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: t0)
-        XCTAssertEqual(word.localRecordState, LocalRecordState(lastModifiedAt: t0, isDeleted: false))
+        XCTAssertEqual(word.localRecordState, LocalRecordState(serverUpdatedAt: nil, isDirty: true, isDeleted: false))
+        word.serverUpdatedAt = t0
+        XCTAssertFalse(word.isSyncDirty)
+        XCTAssertEqual(word.localRecordState, LocalRecordState(serverUpdatedAt: t0, isDirty: false, isDeleted: false))
         word.markDeleted(now: t1)
-        XCTAssertEqual(word.localRecordState, LocalRecordState(lastModifiedAt: t1, isDeleted: true))
+        XCTAssertTrue(word.isSyncDirty)
+        XCTAssertEqual(word.localRecordState, LocalRecordState(serverUpdatedAt: t0, isDirty: true, isDeleted: true))
+        word.serverUpdatedAt = .distantPast
+        XCTAssertTrue(word.isSyncDirty, "the sentinel never equals a real modification time")
 
         let folder = WordFolder(name: "Еда")
+        XCTAssertTrue(folder.isSyncDirty)
+        folder.serverUpdatedAt = folder.lastModifiedAt
+        XCTAssertFalse(folder.isSyncDirty)
         folder.markDeleted(now: t1)
-        XCTAssertEqual(folder.localRecordState, LocalRecordState(lastModifiedAt: t1, isDeleted: true))
+        XCTAssertEqual(folder.localRecordState,
+                       LocalRecordState(serverUpdatedAt: folder.serverUpdatedAt, isDirty: true, isDeleted: true))
+    }
+
+    /// Dirty state is equality, not ordering: a backwards device clock still marks a row dirty.
+    func testDirtyIsEqualityNotOrdering() {
+        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: t1)
+        word.serverUpdatedAt = t1
+        word.updatedAt = t0
+        XCTAssertTrue(word.isSyncDirty)
+    }
+
+    func testSentinelEditedSinceLinkIsAnOrdinaryDirtyEdit() {
+        let edited = LocalRecordState(serverUpdatedAt: sentinel, isDirty: true, isDeleted: false, editedSinceLink: true)
+        XCTAssertEqual(decide(local: edited, updatedAt: t1), .keepLocal, "the local edit is pushed")
+        XCTAssertEqual(decide(local: edited, updatedAt: t1, deletedAt: t1), .softDelete(at: t1), "delete still wins")
+        let untouched = LocalRecordState(serverUpdatedAt: sentinel, isDirty: true, isDeleted: false)
+        XCTAssertEqual(decide(local: untouched, updatedAt: t0), .update, "an untouched sentinel row follows the server")
+    }
+
+    func testEditedSinceLinkComesFromTheRowsOwnModificationTime() {
+        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: t0)
+        word.serverUpdatedAt = sentinel
+        XCTAssertFalse(word.localRecordState(linkedAt: t1).editedSinceLink)
+        XCTAssertFalse(word.localRecordState(linkedAt: nil).editedSinceLink)
+        word.updatedAt = t2
+        XCTAssertTrue(word.localRecordState(linkedAt: t1).editedSinceLink)
+        XCTAssertFalse(word.localRecordState(linkedAt: t2).editedSinceLink, "equal to the link time is not an edit")
+        word.serverUpdatedAt = t0
+        XCTAssertFalse(word.localRecordState(linkedAt: t1).editedSinceLink, "only sentinel rows qualify")
+        let folder = WordFolder(name: "x")
+        folder.serverUpdatedAt = sentinel
+        folder.updatedAt = t2
+        XCTAssertTrue(folder.localRecordState(linkedAt: t1).editedSinceLink)
     }
 }

@@ -15,7 +15,7 @@ enum WordIdentityBackfill {
             return lhs.sourceLanguageCode < rhs.sourceLanguageCode
         }
         var seen = Set<UUID>()
-        var changes: [(word: Word, previous: UUID?)] = []
+        var changes: [(word: Word, previous: UUID?, previousServer: Date?)] = []
         for word in words {
             if let current = word.uuid, !seen.contains(current) {
                 seen.insert(current)
@@ -23,8 +23,9 @@ enum WordIdentityBackfill {
             }
             var fresh = UUID()
             while seen.contains(fresh) { fresh = UUID() }
-            changes.append((word, word.uuid))
+            changes.append((word, word.uuid, word.serverUpdatedAt))
             word.uuid = fresh
+            word.serverUpdatedAt = nil
             seen.insert(fresh)
         }
         guard !changes.isEmpty else { return 0 }
@@ -34,7 +35,10 @@ enum WordIdentityBackfill {
             if rollbackOnFailure {
                 context.rollback()
             } else {
-                for change in changes { change.word.uuid = change.previous }
+                for change in changes {
+                    change.word.uuid = change.previous
+                    change.word.serverUpdatedAt = change.previousServer
+                }
             }
             throw error
         }

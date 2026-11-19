@@ -2,7 +2,7 @@
 
 Personal iPhone dictionary and practice app for Russian speakers learning Polish.
 SwiftUI, SwiftData, Swift 5.9, iOS 17+. Optional Supabase account (Apple/Google via the SDK's
-OAuth); no synchronization yet. All vocabulary is local; web translation sends entered/scanned
+OAuth); words and folders sync with the account (offline-first, see docs/architecture.md › Sync). Local vocabulary stays the source of truth; web translation sends entered/scanned
 text to external services; signed-in users upload content-free diagnostics (app_logs).
 UI copy is Russian; code, file names and project instructions are English.
 

@@ -89,4 +89,15 @@ final class AppLogTests: XCTestCase {
         XCTAssertTrue(AppResources.isUnitTestHost)
         XCTAssertTrue(AppLog.shared is NoopAppLogger)
     }
+
+    func testSyncEventsAndKeysMatchTheServerContract() {
+        let events: [LogEvent] = [.syncCompleted, .syncFailed, .syncRowsSkipped, .syncLinked, .syncAccountMismatch]
+        XCTAssertEqual(events.map(\.rawValue),
+                       ["sync.completed", "sync.failed", "sync.rows_skipped", "sync.linked", "sync.account_mismatch"])
+        for event in events {
+            XCTAssertNotNil(event.rawValue.range(of: LogEvent.serverPattern, options: .regularExpression))
+        }
+        XCTAssertEqual([LogKey.trigger, .pulled, .pushed, .skipped, .reason, .relink].map(\.rawValue),
+                       ["trigger", "pulled", "pushed", "skipped", "reason", "relink"])
+    }
 }

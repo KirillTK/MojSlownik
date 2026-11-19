@@ -30,6 +30,11 @@ final class AuthStore {
     @ObservationIgnored private let logger: any AppLogging
     @ObservationIgnored private var observation: Task<Void, Never>?
     @ObservationIgnored private let signOutFlushTimeout: Duration
+    /// Called when the account changes (sign-in, sign-out, restored session), never for a token
+    /// refresh of the same account.
+    @ObservationIgnored var onAccountChange: ((AuthAccount?) -> Void)?
+    /// Runs while the session still exists, next to the log flush, within the same time bound.
+    @ObservationIgnored var beforeSignOut: (@MainActor () async -> Void)?
 
     init(backend: any AuthBackend, logger: (any AppLogging)? = nil,
          signOutFlushTimeout: Duration = .seconds(3)) {
@@ -59,6 +64,7 @@ final class AuthStore {
                 guard newState != self.state else { continue }
                 self.errorMessage = nil
                 self.state = newState
+                self.onAccountChange?(account)
                 if self.isSignedIn, !wasSignedIn {
                     // Never block session updates on the network.
                     Task { await self.logger.flush() }
@@ -102,13 +108,32 @@ final class AuthStore {
         }
     }
 
-    /// Waits for a log flush or the timeout, whichever comes first, then cancels the other.
-    /// The queue's flush stops on cancellation (rows stay queued for this account).
+    /// Waits until the log flush and `beforeSignOut` (the final sync) both finish, or the
+    /// timeout fires, then cancels what is left. The queue's flush stops on cancellation (rows
+    /// stay queued for this account).
     private func flushBounded() async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in await self.logger.flush() }
-            group.addTask { [signOutFlushTimeout] in try? await Task.sleep(for: signOutFlushTimeout) }
-            await group.next()
+        let before = beforeSignOut
+        await withTaskGroup(of: Bool.self) { group in
+            var pending = 1
+            group.addTask { @MainActor in
+                await self.logger.flush()
+                return true
+            }
+            if let before {
+                pending += 1
+                group.addTask { @MainActor in
+                    await before()
+                    return true
+                }
+            }
+            group.addTask { [signOutFlushTimeout] in
+                try? await Task.sleep(for: signOutFlushTimeout)
+                return false
+            }
+            while pending > 0, let finishedWork = await group.next() {
+                guard finishedWork else { break }
+                pending -= 1
+            }
             group.cancelAll()
         }
     }

@@ -83,13 +83,18 @@ begin
     get diagnostics affected = row_count;
     assert affected = 0, 'B must not update A''s folder';
 
-    delete from public.words where id = '00000000-0000-4000-8000-0000000000d1';
-    get diagnostics affected = row_count;
-    assert affected = 0, 'B must not delete A''s word';
+    -- Hard deletes are revoked for everyone (soft delete only).
+    begin
+        delete from public.words where id = '00000000-0000-4000-8000-0000000000d1';
+        raise exception 'FAIL: B deleted A''s word';
+    exception when insufficient_privilege then null;
+    end;
 
-    delete from public.folders where id = '00000000-0000-4000-8000-0000000000f1';
-    get diagnostics affected = row_count;
-    assert affected = 0, 'B must not delete A''s folder';
+    begin
+        delete from public.folders where id = '00000000-0000-4000-8000-0000000000f1';
+        raise exception 'FAIL: B deleted A''s folder';
+    exception when insufficient_privilege then null;
+    end;
 
     -- Same client-generated id in another account: allowed, no cross-user collision.
     insert into public.words (id, term, term_language, translation, translation_language, entered_language,
@@ -134,13 +139,15 @@ begin
     exception when check_violation then null;
     end;
 
-    -- Owner may soft-delete and hard-delete its own rows.
+    -- Owner may soft-delete its own rows; hard delete is revoked.
     update public.words set deleted_at = now() where id = '00000000-0000-4000-8000-0000000000d1';
     get diagnostics affected = row_count;
     assert affected = 1, 'B must be able to update its own word';
-    delete from public.words where id = '00000000-0000-4000-8000-0000000000d1';
-    get diagnostics affected = row_count;
-    assert affected = 1, 'B must be able to delete its own word';
+    begin
+        delete from public.words where id = '00000000-0000-4000-8000-0000000000d1';
+        raise exception 'FAIL: B hard-deleted its own word';
+    exception when insufficient_privilege then null;
+    end;
 end $$;
 
 -- ---------------------------------------------------------------- anon (no session)
@@ -188,8 +195,8 @@ begin
            'RLS must be enabled on words and folders';
 
     assert (select count(*) from pg_policies
-            where schemaname = 'public' and tablename in ('words', 'folders')) = 8,
-           'words and folders must have exactly one policy per command';
+            where schemaname = 'public' and tablename in ('words', 'folders')) = 6,
+           'words and folders must have exactly one policy each for select/insert/update';
     assert not exists (select 1 from pg_policies
                        where schemaname = 'public' and tablename in ('words', 'folders')
                          and (roles <> '{authenticated}'

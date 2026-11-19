@@ -25,6 +25,7 @@ final class DailyStudyStore {
     private let calendar: Calendar
     private let logger: any AppLogging
     private var activity: DailyActivity
+    private let changeSignal: LocalChangeSignal?
 
     convenience init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent,
                      now: Date = .now) {
@@ -33,8 +34,9 @@ final class DailyStudyStore {
     }
 
     init(repository: any DailyActivityRepository, calendar: Calendar = .autoupdatingCurrent, now: Date = .now,
-         logger: (any AppLogging)? = nil) {
+         logger: (any AppLogging)? = nil, changeSignal: LocalChangeSignal? = nil) {
         let logger = logger ?? NoopAppLogger()
+        self.changeSignal = changeSignal
         self.logger = logger
         self.repository = LoggingDailyActivityRepository(repository, logger: logger)
         self.calendar = calendar
@@ -115,6 +117,7 @@ final class DailyStudyStore {
         activity = next
         commit()
         logAnswer(mode, isCorrect: isCorrect)
+        changeSignal?.notify()
         return assessment
     }
 
@@ -148,6 +151,7 @@ final class DailyStudyStore {
         activity = next
         commit()
         logAnswer(.flashcards, isCorrect: grade != .again, grade: grade)
+        changeSignal?.notify()
     }
 
     /// Practice screen and result only (never the word); listening also counts toward quiz completion.

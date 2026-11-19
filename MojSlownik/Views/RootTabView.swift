@@ -25,4 +25,5 @@ struct RootTabView: View {
         .environment(resources.dailyStudy)
         .environment(resources.achievements)
         .environment(resources.auth)
+        .environment(resources.sync)
 }

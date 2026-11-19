@@ -134,4 +134,26 @@ final class FolderLibraryStoreTests: XCTestCase {
     private func makeLibrary(_ container: ModelContainer) -> FolderLibraryStore {
         FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
     }
+
+    @MainActor
+    func testChangeSignalFiresAfterSuccessfulWritesOnly() throws {
+        let fake = InMemoryFolderRepository()
+        let signal = LocalChangeSignal()
+        var fired = 0
+        signal.handler = { fired += 1 }
+        let library = FolderLibraryStore(repository: fake, changeSignal: signal)
+
+        let first = try library.create(name: "Урок 1")
+        let second = try library.create(name: "Урок 2")
+        try library.rename(id: first, name: "Урок 3")
+        try library.reorder(ids: [second, first])
+        try library.delete(id: second)
+        XCTAssertEqual(fired, 5)
+
+        fake.nextError = RepositoryFakeError.forced
+        XCTAssertThrowsError(try library.create(name: "Другое"))
+        fake.nextError = RepositoryFakeError.forced
+        XCTAssertThrowsError(try library.delete(id: first))
+        XCTAssertEqual(fired, 5)
+    }
 }

@@ -8,24 +8,57 @@ enum RemoteMergeDecision: Equatable, Sendable {
     case update
     case softDelete(at: Date)
     case keepLocal
+    /// The local row already holds the server's state; only the sync timestamps are recorded.
+    case acknowledge
 }
 
-/// The local row's sync-relevant state (from Word/WordFolder `lastModifiedAt` and `isActive`).
+/// The local row's sync-relevant state (from Word/WordFolder `serverUpdatedAt`, `isSyncDirty`
+/// and `isActive`).
 struct LocalRecordState: Equatable, Sendable {
-    let lastModifiedAt: Date
+    /// Server `updated_at` of the last synced version; nil = never synced to the linked
+    /// account; `Date.distantPast` = re-link sentinel (the server wins).
+    let serverUpdatedAt: Date?
+    let isDirty: Bool
     let isDeleted: Bool
+    /// A sentinel row the user changed after the link was made (this device's clock against
+    /// this device's own `updatedAt`). It is a real local edit, not a stale copy.
+    var editedSinceLink = false
 }
 
-/// Last-write-wins by `updatedAt`; ties keep the local row. Pure, so it is fully unit-testable.
+/// Server-time last-write-wins (plan S5). Compares only server timestamps with each other, or
+/// local equality (dirty); never the device clock. Pure, so it is fully unit-testable.
 enum RemoteMergePolicy {
+    static let relinkSentinel = Date.distantPast
+
     static func decide(local: LocalRecordState?, remoteUpdatedAt: Date, remoteDeletedAt: Date?) -> RemoteMergeDecision {
+        // 1. No local row. Never materialize a row only to tombstone it.
         guard let local else {
-            // Never materialize a row only to tombstone it.
             return remoteDeletedAt == nil ? .insert : .keepLocal
         }
-        guard remoteUpdatedAt > local.lastModifiedAt else { return .keepLocal }
+        // 2. Re-link sentinel: the account's version wins, unless the row was edited after the
+        // link (then it is an ordinary dirty edit: branch 5, last device to sync wins).
+        if local.serverUpdatedAt == relinkSentinel, !local.editedSinceLink {
+            return serverWins(local: local, remoteDeletedAt: remoteDeletedAt)
+        }
+        // 3. Echo or stale row: both values are server time.
+        if let synced = local.serverUpdatedAt, remoteUpdatedAt <= synced { return .keepLocal }
+        // 4. Local row not changed since the last sync.
+        if !local.isDirty {
+            return serverWins(local: local, remoteDeletedAt: remoteDeletedAt)
+        }
+        // 5. True concurrent change: delete wins, otherwise the next push overwrites the server.
+        if let remoteDeletedAt, !local.isDeleted { return .softDelete(at: remoteDeletedAt) }
+        return .keepLocal
+    }
+
+    static func isEditedSinceLink(serverUpdatedAt: Date?, modifiedAt: Date, linkedAt: Date?) -> Bool {
+        guard serverUpdatedAt == relinkSentinel, let linkedAt else { return false }
+        return modifiedAt > linkedAt
+    }
+
+    private static func serverWins(local: LocalRecordState, remoteDeletedAt: Date?) -> RemoteMergeDecision {
         if let remoteDeletedAt {
-            return local.isDeleted ? .keepLocal : .softDelete(at: remoteDeletedAt)
+            return local.isDeleted ? .acknowledge : .softDelete(at: remoteDeletedAt)
         }
         return .update
     }
@@ -40,9 +73,22 @@ enum RemoteMergePolicy {
 }
 
 extension Word {
-    var localRecordState: LocalRecordState { LocalRecordState(lastModifiedAt: lastModifiedAt, isDeleted: !isActive) }
+    var localRecordState: LocalRecordState { localRecordState(linkedAt: nil) }
+
+    /// `linkedAt`: when the current account link was made (device clock); nil = unknown.
+    func localRecordState(linkedAt: Date?) -> LocalRecordState {
+        LocalRecordState(serverUpdatedAt: serverUpdatedAt, isDirty: isSyncDirty, isDeleted: !isActive,
+                         editedSinceLink: RemoteMergePolicy.isEditedSinceLink(
+                             serverUpdatedAt: serverUpdatedAt, modifiedAt: lastModifiedAt, linkedAt: linkedAt))
+    }
 }
 
 extension WordFolder {
-    var localRecordState: LocalRecordState { LocalRecordState(lastModifiedAt: lastModifiedAt, isDeleted: !isActive) }
+    var localRecordState: LocalRecordState { localRecordState(linkedAt: nil) }
+
+    func localRecordState(linkedAt: Date?) -> LocalRecordState {
+        LocalRecordState(serverUpdatedAt: serverUpdatedAt, isDirty: isSyncDirty, isDeleted: !isActive,
+                         editedSinceLink: RemoteMergePolicy.isEditedSinceLink(
+                             serverUpdatedAt: serverUpdatedAt, modifiedAt: lastModifiedAt, linkedAt: linkedAt))
+    }
 }

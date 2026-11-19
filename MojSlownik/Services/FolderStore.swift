@@ -97,7 +97,7 @@ enum FolderStore {
         }
     }
 
-    private static func nameKey(_ name: String) -> String {
+    static func nameKey(_ name: String) -> String {
         normalizedName(name)
             .precomposedStringWithCanonicalMapping.lowercased()
     }

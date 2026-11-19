@@ -140,7 +140,48 @@ final class RemoteRecordValidatorTests: XCTestCase {
     func testServerTimestampAheadOfSlowDeviceClockIsAccepted() throws {
         XCTAssertNoThrow(try validate(word(updatedAt: now.addingTimeInterval(10 * 60))))
         XCTAssertNoThrow(try validate(word(updatedAt: now.addingTimeInterval(6 * 60 * 60))))
-        assertRejects(word(updatedAt: now.addingTimeInterval(2 * 24 * 60 * 60)), .invalidDate)
+        // `updated_at` is server time: no device-clock upper bound at all.
+        XCTAssertNoThrow(try validate(word(updatedAt: now.addingTimeInterval(2 * 24 * 60 * 60))))
+        XCTAssertNoThrow(try validate(word(updatedAt: now.addingTimeInterval(400 * 24 * 60 * 60))))
+    }
+
+    /// Interior tab/newline/CR are text (the add-word fields are multiline); other controls are not.
+    func testInteriorWhitespaceControlsAreAccepted() throws {
+        XCTAssertEqual(try validate(word(term: "ko\nt\tx\r\ny")).term, "ko\nt\tx\r\ny")
+        XCTAssertEqual(try validate(word(translation: " \n кот\nдом \n")).translation, "кот\nдом")
+        assertRejects(word(term: "ko\u{0}t"), .invalidText)
+        assertRejects(word(term: "ko\u{1B}t"), .invalidText)
+        assertRejects(word(term: "ko\u{85}t"), .invalidText)
+    }
+
+    /// The server counts char_length in Unicode scalars; graphemes would let this through.
+    func testTextLengthCountsUnicodeScalars() throws {
+        let max = RemoteRecordValidator.maxTextLength
+        XCTAssertNoThrow(try validate(word(term: String(repeating: "a", count: max))))
+        assertRejects(word(term: String(repeating: "a", count: max + 1)), .invalidText)
+        // "e" + combining acute = 1 grapheme, 2 scalars: 300 graphemes are 600 scalars.
+        let combining = String(repeating: "e\u{301}", count: 300)
+        XCTAssertEqual(combining.count, 300)
+        assertRejects(word(translation: combining), .invalidText)
+        XCTAssertNoThrow(try validate(word(translation: String(repeating: "e\u{301}", count: 250))))
+        assertRejects(word(translation: String(repeating: "e\u{301}", count: 251)), .invalidText)
+    }
+
+    func testCreatedAtAheadOfNowIsBoundedByUpdatedAt() throws {
+        let updated = now.addingTimeInterval(3 * 24 * 3_600)
+        let skew = RemoteRecordValidator.allowedClockSkew
+        XCTAssertNoThrow(try validate(word(createdAt: now.addingTimeInterval(3_600), updatedAt: now.addingTimeInterval(60))))
+        XCTAssertNoThrow(try validate(word(createdAt: updated.addingTimeInterval(skew), updatedAt: updated)))
+        assertRejects(word(createdAt: updated.addingTimeInterval(skew + 1), updatedAt: updated), .invalidDate)
+        assertRejects(word(updatedAt: updated, deletedAt: updated.addingTimeInterval(skew + 1)), .invalidDate)
+        // A slow device clock: a row updated "in the future" may carry a due date relative to it.
+        let due = updated.addingTimeInterval(SRSEngine.maxIntervalDays * 86_400)
+        XCTAssertNoThrow(try validate(word(updatedAt: updated, dueDate: due)))
+    }
+
+    func testUpdatedAtBeforeEarliestDateIsRejected() {
+        assertRejects(word(createdAt: now.addingTimeInterval(-3_600),
+                           updatedAt: RemoteRecordValidator.earliestDate.addingTimeInterval(-1)), .invalidDate)
     }
 
     func testRejectsTooManyFolderIDs() {
@@ -150,8 +191,8 @@ final class RemoteRecordValidatorTests: XCTestCase {
 
     func testRejectsImplausibleDates() {
         let future = now.addingTimeInterval(RemoteRecordValidator.allowedClockSkew + 1)
-        assertRejects(word(createdAt: future, updatedAt: future), .invalidDate)
-        assertRejects(word(updatedAt: future), .invalidDate)
+        // created_at/deleted_at are bounded by max(now, updatedAt) + skew; updated_at has no upper bound.
+        assertRejects(word(createdAt: future), .invalidDate)
         assertRejects(word(deletedAt: future), .invalidDate)
         assertRejects(word(createdAt: Date(timeIntervalSince1970: 0), updatedAt: Date(timeIntervalSince1970: 1)), .invalidDate)
     }
@@ -213,7 +254,8 @@ final class RemoteRecordValidatorTests: XCTestCase {
             (folder(id: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!), .invalidID),
             (folder(name: ""), .invalidText),
             (folder(name: String(repeating: "x", count: RemoteRecordValidator.maxFolderNameLength + 1)), .invalidText),
-            (folder(updatedAt: now.addingTimeInterval(2 * 24 * 3_600)), .invalidDate),
+            (folder(createdAt: now.addingTimeInterval(2 * 24 * 3_600)), .invalidDate),
+            (folder(updatedAt: Date(timeIntervalSince1970: 1)), .invalidDate),
         ]
         for (record, expected) in cases {
             XCTAssertThrowsError(try RemoteRecordValidator.validate(record, ownerID: owner, now: now)) { error in

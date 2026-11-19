@@ -346,4 +346,52 @@ final class AuthStoreTests: XCTestCase {
         await waitUntil("session") { signedIn.state != .unknown }
         XCTAssertEqual(signedIn.account, StaticAuthBackend.testAccount)
     }
+
+    func testOnAccountChangeFiresForSignInAndSignOutButNotForTokenRefresh() async {
+        let backend = ScriptedAuthBackend()
+        let store = AuthStore(backend: backend)
+        var changes: [AuthAccount?] = []
+        store.onAccountChange = { changes.append($0) }
+        store.start()
+        await waitUntil("session") { store.state != .unknown }
+        XCTAssertEqual(changes.count, 1, "the restored (signed-out) session is reported once")
+        XCTAssertNil(changes[0])
+
+        backend.emit(account)
+        await waitUntil("signed in") { changes.count == 2 }
+        backend.emit(account)  // token refresh of the same account
+        backend.emit(nil)
+        await waitUntil("signed out") { changes.count == 3 }
+        XCTAssertEqual(changes.compactMap { $0 }.count, 1)
+        XCTAssertNil(changes[2])
+    }
+
+    func testBeforeSignOutRunsWhileTheSessionExists() async {
+        let backend = ScriptedAuthBackend(initial: account)
+        let store = AuthStore(backend: backend, signOutFlushTimeout: .seconds(5))
+        var signOutCallsWhenRun: Int?
+        store.beforeSignOut = { signOutCallsWhenRun = backend.signOutCalls }
+        store.start()
+        await waitUntil("session") { store.isSignedIn }
+        await store.signOut()
+        XCTAssertEqual(signOutCallsWhenRun, 0, "the final sync ran before the backend signed out")
+        XCTAssertEqual(backend.signOutCalls, 1)
+    }
+
+    func testBeforeSignOutIsCutAtTheTimeoutTogetherWithTheFlush() async {
+        let backend = ScriptedAuthBackend(initial: account)
+        let store = AuthStore(backend: backend, signOutFlushTimeout: .milliseconds(50))
+        var cancelled = false
+        store.beforeSignOut = {
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+            cancelled = true
+        }
+        store.start()
+        await waitUntil("session") { store.isSignedIn }
+        let started = ContinuousClock.now
+        await store.signOut()
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(2))
+        XCTAssertTrue(cancelled, "the hanging final sync was cancelled at the timeout")
+        XCTAssertEqual(backend.signOutCalls, 1)
+    }
 }

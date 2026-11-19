@@ -4,6 +4,11 @@ import SwiftUI
 /// with sign-out. A successful sign-in closes the sheet. Signing out never touches local words.
 struct AccountView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(SyncStore.self) private var sync
+    @State private var confirmingMerge = false
+    /// Set by the manual button; the next terminal status is announced to VoiceOver.
+    @State private var announceNextResult = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric(relativeTo: .largeTitle) private var tileSize: CGFloat = 64
     @ScaledMetric(relativeTo: .body) private var providerLogoSize: CGFloat = 20
@@ -25,6 +30,7 @@ struct AccountView: View {
                 .padding(.horizontal, AppSpacing.l)
                 .padding(.vertical, AppSpacing.m)
             }
+            .onChange(of: sync.status) { _, status in announceIfManual(status) }
             .background(Color.appBackground)
             .onDisappear { auth.dismissError() }
             // A successful sign-in closes the sheet; opening it while signed in shows the account.
@@ -124,6 +130,8 @@ struct AccountView: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("accountCard")
 
+            syncCard
+
             Button {
                 Task { await auth.signOut() }
             } label: {
@@ -143,6 +151,122 @@ struct AccountView: View {
     }
 }
 
+extension AccountView {
+    /// Sync status and manual sync; the mismatch block when this iPhone is linked to another
+    /// account. Hidden when the build has no sync transport.
+    @ViewBuilder fileprivate var syncCard: some View {
+        if sync.status != .unavailable {
+            VStack(alignment: .leading, spacing: AppSpacing.s) {
+                Text("Синхронизация")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.appInk)
+                    // A single long word: shrink a little at the largest sizes instead of
+                    // breaking mid-word.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityAddTraits(.isHeader)
+
+                if sync.status == .accountMismatch {
+                    mismatchBlock
+                } else {
+                    statusRow
+                    Button {
+                        announceNextResult = true
+                        sync.syncNow()
+                    } label: {
+                        Text("Синхронизировать сейчас")
+                            .font(.body.weight(.semibold))
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .tint(Color.appAccentText)
+                    .disabled(!sync.canSyncNow)
+                    .accessibilityIdentifier("syncNowButton")
+                }
+            }
+            .padding(AppSpacing.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
+    }
+
+    @ViewBuilder private var statusRow: some View {
+        if sync.status == .failed {
+            // Calm recoverable-error pattern (DESIGN.md): no red, the next trigger retries.
+            calmNote(sync.statusText)
+                .accessibilityIdentifier("syncStatus")
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
+                if sync.isSyncing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityHidden(true)
+                }
+                Text(sync.statusText)
+                    .font(.footnote)
+                    .foregroundStyle(Color.subtleText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(sync.isSyncing ? "Идёт синхронизация" : sync.statusText)
+            .accessibilityIdentifier("syncStatus")
+        }
+    }
+
+    /// The calm `info.circle` footnote; the icon stacks above the text at accessibility sizes.
+    @ViewBuilder private func calmNote(_ text: String) -> some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Image(systemName: "info.circle")
+                    Text(text)
+                }
+            } else {
+                Label(text, systemImage: "info.circle")
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(Color.subtleText)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func announceIfManual(_ status: SyncStore.Status) {
+        guard announceNextResult else { return }
+        switch status {
+        case .synced, .failed:
+            announceNextResult = false
+            AccessibilityNotification.Announcement(sync.statusText).post()
+        default:
+            break
+        }
+    }
+
+    private var mismatchBlock: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            calmNote(sync.statusText)
+                .accessibilityIdentifier("syncMismatch")
+            Button {
+                confirmingMerge = true
+            } label: {
+                Text("Объединить словари")
+                    .font(.body.weight(.semibold))
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }
+            .tint(Color.appAccentText)
+            .accessibilityIdentifier("syncMergeButton")
+            .confirmationDialog("Объединить словари?",
+                                isPresented: $confirmingMerge, titleVisibility: .visible) {
+                Button("Объединить") { sync.confirmLinkToCurrentAccount() }
+                Button("Отмена", role: .cancel) {}
+            } message: {
+                Text("Слова и папки с этого iPhone попадут в аккаунт, а слова аккаунта появятся на iPhone. Ничего не удаляется.")
+            }
+        }
+    }
+}
+
 extension AuthProvider {
     var displayName: String {
         switch self {
@@ -155,11 +279,11 @@ extension AuthProvider {
 #Preview("Signed out") {
     let auth = AuthStore(backend: StaticAuthBackend())
     auth.start()
-    return AccountView().environment(auth)
+    return AccountView().environment(auth).environment(AppResources.preview.sync)
 }
 
 #Preview("Signed in") {
     let auth = AuthStore(backend: StaticAuthBackend(account: StaticAuthBackend.testAccount))
     auth.start()
-    return AccountView().environment(auth)
+    return AccountView().environment(auth).environment(AppResources.preview.sync)
 }

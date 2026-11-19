@@ -18,18 +18,26 @@ final class BackgroundLogFlush {
 
     @discardableResult
     static func start(logger: any AppLogging, begin: Begin? = nil, end: End? = nil) -> Task<Void, Never> {
+        run(name: "app-log-flush", begin: begin, end: end) { await logger.flush() }
+    }
+
+    /// Runs `work` inside a background task that ends exactly once: on completion, or when iOS
+    /// expires it (the work is cancelled).
+    @discardableResult
+    static func run(name: String, begin: Begin? = nil, end: End? = nil,
+                    work: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
         let begin = begin ?? { name, expiration in
             UIApplication.shared.beginBackgroundTask(withName: name) {
                 MainActor.assumeIsolated { expiration() }
             }
         }
         let run = BackgroundLogFlush(end: end ?? { UIApplication.shared.endBackgroundTask($0) })
-        run.identifier = begin("app-log-flush") { [run] in
+        run.identifier = begin(name) { [run] in
             run.flush?.cancel()
             run.finish()
         }
         let task = Task { [run] in
-            await logger.flush()
+            await work()
             run.finish()
         }
         run.flush = task

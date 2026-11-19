@@ -13,6 +13,9 @@ final class Word {
     var uuid: UUID? = nil
     var updatedAt: Date? = nil
     var deletedAt: Date? = nil
+    // server updated_at of the last synced version; nil = never synced to the linked account;
+    // .distantPast = re-link sentinel
+    var serverUpdatedAt: Date? = nil
 
     // Интервальное повторение (упрощённый SM-2)
     var easeFactor: Double
@@ -44,17 +47,24 @@ extension Word {
         set { categoryRawValue = newValue.rawValue }
     }
 
-    func matches(source: String, translation: String, language: AppLanguage) -> Bool {
-        func normalized(_ text: String) -> String {
-            text.trimmingCharacters(in: .whitespacesAndNewlines)
-                .precomposedStringWithCanonicalMapping.lowercased()
-        }
-        return normalized(text(in: language)) == normalized(source)
-            && normalized(text(in: language.other)) == normalized(translation)
+    /// Trim, NFC, lowercase: the comparison form shared by duplicate checks and sync adoption.
+    static func normalizedText(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .precomposedStringWithCanonicalMapping.lowercased()
     }
+
+    func matches(source: String, translation: String, language: AppLanguage) -> Bool {
+        Word.normalizedText(text(in: language)) == Word.normalizedText(source)
+            && Word.normalizedText(text(in: language.other)) == Word.normalizedText(translation)
+    }
+
+    /// Normalized (polish, russian) pair, used to adopt a server duplicate during sync.
+    var syncPairKey: String { Word.normalizedText(polish) + "\u{1F}" + Word.normalizedText(russian) }
 
     var isActive: Bool { deletedAt == nil }
     var lastModifiedAt: Date { updatedAt ?? createdAt }
+    /// Changed since the last sync: equality, never ordering (the device clock may move back).
+    var isSyncDirty: Bool { serverUpdatedAt != lastModifiedAt }
 
     func markDeleted(now: Date) {
         deletedAt = now

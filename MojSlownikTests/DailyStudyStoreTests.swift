@@ -409,4 +409,25 @@ final class DailyStudyStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
         try body(defaults)
     }
+
+    func testChangeSignalFiresAfterSuccessfulReviewAndPracticeAnswerOnly() throws {
+        let (container, words) = try makeWords(2)
+        let signal = LocalChangeSignal()
+        var fired = 0
+        signal.handler = { fired += 1 }
+        let repository = InMemoryDailyActivityRepository()
+        let store = DailyStudyStore(repository: repository, calendar: calendar, now: now, changeSignal: signal)
+
+        try store.review(.good, to: words[0], context: container.mainContext, now: now)
+        XCTAssertEqual(fired, 1)
+        try store.recordPracticeAnswer(word: words[1], answer: .choice(isCorrect: true),
+                                       context: container.mainContext, mode: .quiz, now: now)
+        XCTAssertEqual(fired, 2)
+
+        repository.prepareError = RepositoryFakeError.forced
+        XCTAssertThrowsError(try store.review(.easy, to: words[0], context: container.mainContext, now: now))
+        XCTAssertThrowsError(try store.recordPracticeAnswer(word: words[1], answer: .choice(isCorrect: true),
+                                                            context: container.mainContext, mode: .quiz, now: now))
+        XCTAssertEqual(fired, 2, "failures never notify")
+    }
 }

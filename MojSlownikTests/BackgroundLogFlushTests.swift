@@ -48,4 +48,39 @@ final class BackgroundLogFlushTests: XCTestCase {
         await task.value
         XCTAssertTrue(ended.isEmpty)
     }
+
+    func testRunEndsTaskOnceAfterWorkCompletes() async {
+        var ended: [UIBackgroundTaskIdentifier] = []
+        var names: [String] = []
+        var worked = false
+        let task = BackgroundLogFlush.run(name: "sync",
+                                          begin: { [identifier] name, _ in
+                                              names.append(name)
+                                              return identifier
+                                          },
+                                          end: { ended.append($0) }) { worked = true }
+        await task.value
+        XCTAssertTrue(worked)
+        XCTAssertEqual(names, ["sync"])
+        XCTAssertEqual(ended, [identifier])
+    }
+
+    func testRunExpirationCancelsWorkAndEndsTaskOnce() async {
+        var ended: [UIBackgroundTaskIdentifier] = []
+        var expire: (@MainActor () -> Void)?
+        var wasCancelled = false
+        let task = BackgroundLogFlush.run(name: "sync",
+                                          begin: { [identifier] _, expiration in
+                                              expire = expiration
+                                              return identifier
+                                          },
+                                          end: { ended.append($0) }) {
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+            wasCancelled = true
+        }
+        expire?()
+        await task.value
+        XCTAssertTrue(wasCancelled)
+        XCTAssertEqual(ended, [identifier])
+    }
 }
