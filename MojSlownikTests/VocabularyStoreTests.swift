@@ -79,4 +79,29 @@ final class VocabularyStoreTests: XCTestCase {
             XCTAssertEqual(repo.calls, [.ensureIdentity])
         }
     }
+
+    func testChangeSignalFiresAfterSuccessfulWritesOnly() throws {
+        let repo = RecordingVocabularyRepository()
+        let signal = LocalChangeSignal()
+        var fired = 0
+        signal.handler = { fired += 1 }
+        let store = VocabularyStore(repository: repo, changeSignal: signal)
+        let target = word(uuid: UUID())
+        let folder = UUID()
+
+        try store.add(source: "woda", translation: "вода")
+        try store.toggleScanned(source: "woda", translation: "вода", category: .food)
+        try store.changeCategory(.home, source: "woda", translation: "вода")
+        try store.setCategory(.travel, for: target)
+        try store.deleteWord(target)
+        try store.setMembership(of: target, folderID: folder, included: true)
+        try store.removeFromAllFolders(target)
+        XCTAssertEqual(fired, 7)
+
+        repo.nextError = RepositoryFakeError.forced
+        XCTAssertThrowsError(try store.add(source: "kot", translation: "кот"))
+        repo.nextError = RepositoryFakeError.forced
+        XCTAssertThrowsError(try store.deleteWord(target))
+        XCTAssertEqual(fired, 7, "failed writes never notify")
+    }
 }

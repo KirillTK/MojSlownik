@@ -6,12 +6,17 @@ import XCTest
 class E2ETestCase: XCTestCase {
     /// Mirrors the app-side `UITestFixture` (names are pinned by a unit test).
     enum Fixture: String {
-        case empty, basicVocabulary, dueForReview, foldersOrdered
+        case empty, basicVocabulary, dueForReview, foldersOrdered, syncedVocabulary
     }
 
     /// Mirrors the app-side `UITestAuthState` (a network-free auth backend).
     enum AuthState: String {
         case signedOut, signedIn, failing
+    }
+
+    /// Mirrors the app-side `UITestSyncState` (a network-free sync server model).
+    enum SyncState: String {
+        case empty, remoteVocabulary, failsOnce, linkedToOtherAccount, syncedThenRemoteChanges
     }
 
     var app: XCUIApplication!
@@ -26,11 +31,15 @@ class E2ETestCase: XCTestCase {
 
     @MainActor
     @discardableResult
-    func launch(_ fixture: Fixture, prefill: String? = nil, auth: AuthState? = nil) -> XCUIApplication {
+    func launch(_ fixture: Fixture, prefill: String? = nil, auth: AuthState? = nil,
+                sync: SyncState? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["UITEST_FIXTURE"] = fixture.rawValue
         if let auth {
             app.launchEnvironment["UITEST_AUTH"] = auth.rawValue
+        }
+        if let sync {
+            app.launchEnvironment["UITEST_SYNC"] = sync.rawValue
         }
         if let prefill {
             app.launchEnvironment["UITEST_PREFILL"] = prefill

@@ -132,4 +132,82 @@ final class AchievementStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: name) }
         body(defaults)
     }
+
+    func testQuietFlagRecordsTheNextUnlockWithoutBannerOrLogThenIsConsumed() {
+        withDefaults { defaults in
+            let spy = AppLogSpy()
+            let store = AchievementStore(repository: UserDefaultsAchievementStateRepository(defaults: defaults),
+                                         calendar: calendar, catalog: catalog, displayDuration: .seconds(60),
+                                         logger: spy)
+            store.sync(vocabulary: words(1), now: now)
+            store.recordNextUnlocksSilently(now: now)
+            store.sync(vocabulary: words(2), now: now.addingTimeInterval(1))
+            XCTAssertNotNil(store.unlocked["w2"], "the unlock is recorded")
+            XCTAssertTrue(store.pendingAnnouncements.isEmpty)
+            XCTAssertFalse(spy.events.contains(.achievementUnlocked))
+
+            store.sync(vocabulary: words(3), now: now.addingTimeInterval(2))
+            XCTAssertEqual(store.pendingAnnouncements.map(\.id), ["w3"], "one-shot: the next unlock announces")
+            XCTAssertEqual(spy.events.filter { $0 == .achievementUnlocked }.count, 1)
+        }
+    }
+
+    func testQuietFlagExpiresAfterTenSecondsAndNonUnlockingSyncKeepsIt() {
+        withDefaults { defaults in
+            let store = makeStore(defaults)
+            store.sync(vocabulary: words(1), now: now)
+            store.recordNextUnlocksSilently(now: now)
+            store.sync(vocabulary: words(1), now: now.addingTimeInterval(5))
+            store.sync(vocabulary: words(2), now: now.addingTimeInterval(6))
+            XCTAssertTrue(store.pendingAnnouncements.isEmpty, "a sync that unlocks nothing did not consume the flag")
+
+            store.recordNextUnlocksSilently(now: now)
+            store.sync(vocabulary: words(3), now: now.addingTimeInterval(10.5))
+            XCTAssertEqual(store.pendingAnnouncements.map(\.id), ["w3"], "expired after 10 s")
+        }
+    }
+
+    func testQuietModeSilencesEverySyncWhileActiveAndEndsWithTheCycleIfTheTrackerAlreadySynced() {
+        withDefaults { defaults in
+            let spy = AppLogSpy()
+            let store = AchievementStore(repository: UserDefaultsAchievementStateRepository(defaults: defaults),
+                                         calendar: calendar, catalog: catalog, displayDuration: .seconds(60),
+                                         logger: spy)
+            store.sync(vocabulary: words(0), now: now)
+            store.beginQuietUnlocks()
+            store.sync(vocabulary: words(1), now: now.addingTimeInterval(1))
+            store.sync(vocabulary: words(2), now: now.addingTimeInterval(2))
+            XCTAssertNotNil(store.unlocked["w2"])
+            XCTAssertTrue(store.pendingAnnouncements.isEmpty)
+            store.endQuietUnlocks(now: now.addingTimeInterval(3))
+
+            store.sync(vocabulary: words(3), now: now.addingTimeInterval(4))
+            XCTAssertEqual(store.pendingAnnouncements.map(\.id), ["w3"], "no lingering window after a mid-cycle re-sync")
+            XCTAssertEqual(spy.events.filter { $0 == .achievementUnlocked }.count, 1)
+        }
+    }
+
+    func testQuietModeDrainsTheNextSyncAfterTheCycleThenEnds() {
+        withDefaults { defaults in
+            let store = makeStore(defaults)
+            store.sync(vocabulary: words(0), now: now)
+            store.beginQuietUnlocks()
+            store.endQuietUnlocks(now: now.addingTimeInterval(1))   // tracker has not re-synced yet
+            store.sync(vocabulary: words(1), now: now.addingTimeInterval(2))   // the tracker's re-sync
+            XCTAssertTrue(store.pendingAnnouncements.isEmpty)
+            store.sync(vocabulary: words(2), now: now.addingTimeInterval(3))
+            XCTAssertEqual(store.pendingAnnouncements.map(\.id), ["w2"], "the window was one sync")
+        }
+    }
+
+    func testQuietDrainExpiresAfterTenSeconds() {
+        withDefaults { defaults in
+            let store = makeStore(defaults)
+            store.sync(vocabulary: words(0), now: now)
+            store.beginQuietUnlocks()
+            store.endQuietUnlocks(now: now)
+            store.sync(vocabulary: words(1), now: now.addingTimeInterval(11))
+            XCTAssertEqual(store.pendingAnnouncements.map(\.id), ["w1"])
+        }
+    }
 }

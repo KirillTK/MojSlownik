@@ -20,6 +20,13 @@ final class AchievementStore {
     @ObservationIgnored private var dismissTask: Task<Void, Never>?
     @ObservationIgnored private(set) var announcedIDs: Set<String> = []
     @ObservationIgnored private var isSceneActive = true
+    /// One-shot, in-memory: unlocks caused by just-pulled vocabulary are recorded without a banner.
+    @ObservationIgnored private var quietUntil: Date?
+    /// A sync cycle is applying pulled vocabulary: every unlock is silent until it ends.
+    @ObservationIgnored private var quietActive = false
+    @ObservationIgnored private var syncedWhileQuiet = false
+    /// After the cycle: the next `sync` (the tracker's re-sync of the pulled words) is silent too.
+    @ObservationIgnored private var drainUntil: Date?
 
     convenience init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent,
                      catalog: [AchievementDefinition] = AchievementCatalog.all,
@@ -72,13 +79,41 @@ final class AchievementStore {
         persist()
     }
 
+    /// The next `sync(vocabulary:)` that unlocks something within 10 s records it silently
+    /// (no banner, no `achievement.unlocked` log), like the first-install sync.
+    func recordNextUnlocksSilently(now: Date = .now) {
+        quietUntil = now.addingTimeInterval(10)
+    }
+
+    /// Sync cycle start of applying pulled rows (before the first page is saved, so the
+    /// tracker's re-sync of those rows cannot announce them). Ended by `endQuietUnlocks`.
+    func beginQuietUnlocks() {
+        quietActive = true
+        syncedWhileQuiet = false
+    }
+
+    /// Cycle end. If the tracker has not re-synced yet, the next `sync` (within 10 s) is still
+    /// silent and then the mode is over; if it already did, the mode ends now.
+    func endQuietUnlocks(now: Date = .now) {
+        guard quietActive else { return }
+        quietActive = false
+        drainUntil = syncedWhileQuiet ? nil : now.addingTimeInterval(10)
+    }
+
     func sync(vocabulary: AchievementMetrics, now: Date = .now) {
+        let draining = !quietActive && (drainUntil.map { now < $0 } ?? false)
+        defer {
+            if draining { drainUntil = nil }
+            if quietActive { syncedWhileQuiet = true }
+        }
         let metrics = vocabulary.merging(ledger.metrics)
         let ids = AchievementEvaluator.newlyUnlocked(catalog: catalog, metrics: metrics,
                                                      unlocked: Set(unlocked.keys))
         guard !ids.isEmpty || !didInitialSync else { return }
+        let quiet = (quietUntil.map { now < $0 } ?? false) || quietActive || draining
+        if !ids.isEmpty { quietUntil = nil }
         for id in ids { unlocked[id] = now }
-        let announce = didInitialSync
+        let announce = didInitialSync && !quiet
         didInitialSync = true
         persist()
         if announce {

@@ -5,10 +5,43 @@ import SwiftData
 /// Named SwiftData fixtures for UI-test mode. Dates are relative to `now` (launch time).
 enum UITestFixture: String, CaseIterable, Sendable {
     case empty, basicVocabulary, dueForReview, foldersOrdered
+    /// `basicVocabulary` with fixed uuids and rows already synced (clean): pairs with the
+    /// `syncedThenRemoteChanges` server state.
+    case syncedVocabulary
 
     static let lesson1ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F1")!
     static let lesson2ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F2")!
     static let lesson3ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F3")!
+
+    /// Fixed ids of the `syncedVocabulary` words, in `basicVocabulary` order (kot = a1, dom = a2).
+    static let syncedWordIDs: [UUID] = (1...5).map { UUID(uuidString: "00000000-0000-0000-0000-0000000000A\($0)")! }
+
+    struct SyncedWord: Equatable, Sendable {
+        let id: UUID
+        let russian: String
+        let polish: String
+        let source: AppLanguage
+        let createdAt: Date
+        let dueDate: Date
+
+        /// The server's (and the clean local row's) version time: createdAt cut to milliseconds.
+        var syncedAt: Date { UITestFixture.truncatedToMillis(createdAt) }
+    }
+
+    static func syncedWords(now: Date) -> [SyncedWord] {
+        let pairs: [(String, String, AppLanguage)] = [("кот", "kot", .russian), ("дом", "dom", .polish),
+                                                      ("вода", "woda", .polish), ("хлеб", "chleb", .russian),
+                                                      ("книга", "książka", .russian)]
+        return pairs.enumerated().map { index, pair in
+            SyncedWord(id: syncedWordIDs[index], russian: pair.0, polish: pair.1, source: pair.2,
+                       createdAt: now.addingTimeInterval(-Double(index + 1) * 3600),
+                       dueDate: now.addingTimeInterval(30 * 86_400))
+        }
+    }
+
+    static func truncatedToMillis(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
+    }
 
     @MainActor
     func seed(into context: ModelContext, now: Date) throws {
@@ -40,6 +73,14 @@ enum UITestFixture: String, CaseIterable, Sendable {
             words = [word("кот", "kot", .russian), word("дом", "dom", .polish),
                      word("вода", "woda", .polish), word("хлеб", "chleb", .russian),
                      word("книга", "książka", .russian)]
+        case .syncedVocabulary:
+            words = Self.syncedWords(now: now).map { spec in
+                let item = word(spec.russian, spec.polish, spec.source)
+                item.uuid = spec.id
+                item.updatedAt = spec.syncedAt
+                item.serverUpdatedAt = spec.syncedAt
+                return item
+            }
         case .dueForReview:
             words = [word("кот", "kot", .russian), word("дом", "dom", .polish),
                      word("вода", "woda", .polish),

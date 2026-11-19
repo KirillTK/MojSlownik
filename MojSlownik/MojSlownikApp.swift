@@ -9,6 +9,7 @@ struct MojSlownikApp: App {
     @State private var dailyStudy: DailyStudyStore
     @State private var achievements: AchievementStore
     @State private var auth: AuthStore
+    @State private var sync: SyncStore
     @Environment(\.scenePhase) private var scenePhase
     private let container: ModelContainer
     private let logger: any AppLogging
@@ -33,6 +34,7 @@ struct MojSlownikApp: App {
             _dailyStudy = State(initialValue: resources.dailyStudy)
             _achievements = State(initialValue: resources.achievements)
             _auth = State(initialValue: resources.auth)
+            _sync = State(initialValue: resources.sync)
             logger = resources.logger
             AppLog.shared = resources.logger
             // Once per process (here, not in a view's .task that runs per scene).
@@ -50,12 +52,20 @@ struct MojSlownikApp: App {
                 .environment(dailyStudy)
                 .environment(achievements)
                 .environment(auth)
+                .environment(sync)
                 .task { auth.start() }
         }
         .modelContainer(container)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background {
+            switch phase {
+            case .background:
                 BackgroundLogFlush.start(logger: logger)
+                let sync = sync
+                BackgroundLogFlush.run(name: "sync") { await sync.syncBeforeLeaving() }
+            case .active:
+                sync.sceneDidBecomeActive()
+            default:
+                break
             }
         }
     }
@@ -69,6 +79,7 @@ struct AppResources {
     let dailyStudy: DailyStudyStore
     let achievements: AchievementStore
     let auth: AuthStore
+    let sync: SyncStore
     let logger: any AppLogging
     /// Not placed in the environment; creates its client lazily (first auth/log use).
     let supabase: SupabaseClientProvider
@@ -76,7 +87,7 @@ struct AppResources {
     init(configuration: ModelConfiguration? = nil, defaults: UserDefaults = .standard,
          calendar: Calendar = .autoupdatingCurrent, now: Date = .now,
          supabase: SupabaseClientProvider? = nil, logger: (any AppLogging)? = nil,
-         authBackend: (any AuthBackend)? = nil) throws {
+         authBackend: (any AuthBackend)? = nil, syncRemote: (any SyncRemote)? = nil) throws {
         let supabase = supabase ?? SupabaseClientProvider()
         let logger = logger ?? NoopAppLogger()
         if let configuration {
@@ -86,13 +97,25 @@ struct AppResources {
         }
         WordIdentityBackfill.run(container: container)
         // PersistentIdentifier decoding requires Word's schema to be registered first.
+        let changeSignal = LocalChangeSignal()
         dailyStudy = DailyStudyStore(repository: UserDefaultsDailyActivityRepository(defaults: defaults),
-                                     calendar: calendar, now: now, logger: logger)
+                                     calendar: calendar, now: now, logger: logger, changeSignal: changeSignal)
         achievements = AchievementStore(repository: UserDefaultsAchievementStateRepository(defaults: defaults),
                                         calendar: calendar, logger: logger)
-        folders = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container), logger: logger)
-        vocabulary = VocabularyStore(repository: SwiftDataVocabularyRepository(container: container), logger: logger)
+        folders = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container), logger: logger,
+                                     changeSignal: changeSignal)
+        vocabulary = VocabularyStore(repository: SwiftDataVocabularyRepository(container: container), logger: logger,
+                                     changeSignal: changeSignal)
         auth = AuthStore(backend: authBackend ?? SupabaseAuthBackend(provider: supabase), logger: logger)
+        let stateRepository = UserDefaultsSyncStateRepository(defaults: defaults)
+        let syncStore = SwiftDataSyncStore(container: container)
+        let engine = syncRemote.map { SyncEngine(remote: $0, local: syncStore, state: stateRepository) }
+        let sync = SyncStore(engine: engine, state: stateRepository, folders: folders,
+                             achievements: achievements, logger: logger)
+        self.sync = sync
+        changeSignal.handler = { [weak sync] in sync?.localDataChanged() }
+        auth.onAccountChange = { [weak sync] account in sync?.accountDidChange(account) }
+        auth.beforeSignOut = { [weak sync] in await sync?.syncBeforeLeaving() }
         self.logger = logger
         self.supabase = supabase
     }
@@ -102,7 +125,8 @@ struct AppResources {
         let supabase = SupabaseClientProvider()
         let queue = AppLogQueue(fileURL: AppLogQueue.defaultFileURL())
         queue.uploader = SupabaseLogUploader(provider: supabase)
-        let resources = try AppResources(supabase: supabase, logger: queue)
+        let resources = try AppResources(supabase: supabase, logger: queue,
+                                         syncRemote: SupabaseSyncRemote(provider: supabase))
         queue.currentAccountID = { [weak auth = resources.auth] in auth?.account?.userID }
         return resources
     }
@@ -124,9 +148,12 @@ struct AppResources {
     static func uiTest(_ configuration: UITestLaunchConfiguration, now: Date = .now) throws -> AppResources {
         UserDefaults().removePersistentDomain(forName: UITestLaunchConfiguration.defaultsSuite)
         let defaults = UserDefaults(suiteName: UITestLaunchConfiguration.defaultsSuite)!
+        configuration.sync.seedState(into: UserDefaultsSyncStateRepository(defaults: defaults), now: now)
+        let remote = configuration.sync.makeRemote(now: now)
         let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
                                          defaults: defaults, now: now,
-                                         authBackend: configuration.auth.makeBackend())
+                                         authBackend: configuration.auth.makeBackend(), syncRemote: remote)
+        resources.sync.onCycleSucceeded = { remote.armScriptedChanges() }
         try configuration.fixture.seed(into: resources.container.mainContext, now: now)
         return resources
     }

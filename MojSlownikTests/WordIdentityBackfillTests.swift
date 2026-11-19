@@ -104,6 +104,28 @@ final class WordIdentityBackfillTests: XCTestCase {
         XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<Word>()).count, 2)
     }
 
+    func testReKeyedDuplicateGetsServerUpdatedAtNilAndRollbackRestoresIt() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let shared = UUID()
+        for (polish, offset) in [("a", 0.0), ("b", 10.0)] {
+            let word = Word(russian: "в", polish: polish, sourceLanguage: .polish,
+                            createdAt: t0.addingTimeInterval(offset))
+            word.uuid = shared
+            word.serverUpdatedAt = word.lastModifiedAt
+            context.insert(word)
+        }
+        try context.save()
+
+        XCTAssertEqual(try WordIdentityBackfill.assignMissing(in: context, rollbackOnFailure: false), 1)
+        let words = try context.fetch(FetchDescriptor<Word>())
+        let kept = try XCTUnwrap(words.first { $0.polish == "a" })
+        let rekeyed = try XCTUnwrap(words.first { $0.polish == "b" })
+        XCTAssertEqual(kept.serverUpdatedAt, kept.lastModifiedAt, "the keeper stays synced")
+        XCTAssertNil(rekeyed.serverUpdatedAt, "a fresh identity was never synced")
+        XCTAssertTrue(rekeyed.isSyncDirty)
+    }
+
     private func makeContainer() throws -> ModelContainer {
         try ModelContainer(for: Word.self, WordFolder.self,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))

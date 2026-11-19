@@ -28,6 +28,11 @@ enum LogEvent: String, CaseIterable, Codable, Sendable {
     case authFailed = "auth.failed"
     case storageFailed = "storage.failed"
     case translationFailed = "translation.failed"
+    case syncCompleted = "sync.completed"
+    case syncFailed = "sync.failed"
+    case syncRowsSkipped = "sync.rows_skipped"
+    case syncLinked = "sync.linked"
+    case syncAccountMismatch = "sync.account_mismatch"
 
     /// Same pattern as the CHECK constraint on public.app_logs.event.
     static let serverPattern = #"^[a-z][a-z0-9_]{0,31}(\.[a-z][a-z0-9_]{0,31}){1,2}$"#
@@ -35,6 +40,7 @@ enum LogEvent: String, CaseIterable, Codable, Sendable {
 
 enum LogKey: String, CaseIterable, Sendable {
     case source, language, category, mode, correct, grade, provider, achievement, operation, count
+    case trigger, pulled, pushed, skipped, reason, relink
     case inFolder = "in_folder"
     case included
     case targetLanguage = "target_language"

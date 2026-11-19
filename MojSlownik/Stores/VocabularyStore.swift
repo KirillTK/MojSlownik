@@ -8,14 +8,19 @@ final class VocabularyStore {
     @ObservationIgnored private let repository: any VocabularyRepository
     @ObservationIgnored private let logger: any AppLogging
 
-    init(repository: any VocabularyRepository, logger: (any AppLogging)? = nil) {
+    @ObservationIgnored private let changeSignal: LocalChangeSignal?
+
+    init(repository: any VocabularyRepository, logger: (any AppLogging)? = nil,
+         changeSignal: LocalChangeSignal? = nil) {
         let logger = logger ?? NoopAppLogger()
+        self.changeSignal = changeSignal
         self.repository = LoggingVocabularyRepository(repository, logger: logger)
         self.logger = logger
     }
 
     func add(source: String, translation: String, category: WordCategory? = nil, folderID: UUID? = nil) throws {
         try repository.addWord(source: source, translation: translation, category: category, folderID: folderID)
+        changeSignal?.notify()
         logger.log(.wordAdded, addedProperties(source: source, category: category, folderID: folderID, via: "manual"))
     }
 
@@ -24,6 +29,7 @@ final class VocabularyStore {
                        folderID: UUID? = nil) throws -> Bool {
         let added = try repository.toggleScannedWord(source: source, translation: translation,
                                              category: category, folderID: folderID)
+        changeSignal?.notify()
         if added {
             logger.log(.wordAdded, addedProperties(source: source, category: category, folderID: folderID, via: "scan"))
         } else {
@@ -34,26 +40,31 @@ final class VocabularyStore {
 
     func changeCategory(_ category: WordCategory, source: String, translation: String) throws {
         try repository.changeCategory(category, source: source, translation: translation)
+        changeSignal?.notify()
         logger.log(.wordCategoryChanged, [.category: .name(category.stableID)])
     }
 
     func setCategory(_ category: WordCategory, for word: Word) throws {
         try repository.setCategory(category, wordID: identity(of: word))
+        changeSignal?.notify()
         logger.log(.wordCategoryChanged, [.category: .name(category.stableID)])
     }
 
     func deleteWord(_ word: Word) throws {
         try repository.deleteWord(id: identity(of: word))
+        changeSignal?.notify()
         logger.log(.wordDeleted)
     }
 
     func setMembership(of word: Word, folderID: UUID, included: Bool) throws {
         try repository.setMembership(wordID: identity(of: word), folderID: folderID, included: included)
+        changeSignal?.notify()
         logger.log(.wordFoldersChanged, [.included: .bool(included)])
     }
 
     func removeFromAllFolders(_ word: Word) throws {
         try repository.removeFromAllFolders(wordID: identity(of: word))
+        changeSignal?.notify()
         logger.log(.wordFoldersChanged, [.included: .bool(false)])
     }
 
