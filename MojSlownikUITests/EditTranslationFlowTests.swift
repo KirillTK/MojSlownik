@@ -8,8 +8,12 @@ final class EditTranslationFlowTests: E2ETestCase {
 
         let chip = element("scanWordChip-собака-0")
         waitForEnabled(chip)
-        chip.press(forDuration: 1.0)
         let edit = element("scanEditWordButton")
+        // On a slow CI runner a long press can end before the context menu opens; press again.
+        for _ in 0..<3 where !edit.exists {
+            chip.press(forDuration: 1.5)
+            if edit.waitForExistence(timeout: 5) { break }
+        }
         waitForHittable(edit)
         edit.tap()
 
