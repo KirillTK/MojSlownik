@@ -22,11 +22,10 @@ final class SoftDeleteExclusionTests: XCTestCase {
     func testFolderStoreWordsExcludesTombstones() {
         let folderID = UUID()
         let active = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
-        active.folderIDs = [folderID]
         let deleted = tombstone()
-        deleted.folderIDs = [folderID]
-        XCTAssertEqual(FolderStore.words([active, deleted], in: nil).map(\.polish), ["kawa"])
-        XCTAssertEqual(FolderStore.words([active, deleted], in: folderID).map(\.polish), ["kawa"])
+        let index = MembershipIndex.linking([active, deleted], to: folderID)
+        XCTAssertEqual(FolderStore.words([active, deleted], in: nil, memberships: index).map(\.polish), ["kawa"])
+        XCTAssertEqual(FolderStore.words([active, deleted], in: folderID, memberships: index).map(\.polish), ["kawa"])
     }
 
     func testAchievementMetricsIgnoreTombstones() {
@@ -100,10 +99,10 @@ final class SoftDeleteExclusionTests: XCTestCase {
         XCTAssertEqual(rows.count, 2)
         let old = try XCTUnwrap(rows.first { !$0.isActive })
         let fresh = try XCTUnwrap(rows.first { $0.isActive })
-        XCTAssertEqual(fresh.folderIDs, [folder.id])
+        XCTAssertEqual(try memberFolders(fresh, container), [folder.id])
         XCTAssertNotEqual(fresh.uuid, deletedUUID)
         XCTAssertEqual(old.uuid, deletedUUID)
-        XCTAssertTrue(old.folderIDs.isEmpty)
+        XCTAssertTrue(try memberFolders(old, container).isEmpty)
         XCTAssertEqual(old.repetitions, 5)
         XCTAssertEqual(old.deletedAt, now.addingTimeInterval(10))
     }

@@ -9,6 +9,8 @@ struct QuizView: View {
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
     private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var questions: [QuizQuestion] = []
@@ -57,7 +59,7 @@ struct QuizView: View {
     }
 
     private func startQuiz() {
-        let words = FolderStore.words(allWords, in: folderID)
+        let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard questions.isEmpty, words.count >= 4 else { return }
         questions = QuizQuestion.generate(from: words, count: 10)
         quizStarted = true

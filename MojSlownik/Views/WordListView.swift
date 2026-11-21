@@ -5,6 +5,9 @@ struct WordListView: View {
     @Query(sort: \Word.createdAt, order: .reverse) private var storedWords: [Word]
     private var words: [Word] { WorkspaceScope.words(storedWords, workspaceID: workspaces.activeID) }
 
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
+
     @Environment(WorkspaceStore.self) private var workspaces
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @Environment(VocabularyStore.self) private var vocabulary
@@ -25,7 +28,7 @@ struct WordListView: View {
 
     private var filteredWords: [Word] {
         let query = searchText.lowercased()
-        return FolderStore.words(words, in: selectedFolderID).filter { word in
+        return FolderStore.words(words, in: selectedFolderID, memberships: memberships).filter { word in
             (selectedCategory == nil || word.category == selectedCategory)
                 && (query.isEmpty || word.russian.lowercased().contains(query)
                     || word.polish.lowercased().contains(query))
@@ -58,8 +61,9 @@ struct WordListView: View {
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                             }
+                            let index = memberships
                             ForEach(filteredWords) { word in
-                                WordRow(word: word)
+                                WordRow(word: word, folderIDs: word.uuid.map { index.folderIDs(of: $0) } ?? [])
                                     .listRowBackground(Color.clear)
                                     .listRowInsets(EdgeInsets(top: AppSpacing.xs, leading: AppSpacing.l, bottom: AppSpacing.xs, trailing: AppSpacing.l))
                                     .listRowSeparatorTint(Color.appBorder)
@@ -190,9 +194,10 @@ struct WordListView: View {
                     .frame(width: 1, height: 24)
                     .padding(.horizontal, 4)
                     .accessibilityHidden(true)
-                categoryFilter(nil, title: "Все темы", count: FolderStore.words(words, in: selectedFolderID).count)
+                categoryFilter(nil, title: "Все темы", count: FolderStore.words(words, in: selectedFolderID, memberships: memberships).count)
+                let inFolder = FolderStore.words(words, in: selectedFolderID, memberships: memberships)
                 ForEach(WordCategory.allCases) { category in
-                    let count = FolderStore.words(words, in: selectedFolderID).filter { $0.category == category }.count
+                    let count = inFolder.filter { $0.category == category }.count
                     if count > 0 || selectedCategory == category {
                         categoryFilter(category, title: category.rawValue, count: count)
                     }
@@ -274,6 +279,7 @@ extension EmptyStateView where Actions == EmptyView {
 
 private struct WordRow: View {
     let word: Word
+    let folderIDs: Set<UUID>
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @Environment(VocabularyStore.self) private var vocabulary
@@ -375,7 +381,7 @@ private struct WordRow: View {
     private var folderMenu: some View {
         if !folderLibrary.options.isEmpty {
             Menu {
-                if !word.folderIDs.isEmpty {
+                if !folderIDs.isEmpty {
                     Button(role: .destructive) {
                         do {
                             try vocabulary.removeFromAllFolders(word)
@@ -385,7 +391,7 @@ private struct WordRow: View {
                     }
                 }
                 ForEach(folderLibrary.options) { folder in
-                    let included = word.folderIDs.contains(folder.id)
+                    let included = folderIDs.contains(folder.id)
                     Button {
                         do {
                             try vocabulary.setMembership(of: word, folderID: folder.id, included: !included)
@@ -395,7 +401,7 @@ private struct WordRow: View {
                     }
                 }
             } label: {
-                Image(systemName: word.folderIDs.isEmpty ? "folder.badge.plus" : "folder")
+                Image(systemName: folderIDs.isEmpty ? "folder.badge.plus" : "folder")
                     .font(.body)
                     .fontWeight(.medium)
                     .foregroundStyle(Color.appInk)

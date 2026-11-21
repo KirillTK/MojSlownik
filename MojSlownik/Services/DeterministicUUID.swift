@@ -25,3 +25,12 @@ enum WorkspaceID {
     /// pl ← ru: where every word and folder created before workspaces lives.
     static let legacy = make(term: "pl", translation: "ru")
 }
+
+/// Local identity of a word <-> folder membership (client-only; the server keys by word and folder).
+enum MembershipID {
+    static let namespace = UUID(uuidString: "4E7EF163-A08F-4BF2-90BD-ABFDF88826C2")!
+
+    static func make(wordID: UUID, folderID: UUID) -> UUID {
+        UUID.v5(namespace: namespace, name: "\(wordID.uuidString.lowercased())/\(folderID.uuidString.lowercased())")
+    }
+}

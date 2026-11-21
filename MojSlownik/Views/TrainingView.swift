@@ -9,6 +9,8 @@ struct TrainingView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var storedAllWords: [Word]
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
     private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
     @State private var selectedFolderID: UUID?
     @State private var refreshDate = Date.now
@@ -16,7 +18,7 @@ struct TrainingView: View {
     @ScaledMetric(relativeTo: .body) private var modeTile: CGFloat = 36
     @ScaledMetric(relativeTo: .body) private var achievementTile: CGFloat = 40
 
-    private var words: [Word] { FolderStore.words(allWords, in: selectedFolderID) }
+    private var words: [Word] { FolderStore.words(allWords, in: selectedFolderID, memberships: memberships) }
 
     var body: some View {
         NavigationStack {

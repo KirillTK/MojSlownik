@@ -199,4 +199,82 @@ final class WorkspaceBackfillTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: WorkspaceBackfill.markerKey))
         XCTAssertEqual(try workspaces().count, 1)
     }
+
+    // MARK: Legacy memberships (phase 2)
+
+    func testLegacyFolderIDsMigrateOnceAndLeaveTheArrayAndWordsUntouched() throws {
+        let context = ModelContext(container)
+        let live = WordFolder(name: "Живая")
+        let dead = WordFolder(name: "Удалённая")
+        dead.markDeleted(now: t0)
+        let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let dangling = UUID()
+        word.folderIDs = [live.id, live.id, dead.id, dangling]
+        let noUUID = Word(russian: "н", polish: "n", sourceLanguage: .polish, createdAt: t0)
+        noUUID.uuid = nil
+        noUUID.folderIDs = [live.id]
+        for model in [live, dead] as [any PersistentModel] { context.insert(model) }
+        context.insert(word)
+        context.insert(noUUID)
+        try context.save()
+
+        XCTAssertTrue(backfill())
+
+        let check = ModelContext(container)
+        let memberships = try check.fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertEqual(memberships.count, 1, "deduplicated; deleted and dangling folders are not migrated")
+        XCTAssertEqual(memberships[0].folderID, live.id)
+        XCTAssertEqual(memberships[0].id, MembershipID.make(wordID: try XCTUnwrap(word.uuid), folderID: live.id))
+        XCTAssertEqual(memberships[0].workspaceID, WorkspaceID.legacy)
+        XCTAssertEqual(memberships[0].createdAt, word.lastModifiedAt)
+        XCTAssertNil(memberships[0].serverUpdatedAt)
+        let words = try check.fetch(FetchDescriptor<Word>())
+        let saved = try XCTUnwrap(words.first { $0.polish == "w" })
+        XCTAssertEqual(saved.folderIDs, [live.id, live.id, dead.id, dangling], "the legacy array is never edited")
+        XCTAssertEqual(saved.updatedAt, t0, "word updatedAt untouched")
+        XCTAssertTrue(saved.legacyFolderIDsMigrated)
+        XCTAssertFalse(try XCTUnwrap(words.first { $0.polish == "n" }).legacyFolderIDsMigrated,
+                       "a word without a uuid waits for WordIdentityBackfill")
+
+        XCTAssertTrue(backfill())
+        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<FolderMembership>()).count, 1,
+                       "a second run creates nothing")
+    }
+
+    func testMembershipsCreatedAfterTheMigrationAreNeverRecreatedFromTheArray() throws {
+        let context = ModelContext(container)
+        let folder = WordFolder(name: "Урок")
+        let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        word.folderIDs = [folder.id]
+        context.insert(folder)
+        context.insert(word)
+        try context.save()
+        XCTAssertTrue(backfill())
+        let edit = ModelContext(container)
+        try XCTUnwrap(edit.fetch(FetchDescriptor<FolderMembership>()).first).markDeleted(now: now)
+        try edit.save()
+
+        XCTAssertTrue(backfill())
+
+        let rows = try ModelContext(container).fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows[0].deletedAt, "the user's removal is not undone by the legacy array")
+    }
+
+    func testDuplicateMembershipRowsKeepTheLatestModified() throws {
+        let context = ModelContext(container)
+        let word = UUID(), folder = UUID()
+        let older = FolderMembership(wordID: word, folderID: folder, workspaceID: WorkspaceID.legacy, createdAt: t0)
+        let newer = FolderMembership(wordID: word, folderID: folder, workspaceID: WorkspaceID.legacy,
+                                     createdAt: t0.addingTimeInterval(50))
+        context.insert(older)
+        context.insert(newer)
+        try context.save()
+
+        XCTAssertTrue(backfill())
+
+        let rows = try ModelContext(container).fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].createdAt, t0.addingTimeInterval(50))
+    }
 }

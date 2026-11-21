@@ -22,7 +22,12 @@ final class SyncEngineTests: XCTestCase {
         suite = "SyncEngineTests.\(UUID().uuidString)"
         state = UserDefaultsSyncStateRepository(defaults: UserDefaults(suiteName: suite)!)
         engine = makeEngine(container: container, state: state)
+        // The pl ← ru workspace every test row lives in: synced on this device and on the server.
+        try Kit.insertWorkspace(container, syncedAt: workspaceStamp)
+        remote.seed(workspaces: [Kit.remoteWorkspace(updatedAt: workspaceStamp)])
     }
+
+    private let workspaceStamp = SyncTestKit.t0.addingTimeInterval(-9_000)
 
     override func tearDown() {
         UserDefaults().removePersistentDomain(forName: suite)
@@ -45,7 +50,7 @@ final class SyncEngineTests: XCTestCase {
 
     // MARK: First link and push
 
-    func testFirstLinkUploadsEveryWordAndFolderWithTheWireMapping() async throws {
+    func testFirstLinkUploadsEveryRowWithTheV2WireMapping() async throws {
         let folder = try Kit.insertFolder(container, name: " Урок ")
         let word = try Kit.insertWord(container, russian: "кот ", polish: " kot", source: .russian,
                                       category: .nature, folders: [folder])
@@ -54,27 +59,30 @@ final class SyncEngineTests: XCTestCase {
         try engine.link(to: owner)
         let report = try await engine.run(ownerID: owner)
 
-        XCTAssertEqual(report.pushed, 3)
-        XCTAssertEqual(remote.callLog, ["fetchFolders", "fetchWords", "upsertFolders", "upsertWords"],
-                       "pull folders, pull words, push folders, push words")
+        XCTAssertEqual(report.pushed, 4, "folder, two words and the membership (the workspace is on the server)")
+        XCTAssertEqual(remote.callLog, ["fetchWorkspaces", "fetchFolders", "fetchWords", "fetchMemberships",
+                                        "upsertFolders", "upsertWords", "upsertMemberships"],
+                       "pull workspaces, folders, words, memberships; push in the same order")
         let row = try XCTUnwrap(remote.word(id: word, userID: owner))
         XCTAssertEqual(row.term, "kot")
-        XCTAssertEqual(row.termLanguage, "pl")
         XCTAssertEqual(row.translation, "кот")
-        XCTAssertEqual(row.translationLanguage, "ru")
-        XCTAssertEqual(row.enteredLanguage, "ru")
+        XCTAssertEqual(row.workspaceID, WorkspaceID.legacy)
+        XCTAssertEqual(row.enteredSide, "translation")
         XCTAssertEqual(row.category, "nature")
-        XCTAssertEqual(row.folderIDs, [folder])
         XCTAssertNil(row.deletedAt)
-        XCTAssertEqual(try XCTUnwrap(remote.word(id: other, userID: owner)).enteredLanguage, "pl")
-        XCTAssertEqual(try XCTUnwrap(remote.folder(id: folder, userID: owner)).name, "Урок")
+        XCTAssertEqual(try XCTUnwrap(remote.word(id: other, userID: owner)).enteredSide, "term")
+        let serverFolder = try XCTUnwrap(remote.folder(id: folder, userID: owner))
+        XCTAssertEqual(serverFolder.name, "Урок")
+        XCTAssertEqual(serverFolder.workspaceID, WorkspaceID.legacy)
+        let membership = try XCTUnwrap(remote.membership(wordID: word, folderID: folder, userID: owner))
+        XCTAssertNil(membership.deletedAt)
         for local in try Kit.words(container) {
             XCTAssertFalse(local.isSyncDirty)
             XCTAssertEqual(local.serverUpdatedAt, remote.word(id: try XCTUnwrap(local.uuid), userID: owner)?.updatedAt)
         }
         XCTAssertFalse(try XCTUnwrap(Kit.folders(container).first).isSyncDirty)
+        XCTAssertFalse(try XCTUnwrap(Kit.memberships(container).first).isSyncDirty)
         XCTAssertEqual(state.load().lastSyncedAt, t0)
-        XCTAssertFalse(report.vocabularyChanged)
     }
 
     func testTombstoneWhoseEarlierAckWasLostIsUploadedNextCycle() async throws {
@@ -110,25 +118,28 @@ final class SyncEngineTests: XCTestCase {
 
     // MARK: Pull
 
-    func testPullInsertsRemoteFoldersAndWords() async throws {
+    func testPullInsertsRemoteFoldersWordsAndMemberships() async throws {
         let folder = UUID()
-        let unknown = UUID()
-        remote.seed(words: [Kit.remoteWord(term: "most", translation: "мост", folders: [folder, unknown],
+        let word = UUID()
+        remote.seed(words: [Kit.remoteWord(id: word, term: "most", translation: "мост",
                                            updatedAt: t0.addingTimeInterval(-60))],
-                    folders: [Kit.remoteFolder(id: folder, name: "Из облака", updatedAt: t0.addingTimeInterval(-60))])
+                    folders: [Kit.remoteFolder(id: folder, name: "Из облака", updatedAt: t0.addingTimeInterval(-60))],
+                    memberships: [Kit.remoteMembership(wordID: word, folderID: folder,
+                                                       updatedAt: t0.addingTimeInterval(-60))])
         try engine.link(to: owner)
 
         let report = try await engine.run(ownerID: owner)
 
         XCTAssertTrue(report.foldersChanged)
+        XCTAssertTrue(report.membershipsChanged)
         XCTAssertTrue(report.vocabularyChanged)
-        XCTAssertEqual(report.pulled, 2)
         XCTAssertEqual(try Kit.folders(container).map(\.name), ["Из облака"])
-        let word = try XCTUnwrap(Kit.words(container).first)
-        XCTAssertEqual(word.polish, "most")
-        XCTAssertEqual(word.russian, "мост")
-        XCTAssertEqual(word.folderIDs, [folder, unknown], "ids of folders not on the device are kept (unknown ids)")
+        let local = try XCTUnwrap(Kit.words(container).first)
+        XCTAssertEqual(local.polish, "most")
+        XCTAssertEqual(local.russian, "мост")
+        XCTAssertEqual(try Kit.folderIDs(container, of: word), [folder])
         XCTAssertTrue(remote.upsertedWordBatches.isEmpty, "pulled rows are clean")
+        XCTAssertTrue(remote.upsertedMembershipBatches.isEmpty)
     }
 
     func testSecondCycleRequestsOverlappingCursorForTheOwnerAndChangesNothing() async throws {
@@ -142,13 +153,13 @@ final class SyncEngineTests: XCTestCase {
         let wordsCursor = try XCTUnwrap(saved.wordsCursor)
         let foldersCursor = try XCTUnwrap(saved.foldersCursor)
         XCTAssertEqual(wordsCursor.updatedAtMillis, Int64(((t0.timeIntervalSince1970 - 50) * 1000).rounded()))
-        XCTAssertEqual(remote.requestedCursors.count, 2)
+        XCTAssertEqual(remote.requestedCursors.count, 4, "workspaces, folders, words, memberships")
         XCTAssertNil(remote.requestedCursors[0])
 
         let report = try await engine.run(ownerID: owner)
 
-        XCTAssertEqual(remote.requestedCursors[2], foldersCursor.overlapping(by: 60_000))
-        XCTAssertEqual(remote.requestedCursors[3], wordsCursor.overlapping(by: 60_000))
+        XCTAssertEqual(remote.requestedCursors[5], foldersCursor.overlapping(by: 60_000))
+        XCTAssertEqual(remote.requestedCursors[6], wordsCursor.overlapping(by: 60_000))
         XCTAssertEqual(Set(remote.requestedOwners), [owner])
         XCTAssertEqual(report.pulled, 0, "re-fetched rows are echoes")
         XCTAssertFalse(report.vocabularyChanged)
@@ -163,7 +174,7 @@ final class SyncEngineTests: XCTestCase {
 
         let report = try await engine.run(ownerID: owner)
 
-        XCTAssertEqual(report.pulled, 1_200)
+        XCTAssertEqual(report.pulled, 1_201, "1 200 words plus the linked workspace taking the account's version")
         XCTAssertEqual(try Kit.words(container).count, 1_200)
         XCTAssertEqual(remote.callLog.filter { $0 == "fetchWords" }.count, 3, "500 + 500 + 200")
         XCTAssertEqual(remote.requestedCursors.compactMap { $0 }.count, 2, "pages 2 and 3 continue from the last row")
@@ -326,15 +337,16 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(pulled.russian, "первая\nвторая")
     }
 
-    func testRemotePairInRussianTermOrderMapsToTheRightSides() async throws {
-        remote.seed(words: [Kit.remoteWord(term: "кот", translation: "kot", termLanguage: "ru",
-                                           translationLanguage: "pl", entered: "pl", updatedAt: t0.addingTimeInterval(-60))])
+    func testRemoteEnteredSideMapsToTheSourceLanguageCode() async throws {
+        remote.seed(words: [Kit.remoteWord(term: "kot", translation: "кот", entered: "term",
+                                           updatedAt: t0.addingTimeInterval(-60))])
         try engine.link(to: owner)
         _ = try await engine.run(ownerID: owner)
         let word = try XCTUnwrap(Kit.words(container).first)
         XCTAssertEqual(word.russian, "кот")
         XCTAssertEqual(word.polish, "kot")
-        XCTAssertEqual(word.sourceLanguageCode, "pl")
+        XCTAssertEqual(word.sourceLanguageCode, "pl", "entered_side term = the term language")
+        XCTAssertEqual(word.workspaceID, WorkspaceID.legacy)
     }
 
     // MARK: Validation and untrusted rows
@@ -428,7 +440,7 @@ final class SyncEngineTests: XCTestCase {
 
         remote.onCall = nil
         _ = try await engine.run(ownerID: owner)
-        XCTAssertEqual(remote.requestedCursors.compactMap { $0 }.first, saved.overlapping(by: 60_000),
+        XCTAssertEqual(remote.requestedCursors.compactMap { $0 }.last, saved.overlapping(by: 60_000),
                        "the next cycle resumes from the page-1 cursor")
         XCTAssertEqual(try Kit.words(container).count, 600)
     }
@@ -476,7 +488,7 @@ final class SyncEngineTests: XCTestCase {
         let calls = remote.callCount
         let again = try await engine.run(ownerID: owner)
         XCTAssertEqual(again.skipped, ["server_rejected": 1])
-        XCTAssertEqual(remote.callCount - calls, 2, "only the two pulls: the rejected row is not re-sent")
+        XCTAssertEqual(remote.callCount - calls, 4, "only the four pulls: the rejected row is not re-sent")
 
         remote.rejectWhere = nil
         try Kit.edit(container, bad, at: t0.addingTimeInterval(5)) { $0.polish = "bad" }
@@ -498,14 +510,14 @@ final class SyncEngineTests: XCTestCase {
 
     func testCapabilityBumpClearsCursorsAndHeldIDs() async throws {
         let cursor = SyncCursor(updatedAtMillis: 1_799_999_000_000, id: UUID())
-        try state.save(SyncState(linkedAccountID: owner, capabilityVersion: 0, foldersCursor: cursor,
-                                 wordsCursor: cursor, heldIDs: [UUID()]))
+        try state.save(SyncState(linkedAccountID: owner, capabilityVersion: 1, workspacesCursor: cursor,
+                                 foldersCursor: cursor, wordsCursor: cursor, membershipsCursor: cursor,
+                                 heldIDs: [UUID()]))
 
         _ = try await engine.run(ownerID: owner)
 
-        XCTAssertEqual(remote.requestedCursors.count, 2)
-        XCTAssertNil(remote.requestedCursors[0])
-        XCTAssertNil(remote.requestedCursors[1])
+        XCTAssertEqual(remote.requestedCursors.count, 4)
+        XCTAssertTrue(remote.requestedCursors.allSatisfy { $0 == nil }, "all four cursors were cleared")
         XCTAssertEqual(state.load().capabilityVersion, SyncEngine.capabilityVersion)
         XCTAssertTrue(state.load().heldIDs.isEmpty)
     }
@@ -576,6 +588,7 @@ final class SyncEngineTests: XCTestCase {
     }
 
     func testNothingPulledDoesNotFireTheCallback() async throws {
+        remote.server.workspaces = [:]  // the setUp workspace would be a pulled (echo) row
         try engine.link(to: owner)
         var fired = 0
         engine.willApplyPulledRows = { fired += 1 }
@@ -583,32 +596,34 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(fired, 0)
     }
 
-    /// Like a local FolderStore.delete: active words lose the membership and become dirty.
-    func testPulledFolderTombstoneStripsMembershipFromActiveWordsAndPushesIt() async throws {
+    /// Like a local FolderStore.delete: the folder's memberships are tombstoned (dirty, they push);
+    /// no word row changes.
+    func testPulledFolderTombstoneTombstonesMembershipsAndPushesThem() async throws {
         let synced = t0.addingTimeInterval(-3_000)
         let folder = try Kit.insertFolder(container, name: "Урок", syncedAt: synced)
+        let other = try Kit.insertFolder(container, name: "Другая", syncedAt: synced)
         let member = try Kit.insertWord(container, polish: "kot", folders: [folder], syncedAt: synced)
-        let gone = try Kit.insertWord(container, polish: "old", folders: [folder], syncedAt: synced,
-                                      deletedAt: synced)
-        let other = UUID()
         let outsider = try Kit.insertWord(container, polish: "dom", folders: [other], syncedAt: synced)
         try linked()
-        remote.seed(words: [Kit.remoteWord(id: member, term: "kot", folders: [folder], updatedAt: synced),
-                            Kit.remoteWord(id: outsider, term: "dom", folders: [other], updatedAt: synced)],
+        remote.seed(words: [Kit.remoteWord(id: member, term: "kot", updatedAt: synced),
+                            Kit.remoteWord(id: outsider, term: "dom", updatedAt: synced)],
                     folders: [Kit.remoteFolder(id: folder, name: "Урок", updatedAt: t0.addingTimeInterval(-60),
-                                               deletedAt: t0.addingTimeInterval(-60))])
+                                               deletedAt: t0.addingTimeInterval(-60)),
+                              Kit.remoteFolder(id: other, name: "Другая", updatedAt: synced)],
+                    memberships: [Kit.remoteMembership(wordID: member, folderID: folder, updatedAt: synced),
+                                  Kit.remoteMembership(wordID: outsider, folderID: other, updatedAt: synced)])
         serverNow = t0
 
         _ = try await engine.run(ownerID: owner)
 
         XCTAssertNotNil(try Kit.folders(container).first { $0.id == folder }?.deletedAt)
-        XCTAssertEqual(try Kit.word(container, member)?.folderIDs, [], "active member lost the folder")
-        XCTAssertEqual(remote.word(id: member, userID: owner)?.folderIDs, [], "and the change is pushed")
-        XCTAssertEqual(try Kit.word(container, gone)?.folderIDs, [], "tombstones are stripped like FolderStore.delete")
-        XCTAssertEqual(try Kit.word(container, gone)?.updatedAt, synced, "but keep their deletion-time updatedAt")
-        XCTAssertEqual(try Kit.word(container, outsider)?.folderIDs, [other], "other words are untouched")
-        XCTAssertEqual(try Kit.words(container).count, 3)
-        XCTAssertTrue(try Kit.words(container).filter(\.isActive).allSatisfy { !$0.isSyncDirty })
+        XCTAssertTrue(try Kit.folderIDs(container, of: member).isEmpty, "active member lost the folder")
+        XCTAssertNotNil(remote.membership(wordID: member, folderID: folder, userID: owner)?.deletedAt,
+                        "and the change is pushed")
+        XCTAssertEqual(try Kit.folderIDs(container, of: outsider), [other], "other words are untouched")
+        XCTAssertEqual(try Kit.words(container).count, 2)
+        XCTAssertTrue(try Kit.words(container).allSatisfy { $0.isActive && !$0.isSyncDirty }, "words are untouched")
+        XCTAssertTrue(try Kit.memberships(container).allSatisfy { !$0.isSyncDirty })
     }
 
     // MARK: Sentinel edited after the link
@@ -666,9 +681,11 @@ final class SyncEngineTests: XCTestCase {
         let local = try Kit.insertWord(container, russian: "кот", polish: "kot", folders: [localFolder])
         let remoteFolderID = UUID()
         let remoteID = UUID()
-        remote.seed(words: [Kit.remoteWord(id: remoteID, term: "KOT ", translation: " Кот", folders: [remoteFolderID],
+        remote.seed(words: [Kit.remoteWord(id: remoteID, term: "KOT ", translation: " Кот",
                                            updatedAt: t0.addingTimeInterval(-60), repetitions: 6)],
-                    folders: [Kit.remoteFolder(id: remoteFolderID, name: "Облако", updatedAt: t0.addingTimeInterval(-60))])
+                    folders: [Kit.remoteFolder(id: remoteFolderID, name: "Облако", updatedAt: t0.addingTimeInterval(-60))],
+                    memberships: [Kit.remoteMembership(wordID: remoteID, folderID: remoteFolderID,
+                                                       updatedAt: t0.addingTimeInterval(-60))])
         try engine.link(to: owner)
 
         _ = try await engine.run(ownerID: owner)
@@ -679,10 +696,12 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(adopted.uuid, remoteID)
         XCTAssertNotEqual(adopted.uuid, local)
         XCTAssertEqual(adopted.repetitions, 6, "the server progress is adopted")
-        XCTAssertEqual(adopted.folderIDs, [remoteFolderID, localFolder], "remote first, then local memberships")
-        XCTAssertEqual(remote.word(id: remoteID, userID: owner)?.folderIDs, [remoteFolderID, localFolder],
-                       "the union is pushed")
+        XCTAssertEqual(try Kit.folderIDs(container, of: remoteID), [remoteFolderID, localFolder],
+                       "remote memberships plus the re-keyed local one")
+        XCTAssertNotNil(remote.membership(wordID: remoteID, folderID: localFolder, userID: owner),
+                        "the re-keyed membership is pushed")
         XCTAssertFalse(adopted.isSyncDirty)
+        XCTAssertTrue(try Kit.memberships(container).allSatisfy { $0.wordID == remoteID })
     }
 
     func testPairAdoptionAlsoAppliesToSentinelRows() async throws {
@@ -712,10 +731,248 @@ final class SyncEngineTests: XCTestCase {
         let folders = try Kit.folders(container)
         XCTAssertEqual(folders.map(\.id), [remoteFolderID], "one folder, with the server id")
         XCTAssertEqual(folders.first?.name, "урок")
-        XCTAssertEqual(try Kit.word(container, member)?.folderIDs, [remoteFolderID])
-        XCTAssertEqual(remote.word(id: member, userID: owner)?.folderIDs, [remoteFolderID],
-                       "the rewritten membership is pushed")
+        XCTAssertEqual(try Kit.folderIDs(container, of: member), [remoteFolderID])
+        XCTAssertNotNil(remote.membership(wordID: member, folderID: remoteFolderID, userID: owner),
+                        "the rewritten membership is pushed")
+        XCTAssertNil(remote.membership(wordID: member, folderID: localFolder, userID: owner))
         XCTAssertTrue(try Kit.words(container).allSatisfy { !$0.isSyncDirty })
+    }
+
+    // MARK: Workspaces on the wire (v2)
+
+    /// F1: a workspace deleted on another device still has words, a folder and memberships on the
+    /// server. A newly linked device stores the tombstone and the rows (hidden), holds nothing, and
+    /// re-adding the pair brings everything back and pushes the revival.
+    func testDeletedRemoteWorkspaceIsMaterializedAndItsRowsAreStoredNotHeld() async throws {
+        let de = WorkspaceID.make(term: "de", translation: "ru")
+        let word = UUID(), folder = UUID()
+        let stamp = t0.addingTimeInterval(-60)
+        remote.seed(workspaces: [Kit.remoteWorkspace(term: "de", translation: "ru", sortOrder: 1, updatedAt: stamp,
+                                                     deletedAt: stamp)],
+                    words: [Kit.remoteWord(id: word, term: "Haus", translation: "дом", workspace: de,
+                                           entered: "term", updatedAt: stamp)],
+                    folders: [Kit.remoteFolder(id: folder, name: "Lektion", workspace: de, updatedAt: stamp)],
+                    memberships: [Kit.remoteMembership(wordID: word, folderID: folder, workspace: de,
+                                                       updatedAt: stamp)])
+        try engine.link(to: owner)
+
+        let report = try await engine.run(ownerID: owner)
+
+        XCTAssertTrue(report.skipped.isEmpty, "nothing skipped: \(report.skipped)")
+        XCTAssertTrue(state.load().heldIDs.isEmpty)
+        let workspaces = try Kit.workspaces(container)
+        let tombstone = try XCTUnwrap(workspaces.first { $0.id == de })
+        XCTAssertNotNil(tombstone.deletedAt)
+        XCTAssertFalse(tombstone.isSyncDirty, "a materialized tombstone is clean and never pushed")
+        XCTAssertEqual(try Kit.words(container).count, 1)
+        XCTAssertEqual(try Kit.words(container).first?.term, "Haus", "German keeps its case")
+        XCTAssertEqual(try Kit.folders(container).count, 1)
+        XCTAssertEqual(try Kit.folderIDs(container, of: word), [folder])
+        XCTAssertTrue(WorkspaceScope.words(try Kit.words(container), workspaceID: de).count == 1,
+                      "the words exist but the workspace is hidden: the scope is by workspace id")
+
+        // Re-adding the pair revives the tombstone (dirty) and the next cycle pushes the revival.
+        let context = ModelContext(container)
+        try WorkspaceCatalog.ensure(term: "de", translation: "ru", context: context, now: t0)
+        XCTAssertNil(try Kit.workspaces(container).first { $0.id == de }?.deletedAt)
+        serverNow = t0.addingTimeInterval(60)
+        _ = try await engine.run(ownerID: owner)
+        XCTAssertNil(remote.workspace(id: de, userID: owner)?.deletedAt, "the revival reached the server")
+        XCTAssertFalse(try XCTUnwrap(Kit.workspaces(container).first { $0.id == de }).isSyncDirty)
+    }
+
+    /// F1: membership tombstones whose word or folder is unknown are skipped without holding, so
+    /// held ids never accumulate; an active orphan is held by its MembershipID.
+    func testOrphanMembershipTombstonesAreSkippedNotHeldAndActiveOrphansAreHeld() async throws {
+        let stamp = t0.addingTimeInterval(-60)
+        let activeWord = UUID(), activeFolder = UUID()
+        remote.seed(memberships: [
+            Kit.remoteMembership(wordID: UUID(), folderID: UUID(), updatedAt: stamp, deletedAt: stamp),
+            Kit.remoteMembership(wordID: UUID(), folderID: UUID(), updatedAt: stamp, deletedAt: stamp),
+            Kit.remoteMembership(wordID: activeWord, folderID: activeFolder, updatedAt: stamp),
+        ])
+        try engine.link(to: owner)
+
+        var counts: [Int] = []
+        for cycle in 0..<3 {
+            serverNow = t0.addingTimeInterval(Double(cycle) * 60)
+            let report = try await engine.run(ownerID: owner)
+            counts.append(state.load().heldIDs.count)
+            if cycle == 0 {
+                XCTAssertEqual(report.skipped["orphan_tombstone"], 2)
+                XCTAssertEqual(report.skipped["unknown_reference"], 1)
+            }
+        }
+        XCTAssertEqual(counts, [1, 1, 1], "only the active orphan is held; tombstones never accumulate")
+        XCTAssertEqual(state.load().heldIDs, [MembershipID.make(wordID: activeWord, folderID: activeFolder)])
+        XCTAssertTrue(try Kit.memberships(container).isEmpty)
+    }
+
+    func testLocalWordDeleteTombstonesItsMembershipsAndTheyPush() async throws {
+        let synced = t0.addingTimeInterval(-3_000)
+        let folder = try Kit.insertFolder(container, syncedAt: synced)
+        let word = try Kit.insertWord(container, folders: [folder], syncedAt: synced)
+        remote.seed(words: [Kit.remoteWord(id: word, updatedAt: synced)],
+                    folders: [Kit.remoteFolder(id: folder, updatedAt: synced)],
+                    memberships: [Kit.remoteMembership(wordID: word, folderID: folder, updatedAt: synced)])
+        try linked()
+        let wordRow = try XCTUnwrap(ModelContext(container).fetch(FetchDescriptor<Word>()).first)
+        try ScanWordStore.delete(wordID: wordRow.persistentModelID, container: container, now: t0)
+        serverNow = t0.addingTimeInterval(10)
+
+        _ = try await engine.run(ownerID: owner)
+
+        XCTAssertNotNil(remote.word(id: word, userID: owner)?.deletedAt)
+        XCTAssertNotNil(remote.membership(wordID: word, folderID: folder, userID: owner)?.deletedAt)
+        XCTAssertEqual(try Kit.words(container).count, 1, "the word row stays (soft delete)")
+    }
+
+    func testOnWorkspacesPulledFiresOncePerCycleAfterTheWorkspacePull() async throws {
+        try engine.link(to: owner)
+        var fired = 0
+        var logAtFire: [String] = []
+        engine.onWorkspacesPulled = {
+            fired += 1
+            logAtFire = self.remote.callLog
+        }
+        _ = try await engine.run(ownerID: owner)
+        XCTAssertEqual(fired, 1)
+        XCTAssertEqual(logAtFire, ["fetchWorkspaces"], "after the workspace pull, before folders")
+        _ = try await engine.run(ownerID: owner)
+        XCTAssertEqual(fired, 2)
+    }
+
+    func testPersistKeepsAllFourCursorsWhenTheLinkIsUnchanged() async throws {
+        let stamp = t0.addingTimeInterval(-60)
+        let word = UUID(), folder = UUID()
+        remote.seed(words: [Kit.remoteWord(id: word, updatedAt: stamp)],
+                    folders: [Kit.remoteFolder(id: folder, updatedAt: stamp)],
+                    memberships: [Kit.remoteMembership(wordID: word, folderID: folder, updatedAt: stamp)])
+        try engine.link(to: owner)
+        _ = try await engine.run(ownerID: owner)
+        let saved = state.load()
+        XCTAssertNotNil(saved.workspacesCursor)
+        XCTAssertNotNil(saved.foldersCursor)
+        XCTAssertNotNil(saved.wordsCursor)
+        XCTAssertEqual(saved.membershipsCursor?.id, word)
+        XCTAssertEqual(saved.membershipsCursor?.secondaryID, folder, "memberships keep (word_id, folder_id)")
+        XCTAssertEqual(saved.capabilityVersion, 2)
+        XCTAssertEqual(SyncEngine.capabilityVersion, 2)
+        XCTAssertNotNil(saved.lastSyncedAt)
+    }
+
+    func testLaterComparesSecondaryIDWhenMillisAndIDAreEqual() {
+        let id = UUID()
+        let low = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
+        let high = UUID(uuidString: "00000000-0000-4000-8000-000000000002")!
+        let a = SyncCursor(updatedAtMillis: 10, id: id, secondaryID: low)
+        let b = SyncCursor(updatedAtMillis: 10, id: id, secondaryID: high)
+        XCTAssertEqual(SyncEngine.later(a, b), b)
+        XCTAssertEqual(SyncEngine.later(b, a), b, "never moves backwards")
+        XCTAssertEqual(SyncEngine.later(nil, a), a)
+        XCTAssertEqual(SyncEngine.later(SyncCursor(updatedAtMillis: 10, id: id), a), a, "nil sorts before any")
+        XCTAssertEqual(SyncEngine.later(a, SyncCursor(updatedAtMillis: 10, id: id)), a)
+        XCTAssertEqual(SyncEngine.later(a, SyncCursor(updatedAtMillis: 11, id: low)).updatedAtMillis, 11)
+    }
+
+    /// F10: a membership whose word was rejected, is held or not yet synced is kept dirty and sent
+    /// once the word is acknowledged.
+    func testMembershipWaitsForItsRejectedWordThenIsSent() async throws {
+        let folder = try Kit.insertFolder(container, syncedAt: t0.addingTimeInterval(-3_000))
+        remote.seed(folders: [Kit.remoteFolder(id: folder, updatedAt: t0.addingTimeInterval(-3_000))])
+        let bad = try Kit.insertWord(container, polish: "bad", folders: [folder])
+        try linked()
+        remote.rejectWhere = { $0.term == "bad" }
+
+        let first = try await engine.run(ownerID: owner)
+
+        XCTAssertEqual(first.skipped["server_rejected"], 1)
+        XCTAssertTrue(remote.upsertedMembershipBatches.isEmpty, "no membership is sent for a rejected word")
+        XCTAssertTrue(try XCTUnwrap(Kit.memberships(container).first).isSyncDirty, "it stays dirty")
+
+        remote.rejectWhere = nil
+        try Kit.edit(container, bad, at: t0.addingTimeInterval(5)) { $0.repetitions = 2 }
+        serverNow = t0.addingTimeInterval(30)
+        _ = try await engine.run(ownerID: owner)
+        XCTAssertNotNil(remote.word(id: bad, userID: owner), "the edited word is retried and acked")
+        XCTAssertNil(remote.membership(wordID: bad, folderID: folder, userID: owner),
+                     "a session-rejected id still blocks its memberships in the cycle that acks it")
+        // The rejected ids live for the session (like the rejected word versions): a relaunch clears them.
+        serverNow = t0.addingTimeInterval(60)
+        _ = try await makeEngine(container: container, state: state).run(ownerID: owner)
+
+        XCTAssertNotNil(remote.membership(wordID: bad, folderID: folder, userID: owner), "sent once the word is acked")
+        XCTAssertFalse(try XCTUnwrap(Kit.memberships(container).first).isSyncDirty)
+    }
+
+    func testHeldWordKeepsItsMembershipsLocal() async throws {
+        let held = UUID()
+        let folder = try Kit.insertFolder(container, syncedAt: t0.addingTimeInterval(-3_000))
+        remote.seed(folders: [Kit.remoteFolder(id: folder, updatedAt: t0.addingTimeInterval(-3_000))])
+        try Kit.insertWord(container, polish: "held", id: held, folders: [folder],
+                           syncedAt: t0.addingTimeInterval(-3_000))
+        try linked()
+        remote.seed(words: [Kit.remoteWord(id: held, term: "held", category: "future_cat",
+                                           updatedAt: t0.addingTimeInterval(-60))])
+
+        _ = try await engine.run(ownerID: owner)
+
+        XCTAssertEqual(state.load().heldIDs, [held])
+        XCTAssertTrue(remote.upsertedMembershipBatches.isEmpty)
+    }
+
+    /// A membership the server's foreign key rejects is isolated per row.
+    func testMembershipForeignKeyRejectionIsIsolatedPerRow() async throws {
+        let synced = t0.addingTimeInterval(-3_000)
+        let folder = try Kit.insertFolder(container, syncedAt: synced)
+        let onServer = try Kit.insertWord(container, polish: "here", syncedAt: synced)
+        let missing = try Kit.insertWord(container, polish: "gone", syncedAt: synced)
+        try Kit.insertMembership(container, wordID: onServer, folderID: folder)
+        try Kit.insertMembership(container, wordID: missing, folderID: folder)
+        remote.seed(words: [Kit.remoteWord(id: onServer, term: "here", updatedAt: synced)],
+                    folders: [Kit.remoteFolder(id: folder, updatedAt: synced)])
+        try linked()
+
+        let report = try await engine.run(ownerID: owner)
+
+        XCTAssertEqual(report.skipped["server_rejected"], 1)
+        XCTAssertNotNil(remote.membership(wordID: onServer, folderID: folder, userID: owner))
+        XCTAssertNil(remote.membership(wordID: missing, folderID: folder, userID: owner))
+        let rows = try Kit.memberships(container)
+        XCTAssertFalse(try XCTUnwrap(rows.first { $0.wordID == onServer }).isSyncDirty)
+        XCTAssertTrue(try XCTUnwrap(rows.first { $0.wordID == missing }).isSyncDirty)
+    }
+
+    /// F2: a German word validates and applies in phase 2 (not held), case kept.
+    func testGermanWorkspaceAndWordApplyWithoutBeingHeld() async throws {
+        let de = WorkspaceID.make(term: "de", translation: "ru")
+        let id = UUID()
+        remote.seed(workspaces: [Kit.remoteWorkspace(term: "de", translation: "ru", sortOrder: 1,
+                                                     updatedAt: t0.addingTimeInterval(-60))],
+                    words: [Kit.remoteWord(id: id, term: "Das Haus", translation: "Дом", workspace: de,
+                                           entered: "term", updatedAt: t0.addingTimeInterval(-50))])
+        try engine.link(to: owner)
+
+        let report = try await engine.run(ownerID: owner)
+
+        XCTAssertTrue(report.skipped.isEmpty)
+        XCTAssertTrue(state.load().heldIDs.isEmpty)
+        let word = try XCTUnwrap(Kit.word(container, id))
+        XCTAssertEqual(word.term, "Das Haus")
+        XCTAssertEqual(word.translation, "дом")
+        XCTAssertFalse(word.isSyncDirty, "never pushed back lowercased")
+        XCTAssertTrue(remote.upsertedWordBatches.isEmpty)
+    }
+
+    func testWorkspaceOrderingPushesWorkspaceBeforeItsFoldersAndWords() async throws {
+        let ja = try Kit.insertWorkspace(container, term: "de", translation: "ru")
+        let word = try Kit.insertWord(container, polish: "Haus", workspace: ja)
+        try engine.link(to: owner)
+        _ = try await engine.run(ownerID: owner)
+        let order = remote.callLog.filter { $0.hasPrefix("upsert") }
+        XCTAssertEqual(order, ["upsertWorkspaces", "upsertWords"])
+        XCTAssertNotNil(remote.workspace(id: ja, userID: owner))
+        XCTAssertEqual(remote.word(id: word, userID: owner)?.workspaceID, ja)
     }
 }
 

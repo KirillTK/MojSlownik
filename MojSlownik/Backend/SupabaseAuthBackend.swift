@@ -15,12 +15,12 @@ final class SupabaseAuthBackend: AuthBackend {
         self.provider = provider
     }
 
-    func accountUpdates() -> AsyncStream<AuthAccount?> {
+    func accountUpdates() -> AsyncStream<AuthUpdate> {
         let changes = provider.client.auth.authStateChanges
         return AsyncStream { continuation in
             let task = Task {
                 for await (event, session) in changes {
-                    continuation.yield(Self.account(for: event, session: session))
+                    continuation.yield(Self.update(for: event, session: session))
                 }
                 continuation.finish()
             }
@@ -49,12 +49,12 @@ final class SupabaseAuthBackend: AuthBackend {
     }
 
     /// With `emitLocalSessionAsInitialSession` the stored session is emitted even when expired;
-    /// the SDK requires checking `isExpired`. An expired one counts as signed out until the SDK
-    /// emits `tokenRefreshed`/`signedIn` with a valid session.
-    nonisolated static func account(for event: AuthChangeEvent, session: Session?) -> AuthAccount? {
-        guard let session else { return nil }
-        if event == .initialSession, session.isExpired { return nil }
-        return account(from: session.user)
+    /// the SDK requires checking `isExpired`. An expired one is `.restoring` (not signed out) until
+    /// the SDK emits `tokenRefreshed`/`signedIn` with a valid session.
+    nonisolated static func update(for event: AuthChangeEvent, session: Session?) -> AuthUpdate {
+        guard let session else { return .account(nil) }
+        if event == .initialSession, session.isExpired { return .restoring }
+        return .account(account(from: session.user))
     }
 
     nonisolated static func account(from user: User) -> AuthAccount {

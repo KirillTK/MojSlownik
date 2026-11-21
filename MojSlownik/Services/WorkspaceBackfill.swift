@@ -59,5 +59,43 @@ enum WorkspaceBackfill {
         // 2. Rows from before workspaces join the legacy workspace.
         for word in words where word.workspaceID == nil { word.workspaceID = WorkspaceID.legacy }
         for folder in folders where folder.workspaceID == nil { folder.workspaceID = WorkspaceID.legacy }
+
+        try migrateLegacyMemberships(words: words, folders: folders, in: context)
+    }
+
+    /// 3. Legacy `Word.folderIDs` become `FolderMembership` rows (once per word, flag
+    /// `legacyFolderIDsMigrated`); 4. rows sharing an id are de-duplicated. Never touches words'
+    /// `updatedAt`, the legacy array, or any word/folder row; ids of missing or deleted folders stay in the
+    /// array and are not migrated (the server backfill drops the same ids).
+    private static func migrateLegacyMemberships(words: [Word], folders: [WordFolder],
+                                                 in context: ModelContext) throws {
+        var memberships = try context.fetch(FetchDescriptor<FolderMembership>())
+
+        // 4. Keep the latest modified row per id (membership rows only).
+        for duplicates in Dictionary(grouping: memberships, by: \.id).values where duplicates.count > 1 {
+            let keep = duplicates.max { $0.lastModifiedAt < $1.lastModifiedAt }
+            for membership in duplicates where membership !== keep { context.delete(membership) }
+        }
+        memberships = Dictionary(grouping: memberships, by: \.id).values.compactMap { rows in
+            rows.max { $0.lastModifiedAt < $1.lastModifiedAt }
+        }
+
+        var existing = Set(memberships.map(\.id))
+        var activeFolders: [UUID: WordFolder] = [:]
+        for folder in folders where folder.isActive { activeFolders[folder.id] = folder }
+        for word in words where !word.legacyFolderIDsMigrated {
+            guard let wordID = word.uuid else { continue }
+            var seen = Set<UUID>()
+            for folderID in word.folderIDs where seen.insert(folderID).inserted {
+                guard let folder = activeFolders[folderID],
+                      folder.effectiveWorkspaceID == word.effectiveWorkspaceID else { continue }
+                let id = MembershipID.make(wordID: wordID, folderID: folderID)
+                guard existing.insert(id).inserted else { continue }
+                context.insert(FolderMembership(wordID: wordID, folderID: folderID,
+                                                workspaceID: word.effectiveWorkspaceID,
+                                                createdAt: word.lastModifiedAt))
+            }
+            word.legacyFolderIDsMigrated = true
+        }
     }
 }

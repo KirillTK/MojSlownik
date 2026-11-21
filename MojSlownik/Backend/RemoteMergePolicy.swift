@@ -8,6 +8,8 @@ enum RemoteMergeDecision: Equatable, Sendable {
     case update
     case softDelete(at: Date)
     case keepLocal
+    /// Workspaces only: no local row and a remote tombstone. The tombstone is stored (clean).
+    case insertTombstone(at: Date)
     /// The local row already holds the server's state; only the sync timestamps are recorded.
     case acknowledge
 }
@@ -70,12 +72,41 @@ enum RemoteMergePolicy {
     static func decide(local: LocalRecordState?, remote: ValidatedRemoteFolder) -> RemoteMergeDecision {
         decide(local: local, remoteUpdatedAt: remote.updatedAt, remoteDeletedAt: remote.deletedAt)
     }
+
+    static func decide(local: LocalRecordState?, remote: ValidatedRemoteMembership) -> RemoteMergeDecision {
+        decide(local: local, remoteUpdatedAt: remote.updatedAt, remoteDeletedAt: remote.deletedAt)
+    }
+
+    /// Documented exception to rule 1, for workspaces only: a remote tombstone with no local row
+    /// is materialized. The row holds only language codes and order (no user text), and without it
+    /// every word and folder of a workspace deleted on another device would be held forever on a
+    /// newly linked device, so re-adding the pair could never bring them back.
+    static func decide(local: LocalRecordState?, remote: ValidatedRemoteWorkspace) -> RemoteMergeDecision {
+        if local == nil, let deletedAt = remote.deletedAt { return .insertTombstone(at: deletedAt) }
+        return decide(local: local, remoteUpdatedAt: remote.updatedAt, remoteDeletedAt: remote.deletedAt)
+    }
 }
 
 extension Word {
     var localRecordState: LocalRecordState { localRecordState(linkedAt: nil) }
 
     /// `linkedAt`: when the current account link was made (device clock); nil = unknown.
+    func localRecordState(linkedAt: Date?) -> LocalRecordState {
+        LocalRecordState(serverUpdatedAt: serverUpdatedAt, isDirty: isSyncDirty, isDeleted: !isActive,
+                         editedSinceLink: RemoteMergePolicy.isEditedSinceLink(
+                             serverUpdatedAt: serverUpdatedAt, modifiedAt: lastModifiedAt, linkedAt: linkedAt))
+    }
+}
+
+extension Workspace {
+    func localRecordState(linkedAt: Date?) -> LocalRecordState {
+        LocalRecordState(serverUpdatedAt: serverUpdatedAt, isDirty: isSyncDirty, isDeleted: !isActive,
+                         editedSinceLink: RemoteMergePolicy.isEditedSinceLink(
+                             serverUpdatedAt: serverUpdatedAt, modifiedAt: lastModifiedAt, linkedAt: linkedAt))
+    }
+}
+
+extension FolderMembership {
     func localRecordState(linkedAt: Date?) -> LocalRecordState {
         LocalRecordState(serverUpdatedAt: serverUpdatedAt, isDirty: isSyncDirty, isDeleted: !isActive,
                          editedSinceLink: RemoteMergePolicy.isEditedSinceLink(

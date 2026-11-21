@@ -162,6 +162,83 @@ enum LegacySchemaV3: VersionedSchema {
     }
 }
 
+/// Frozen copy of the persisted schema at 97f4938 (workspaces foundation, before memberships).
+enum LegacySchemaV4: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }
+    static var models: [any PersistentModel.Type] { [Word.self, WordFolder.self, Workspace.self] }
+
+    @Model
+    final class Word {
+        var russian: String
+        var polish: String
+        var sourceLanguageCode: String
+        var categoryRawValue: String = "Другое"
+        var folderIDs: [UUID] = []
+        var createdAt: Date
+        var uuid: UUID? = nil
+        var updatedAt: Date? = nil
+        var deletedAt: Date? = nil
+        var serverUpdatedAt: Date? = nil
+        var workspaceID: UUID? = nil
+        var easeFactor: Double
+        var intervalDays: Double
+        var repetitions: Int
+        var dueDate: Date
+        var lastReviewGradeRawValue: String? = nil
+        var knowledgeTier: Int? = nil
+        var consecutiveSoftMisses: Int = 0
+
+        init(russian: String, polish: String, createdAt: Date) {
+            self.russian = russian
+            self.polish = polish
+            self.sourceLanguageCode = "pl"
+            self.createdAt = createdAt
+            self.uuid = UUID()
+            self.updatedAt = createdAt
+            self.easeFactor = 2.5
+            self.intervalDays = 0
+            self.repetitions = 0
+            self.dueDate = createdAt
+        }
+    }
+
+    @Model
+    final class WordFolder {
+        var id: UUID = UUID()
+        var name: String
+        var createdAt: Date
+        var sortOrder: Int = 0
+        var updatedAt: Date? = nil
+        var deletedAt: Date? = nil
+        var serverUpdatedAt: Date? = nil
+        var workspaceID: UUID? = nil
+
+        init(name: String) {
+            self.name = name
+            self.createdAt = .now
+            self.updatedAt = createdAt
+        }
+    }
+
+    @Model
+    final class Workspace {
+        var id: UUID = UUID()
+        var termLanguageCode: String = "pl"
+        var translationLanguageCode: String = "ru"
+        var sortOrder: Int = 0
+        var createdAt: Date = Date.now
+        var updatedAt: Date? = nil
+        var deletedAt: Date? = nil
+        var serverUpdatedAt: Date? = nil
+
+        init(createdAt: Date) {
+            self.id = WorkspaceID.legacy
+            self.createdAt = createdAt
+            self.updatedAt = createdAt
+        }
+    }
+}
+
 @MainActor
 final class LegacySchemaMigrationTests: XCTestCase {
     private var directory: URL!
@@ -230,7 +307,9 @@ final class LegacySchemaMigrationTests: XCTestCase {
             XCTAssertTrue(word.isActive)
             XCTAssertEqual(word.lastModifiedAt, word.createdAt)
         }
-        XCTAssertEqual(FolderStore.words(words, in: folderID).map(\.polish), ["woda", "kawa"])
+        let memberships = MembershipIndex(try context.fetch(FetchDescriptor<FolderMembership>()))
+        XCTAssertEqual(FolderStore.words(words, in: folderID, memberships: memberships).map(\.polish),
+                       ["woda", "kawa"], "legacy folderIDs became memberships")
         let folders = try FolderStore.folders(in: context)
         XCTAssertEqual(folders.map(\.id), [folderID])
         XCTAssertNil(folders.first?.updatedAt)
@@ -285,8 +364,12 @@ final class LegacySchemaMigrationTests: XCTestCase {
             XCTAssertNil(word.serverUpdatedAt)
             XCTAssertTrue(word.isSyncDirty)
             XCTAssertEqual(word.repetitions, 2 + index)
-            XCTAssertEqual(word.folderIDs, [folderID])
+            XCTAssertEqual(word.folderIDs, [folderID], "the legacy array is kept as it was")
+            XCTAssertTrue(word.legacyFolderIDsMigrated)
         }
+        let migrated = try context.fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertEqual(Set(migrated.map(\.wordID)), Set(ids), "one membership per word, tombstoned word included")
+        XCTAssertTrue(migrated.allSatisfy { $0.folderID == folderID && $0.isActive && $0.serverUpdatedAt == nil })
         XCTAssertEqual(words[2].deletedAt, deleted, "tombstones stay")
         let folders = try context.fetch(FetchDescriptor<WordFolder>())
         XCTAssertEqual(folders.map(\.id), [folderID])
@@ -353,8 +436,18 @@ final class LegacySchemaMigrationTests: XCTestCase {
         XCTAssertEqual(words.map(\.updatedAt), [synced, created.addingTimeInterval(1), deleted])
         XCTAssertEqual(words.map(\.serverUpdatedAt), [synced, nil, nil])
         XCTAssertEqual(words.map(\.deletedAt), [nil, nil, deleted])
-        XCTAssertEqual(words[1].folderIDs, [folderIDs[0], folderIDs[1]], "legacy memberships stay as they were")
+        XCTAssertEqual(words[1].folderIDs, [folderIDs[0], folderIDs[1]], "the legacy array is never edited")
         XCTAssertTrue(words.allSatisfy { $0.workspaceID == WorkspaceID.legacy })
+        XCTAssertTrue(words.allSatisfy(\.legacyFolderIDsMigrated))
+        let memberships = try context.fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertEqual(memberships.map(\.folderID), [folderIDs[0]], "the deleted folder's id is not migrated")
+        XCTAssertEqual(memberships.first?.wordID, ids[1])
+        XCTAssertEqual(memberships.first?.id, MembershipID.make(wordID: ids[1], folderID: folderIDs[0]))
+        XCTAssertEqual(memberships.first?.createdAt, words[1].lastModifiedAt)
+        XCTAssertEqual(memberships.first?.updatedAt, words[1].lastModifiedAt)
+        XCTAssertNil(memberships.first?.serverUpdatedAt)
+        XCTAssertEqual(words.map(\.updatedAt), [synced, created.addingTimeInterval(1), deleted],
+                       "word updatedAt is untouched by the membership migration")
 
         let folders = try context.fetch(FetchDescriptor<WordFolder>()).sorted { $0.name < $1.name }
         XCTAssertEqual(folders.map(\.id), folderIDs)
@@ -372,5 +465,69 @@ final class LegacySchemaMigrationTests: XCTestCase {
         try resources.workspaces.load()
         XCTAssertEqual(resources.workspaces.activeID, WorkspaceID.legacy)
         XCTAssertEqual(resources.folders.options.map(\.id), [folderIDs[0]], "the live folder is listed")
+
+        // A second run creates nothing.
+        XCTAssertTrue(WorkspaceBackfill.run(container: resources.container, defaults: defaults))
+        XCTAssertEqual(try ModelContext(resources.container).fetch(FetchDescriptor<FolderMembership>()).count, 1)
+    }
+
+    /// The phase-1 shape (workspaceID, Workspace; no memberships): `folderIDs` migrate into
+    /// `FolderMembership` rows, once, without touching the words.
+    func testSchemaV4StoreMigratesLegacyFolderIDsIntoMemberships() throws {
+        let legacy = Schema(versionedSchema: LegacySchemaV4.self)
+        let url = directory.appendingPathComponent("v4.store")
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        let ids = [UUID(), UUID()]
+        let folderIDs = autoreleasepool { () -> [UUID] in
+            do {
+                let container = try ModelContainer(for: legacy,
+                                                   configurations: ModelConfiguration(schema: legacy, url: url,
+                                                                                      cloudKitDatabase: .none))
+                let context = ModelContext(container)
+                context.insert(LegacySchemaV4.Workspace(createdAt: created))
+                let folder = LegacySchemaV4.WordFolder(name: "Урок 1")
+                folder.workspaceID = WorkspaceID.legacy
+                context.insert(folder)
+                for (index, pair) in [("вода", "woda"), ("кофе", "kawa")].enumerated() {
+                    let word = LegacySchemaV4.Word(russian: pair.0, polish: pair.1,
+                                                   createdAt: created.addingTimeInterval(Double(index)))
+                    word.uuid = ids[index]
+                    word.workspaceID = WorkspaceID.legacy
+                    // A duplicate id and a dangling id in the legacy array.
+                    word.folderIDs = index == 0 ? [folder.id, folder.id, UUID()] : []
+                    context.insert(word)
+                }
+                try context.save()
+                return [folder.id]
+            } catch {
+                XCTFail("Legacy seeding failed: \(error)")
+                return []
+            }
+        }
+
+        let defaults = UserDefaults(suiteName: "LegacySchemaMigrationTests.\(UUID().uuidString)")!
+        let resources = try AppResources(configuration: ModelConfiguration(url: url, cloudKitDatabase: .none),
+                                         defaults: defaults)
+        let context = ModelContext(resources.container)
+        let words = try context.fetch(FetchDescriptor<Word>()).sorted { $0.createdAt < $1.createdAt }
+        XCTAssertEqual(words.map(\.polish), ["woda", "kawa"])
+        XCTAssertTrue(words.allSatisfy(\.legacyFolderIDsMigrated))
+        XCTAssertEqual(words[0].folderIDs.count, 3, "the legacy array is untouched (dangling id included)")
+        let memberships = try context.fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertEqual(memberships.count, 1, "deduplicated; the dangling id is skipped")
+        XCTAssertEqual(memberships.first?.wordID, ids[0])
+        XCTAssertEqual(memberships.first?.folderID, folderIDs[0])
+
+        XCTAssertTrue(WorkspaceBackfill.run(container: resources.container, defaults: defaults))
+        XCTAssertEqual(try ModelContext(resources.container).fetch(FetchDescriptor<FolderMembership>()).count, 1,
+                       "a second run creates nothing")
+        // A membership removed after the migration is not resurrected from the legacy array.
+        let tombstoned = try XCTUnwrap(ModelContext(resources.container).fetch(FetchDescriptor<FolderMembership>()).first)
+        let editContext = ModelContext(resources.container)
+        let row = try XCTUnwrap(editContext.fetch(FetchDescriptor<FolderMembership>()).first { $0.id == tombstoned.id })
+        row.markDeleted(now: created)
+        try editContext.save()
+        XCTAssertTrue(WorkspaceBackfill.run(container: resources.container, defaults: defaults))
+        XCTAssertNotNil(try ModelContext(resources.container).fetch(FetchDescriptor<FolderMembership>()).first?.deletedAt)
     }
 }

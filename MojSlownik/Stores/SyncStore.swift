@@ -25,9 +25,13 @@ final class SyncStore {
     }
 
     private(set) var status: Status
+    /// True once a cycle finished its workspace pull; reset when the account changes (the phase-4
+    /// gate waits for it).
+    private(set) var workspacePullFinished = false
 
     @ObservationIgnored private let engine: SyncEngine?
     @ObservationIgnored private let state: any SyncStateRepository
+    @ObservationIgnored private let workspaces: WorkspaceStore
     @ObservationIgnored private let folders: FolderLibraryStore
     @ObservationIgnored private let achievements: AchievementStore?
     @ObservationIgnored private let logger: any AppLogging
@@ -45,11 +49,12 @@ final class SyncStore {
     /// Called after each successful cycle. Only UI-test wiring sets it (scripted server changes).
     @ObservationIgnored var onCycleSucceeded: (() -> Void)?
 
-    init(engine: SyncEngine?, state: any SyncStateRepository, folders: FolderLibraryStore,
-         achievements: AchievementStore?, logger: (any AppLogging)?, debounce: Duration = .seconds(5),
+    init(engine: SyncEngine?, state: any SyncStateRepository, workspaces: WorkspaceStore,
+         folders: FolderLibraryStore, achievements: AchievementStore?, logger: (any AppLogging)?, debounce: Duration = .seconds(5),
          foregroundInterval: TimeInterval = 30, now: @escaping () -> Date = Date.init) {
         self.engine = engine
         self.state = state
+        self.workspaces = workspaces
         self.folders = folders
         self.achievements = achievements
         self.logger = logger ?? NoopAppLogger()
@@ -59,6 +64,7 @@ final class SyncStore {
         status = engine == nil ? .unavailable : .signedOut
         // Before the first pulled page is saved: the tracker's re-sync must not announce it.
         engine?.willApplyPulledRows = { [weak self] in self?.achievements?.beginQuietUnlocks() }
+        engine?.onWorkspacesPulled = { [weak self] in self?.workspacePullFinished = true }
     }
 
     var isSyncing: Bool { status == .syncing }
@@ -69,6 +75,7 @@ final class SyncStore {
 
     func accountDidChange(_ account: AuthAccount?) {
         self.account = account
+        workspacePullFinished = false
         cancelRunning()
         guard engine != nil else {
             status = .unavailable
@@ -224,7 +231,9 @@ final class SyncStore {
     private func succeeded(_ report: SyncReport, trigger: Trigger) {
         status = .synced(state.load().lastSyncedAt ?? now())
         lastFailure = nil
-        if report.foldersChanged { try? folders.load() }
+        // Workspaces first: loading them re-points the folder store at the active workspace.
+        if report.workspacesChanged { try? workspaces.load() }
+        if report.foldersChanged || report.membershipsChanged { try? folders.load() }
         if report.pulled > 0 || report.pushed > 0 || trigger == .link || trigger == .manual {
             logger.log(.syncCompleted, [.trigger: .name(trigger.rawValue), .pulled: .int(report.pulled),
                                         .pushed: .int(report.pushed)])

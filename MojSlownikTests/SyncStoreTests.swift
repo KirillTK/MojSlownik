@@ -12,6 +12,7 @@ final class SyncStoreTests: XCTestCase {
     private var remote: InMemorySyncRemote!
     private var state: UserDefaultsSyncStateRepository!
     private var folders: FolderLibraryStore!
+    private var workspaces: WorkspaceStore!
     private var spy: AppLogSpy!
     private var suite = ""
     private var appNow = SyncTestKit.t0
@@ -24,6 +25,12 @@ final class SyncStoreTests: XCTestCase {
         suite = "SyncStoreTests.\(UUID().uuidString)"
         state = UserDefaultsSyncStateRepository(defaults: UserDefaults(suiteName: suite)!)
         folders = FolderLibraryStore.inLegacyWorkspace(repository: SwiftDataFolderRepository(container: container))
+        workspaces = WorkspaceStore(repository: SwiftDataWorkspaceRepository(container: container),
+                                    activeRepository: UserDefaultsActiveWorkspaceRepository(
+                                        defaults: UserDefaults(suiteName: suite)!))
+        // The pl ← ru workspace every legacy-shaped row belongs to (not on the server yet: it is pushed).
+        try Kit.insertWorkspace(container)
+        try workspaces.load()
         spy = AppLogSpy()
     }
 
@@ -35,7 +42,7 @@ final class SyncStoreTests: XCTestCase {
                            debounce: Duration = .milliseconds(20), foreground: TimeInterval = 30) -> SyncStore {
         let engine = engine ? SyncEngine(remote: remote, local: SwiftDataSyncStore(container: container, now: { self.t0 }),
                                          state: state, now: { self.t0 }) : nil
-        return SyncStore(engine: engine, state: state, folders: folders, achievements: achievements, logger: spy,
+        return SyncStore(engine: engine, state: state, workspaces: workspaces, folders: folders, achievements: achievements, logger: spy,
                          debounce: debounce, foregroundInterval: foreground, now: { self.appNow })
     }
 
@@ -56,6 +63,25 @@ final class SyncStoreTests: XCTestCase {
     }
 
     private func count(_ call: String) -> Int { remote.callLog.filter { $0 == call }.count }
+
+    // MARK: Workspaces
+
+    func testWorkspacesReloadAfterAPullAndPullFinishedIsExposed() async throws {
+        remote.seed(workspaces: [Kit.remoteWorkspace(term: "de", translation: "ru", sortOrder: 1,
+                                                     updatedAt: t0.addingTimeInterval(-60))])
+        let store = makeStore()
+        XCTAssertFalse(store.workspacePullFinished)
+        XCTAssertEqual(workspaces.options.count, 1)
+
+        store.accountDidChange(account)
+        await waitForSynced(store)
+
+        XCTAssertTrue(store.workspacePullFinished)
+        XCTAssertEqual(workspaces.options.map(\.termCode), ["pl", "de"], "reloaded after the pull")
+
+        store.accountDidChange(nil)
+        XCTAssertFalse(store.workspacePullFinished, "reset when the account changes")
+    }
 
     // MARK: Account changes
 
@@ -191,7 +217,8 @@ final class SyncStoreTests: XCTestCase {
         await store.syncBeforeLeaving()
 
         XCTAssertEqual(Array(remote.callLog.dropFirst(marker)),
-                       ["fetchFolders", "fetchWords", "upsertWords"], "pull first, then push")
+                       ["fetchWorkspaces", "fetchFolders", "fetchWords", "fetchMemberships", "upsertWords"],
+                       "pull first, then push")
         XCTAssertEqual(remote.server.words.count, 2)
         XCTAssertEqual(try Kit.words(container).count, 2)
     }
@@ -199,7 +226,7 @@ final class SyncStoreTests: XCTestCase {
     func testSignOutMidRunCancelsWithoutAFailureLog() async throws {
         let store = makeStore()
         remote.onCall = { name in
-            if name == "fetchFolders" { store.accountDidChange(nil) }
+            if name == "fetchWorkspaces" { store.accountDidChange(nil) }
         }
         store.accountDidChange(account)
         await waitUntil("signed out") { store.status == .signedOut }
@@ -216,10 +243,10 @@ final class SyncStoreTests: XCTestCase {
         store.accountDidChange(account)
         await waitUntil("failed") { store.status == .failed }
         store.syncNow()
-        await waitUntil("second failure") { self.count("fetchFolders") == 2 }
+        await waitUntil("second failure") { self.count("fetchWorkspaces") == 2 }
         await waitUntil("failed again") { store.status == .failed }
         store.syncNow()
-        await waitUntil("third attempt") { self.count("fetchFolders") == 3 }
+        await waitUntil("third attempt") { self.count("fetchWorkspaces") == 3 }
         await waitUntil("failed 3") { store.status == .failed }
         XCTAssertEqual(spy.events.filter { $0 == .syncFailed }.count, 1)
         XCTAssertEqual(spy.entries.first { $0.event == .syncFailed }?.properties[.errorDomain], .name(NSURLErrorDomain))
@@ -320,7 +347,7 @@ final class SyncStoreTests: XCTestCase {
 
         XCTAssertLessThan(ContinuousClock.now - started, .seconds(5), "returned promptly")
         try await Task.sleep(for: .milliseconds(100))
-        XCTAssertEqual(count("fetchFolders"), 1, "no new cycle was started")
+        XCTAssertEqual(count("fetchWorkspaces"), 1, "no new cycle was started")
         XCTAssertNotEqual(store.status, .syncing)
     }
 

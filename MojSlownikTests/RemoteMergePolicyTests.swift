@@ -75,10 +75,11 @@ final class RemoteMergePolicyTests: XCTestCase {
 
     /// The decision type has no hard-delete case; this switch stops compiling if one is added.
     func testNoDecisionHardDeletes() {
-        let all: [RemoteMergeDecision] = [.insert, .update, .softDelete(at: t0), .keepLocal, .acknowledge]
+        let all: [RemoteMergeDecision] = [.insert, .update, .softDelete(at: t0), .keepLocal, .acknowledge,
+                                          .insertTombstone(at: t0)]
         for decision in all {
             switch decision {
-            case .insert, .update, .softDelete, .keepLocal, .acknowledge: break
+            case .insert, .update, .softDelete, .keepLocal, .acknowledge, .insertTombstone: break
             }
         }
     }
@@ -134,5 +135,64 @@ final class RemoteMergePolicyTests: XCTestCase {
         folder.serverUpdatedAt = sentinel
         folder.updatedAt = t2
         XCTAssertTrue(folder.localRecordState(linkedAt: t1).editedSinceLink)
+    }
+
+    // MARK: Workspaces and memberships
+
+    private func workspace(deletedAt: Date? = nil, updatedAt: Date) -> ValidatedRemoteWorkspace {
+        ValidatedRemoteWorkspace(id: WorkspaceID.legacy, termLanguage: "pl", translationLanguage: "ru", sortOrder: 0,
+                                 createdAt: t0, updatedAt: updatedAt, deletedAt: deletedAt)
+    }
+
+    private func membership(deletedAt: Date? = nil, updatedAt: Date) -> ValidatedRemoteMembership {
+        ValidatedRemoteMembership(workspaceID: WorkspaceID.legacy, wordID: UUID(), folderID: UUID(),
+                                  createdAt: t0, updatedAt: updatedAt, deletedAt: deletedAt)
+    }
+
+    private func wordRecord(deletedAt: Date?) -> ValidatedRemoteWord {
+        ValidatedRemoteWord(id: UUID(), workspaceID: WorkspaceID.legacy, term: "kot", translation: "кот",
+                            enteredSide: .term, category: .other, createdAt: t0, updatedAt: t1, deletedAt: deletedAt,
+                            easeFactor: 2.5, intervalDays: 1, repetitions: 1, dueDate: t1, lastReviewGrade: nil,
+                            knowledgeTier: nil, consecutiveSoftMisses: 0)
+    }
+
+    /// The documented workspace-only exception: a remote tombstone with no local row is stored.
+    func testWorkspaceTombstoneWithoutLocalRowIsMaterialized() {
+        XCTAssertEqual(RemoteMergePolicy.decide(local: nil, remote: workspace(deletedAt: t1, updatedAt: t1)),
+                       .insertTombstone(at: t1))
+        XCTAssertEqual(RemoteMergePolicy.decide(local: nil, remote: workspace(updatedAt: t1)), .insert)
+    }
+
+    func testOtherKindsStillNeverMaterializeTombstones() {
+        XCTAssertEqual(RemoteMergePolicy.decide(local: nil, remote: wordRecord(deletedAt: t1)), .keepLocal)
+        XCTAssertEqual(RemoteMergePolicy.decide(local: nil, remote: ValidatedRemoteFolder(
+            id: UUID(), workspaceID: WorkspaceID.legacy, name: "x", sortOrder: 0, createdAt: t0, updatedAt: t1,
+            deletedAt: t1)), .keepLocal)
+        XCTAssertEqual(RemoteMergePolicy.decide(local: nil, remote: membership(deletedAt: t1, updatedAt: t1)),
+                       .keepLocal)
+    }
+
+    func testMembershipAndWorkspaceFollowTheSameRules() {
+        let clean = LocalRecordState(serverUpdatedAt: t0, isDirty: false, isDeleted: false)
+        XCTAssertEqual(RemoteMergePolicy.decide(local: clean, remote: membership(updatedAt: t1)), .update)
+        XCTAssertEqual(RemoteMergePolicy.decide(local: clean, remote: membership(deletedAt: t1, updatedAt: t1)),
+                       .softDelete(at: t1))
+        XCTAssertEqual(RemoteMergePolicy.decide(local: clean, remote: workspace(updatedAt: t0)), .keepLocal,
+                       "an echo of the synced version changes nothing")
+        let dirty = LocalRecordState(serverUpdatedAt: nil, isDirty: true, isDeleted: false)
+        XCTAssertEqual(RemoteMergePolicy.decide(local: dirty, remote: membership(updatedAt: t1)), .keepLocal)
+    }
+
+    func testLocalStateComesFromWorkspaceAndMembership() {
+        let workspace = Workspace(termLanguageCode: "pl", translationLanguageCode: "ru", createdAt: t0)
+        XCTAssertEqual(workspace.localRecordState(linkedAt: nil),
+                       LocalRecordState(serverUpdatedAt: nil, isDirty: true, isDeleted: false))
+        workspace.serverUpdatedAt = workspace.lastModifiedAt
+        XCTAssertFalse(workspace.localRecordState(linkedAt: nil).isDirty)
+        let membership = FolderMembership(wordID: UUID(), folderID: UUID(), workspaceID: WorkspaceID.legacy,
+                                          createdAt: t0)
+        membership.markDeleted(now: t1)
+        XCTAssertEqual(membership.localRecordState(linkedAt: nil),
+                       LocalRecordState(serverUpdatedAt: nil, isDirty: true, isDeleted: true))
     }
 }

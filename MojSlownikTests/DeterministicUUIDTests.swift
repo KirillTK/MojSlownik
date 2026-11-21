@@ -41,4 +41,14 @@ final class DeterministicUUIDTests: XCTestCase {
                        "2ed6657d-e927-568b-95e1-2665a8aea6a2")
         XCTAssertEqual(UUID.v5(namespace: dns, name: "a"), UUID.v5(namespace: dns, name: "a"))
     }
+
+    func testMembershipIDIsPinnedAndIndependentOfCase() {
+        let word = UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!
+        let folder = UUID(uuidString: "00000000-0000-0000-0000-0000000000F1")!
+        XCTAssertEqual(MembershipID.make(wordID: word, folderID: folder).uuidString.lowercased(),
+                       "ac1d00f8-3a8d-50c2-9a32-97991e1d73be")
+        XCTAssertNotEqual(MembershipID.make(wordID: word, folderID: folder),
+                          MembershipID.make(wordID: folder, folderID: word), "order matters")
+        XCTAssertEqual(MembershipID.namespace.uuidString.lowercased(), "4e7ef163-a08f-4bf2-90bd-abfdf88826c2")
+    }
 }

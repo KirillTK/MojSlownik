@@ -1,26 +1,31 @@
 import Foundation
 
 /// Keyset position of a table pull: the last applied `(updated_at, id)`. Milliseconds are
-/// integers so equality with the server's ms-precision `updated_at` is exact.
+/// integers so equality with the server's ms-precision `updated_at` is exact. Memberships have no
+/// id: `id` = word_id and `secondaryID` = folder_id.
 struct SyncCursor: Codable, Equatable, Sendable {
     let updatedAtMillis: Int64
     let id: UUID
+    let secondaryID: UUID?
 
     private static let nilUUID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
 
-    init(updatedAtMillis: Int64, id: UUID) {
+    init(updatedAtMillis: Int64, id: UUID, secondaryID: UUID? = nil) {
         self.updatedAtMillis = updatedAtMillis
         self.id = id
+        self.secondaryID = secondaryID
     }
 
-    init(updatedAt: Date, id: UUID) {
-        self.init(updatedAtMillis: Int64((updatedAt.timeIntervalSince1970 * 1000).rounded()), id: id)
+    init(updatedAt: Date, id: UUID, secondaryID: UUID? = nil) {
+        self.init(updatedAtMillis: Int64((updatedAt.timeIntervalSince1970 * 1000).rounded()), id: id,
+                  secondaryID: secondaryID)
     }
 
     /// The start of the next pull: `millis` earlier, with the nil UUID so no tied row is skipped.
     /// The overlap covers transactions that committed out of `clock_timestamp()` order.
     func overlapping(by millis: Int64 = 60_000) -> SyncCursor {
-        SyncCursor(updatedAtMillis: updatedAtMillis - millis, id: Self.nilUUID)
+        SyncCursor(updatedAtMillis: updatedAtMillis - millis, id: Self.nilUUID,
+                   secondaryID: secondaryID == nil ? nil : Self.nilUUID)
     }
 
     /// UTC `yyyy-MM-ddTHH:mm:ss.SSSZ` from integer arithmetic (never a DateFormatter), so a
@@ -52,6 +57,19 @@ struct RemoteAck: Decodable, Equatable, Sendable {
     }
 }
 
+/// `word_id`, `folder_id` and server-assigned `updated_at` returned for an upserted membership.
+struct RemoteMembershipAck: Decodable, Equatable, Sendable {
+    let wordID: UUID
+    let folderID: UUID
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case wordID = "word_id"
+        case folderID = "folder_id"
+        case updatedAt = "updated_at"
+    }
+}
+
 /// Errors a transport maps for the engine. Any other error is transient (retry later).
 enum SyncRemoteError: Error, Equatable {
     /// The server permanently rejects this request's rows (SQLSTATE 22/23, HTTP 413).
@@ -63,8 +81,12 @@ enum SyncRemoteError: Error, Equatable {
 /// Network transport of the sync engine. Foundation only, so the engine is tested with a fake.
 @MainActor
 protocol SyncRemote: AnyObject {
+    func fetchWorkspaces(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteWorkspaceRecord]
     func fetchFolders(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteFolderRecord]
     func fetchWords(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteWordRecord]
+    func fetchMemberships(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteMembershipRecord]
+    func upsertWorkspaces(_ rows: [RemoteWorkspaceUpsert]) async throws -> [RemoteAck]
     func upsertFolders(_ rows: [RemoteFolderUpsert]) async throws -> [RemoteAck]
     func upsertWords(_ rows: [RemoteWordUpsert]) async throws -> [RemoteAck]
+    func upsertMemberships(_ rows: [RemoteMembershipUpsert]) async throws -> [RemoteMembershipAck]
 }

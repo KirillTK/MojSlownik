@@ -59,11 +59,16 @@ final class UITestSupportTests: XCTestCase {
         let container = try seeded(.foldersOrdered)
         XCTAssertEqual(try FolderStore.folders(in: container.mainContext).map(\.name),
                        ["Урок 1", "Урок 2", "Урок 3"])
-        let byPolish = Dictionary(uniqueKeysWithValues: try words(container).map { ($0.polish, $0.folderIDs) })
+        let index = MembershipIndex(try container.mainContext.fetch(FetchDescriptor<FolderMembership>()))
+        let byPolish = Dictionary(uniqueKeysWithValues: try words(container).map {
+            ($0.polish, $0.uuid.map { index.folderIDs(of: $0) } ?? []) })
         XCTAssertEqual(byPolish["kot"], [UITestFixture.lesson1ID])
         XCTAssertEqual(byPolish["dom"], [UITestFixture.lesson1ID])
         XCTAssertEqual(byPolish["woda"], [UITestFixture.lesson2ID])
         XCTAssertEqual(byPolish["chleb"], [])
+        XCTAssertTrue(try words(container).allSatisfy { $0.folderIDs.isEmpty }, "the legacy array stays frozen")
+        XCTAssertTrue(try container.mainContext.fetch(FetchDescriptor<FolderMembership>())
+            .allSatisfy { $0.workspaceID == WorkspaceID.legacy })
     }
 
     func testEveryFixtureSeedsExactlyOneLegacyWorkspaceAndAssignsIt() throws {
@@ -155,7 +160,7 @@ final class UITestSupportTests: XCTestCase {
             XCTAssertEqual(row.createdAt, word.createdAt)
             XCTAssertEqual(row.dueDate, word.dueDate)
             XCTAssertEqual(row.category, word.category.stableID)
-            XCTAssertEqual(row.enteredLanguage, word.sourceLanguageCode)
+            XCTAssertEqual(row.enteredSide, word.sourceLanguageCode == "ru" ? "translation" : "term")
             XCTAssertEqual(row.repetitions, word.repetitions)
             XCTAssertEqual(row.intervalDays, word.intervalDays)
             XCTAssertNil(row.deletedAt)
@@ -168,6 +173,31 @@ final class UITestSupportTests: XCTestCase {
         XCTAssertEqual(state.linkedAccountID, owner)
         let newest = try XCTUnwrap(remote.server.words.values.max { $0.updatedAt < $1.updatedAt })
         XCTAssertEqual(state.wordsCursor, SyncCursor(updatedAt: newest.updatedAt, id: newest.id))
+    }
+
+    func testSyncedVocabularyWorkspaceIsCleanAndMirrorsTheServerCopy() throws {
+        let container = try seeded(.syncedVocabulary)
+        let workspace = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Workspace>()).first)
+        XCTAssertFalse(workspace.isSyncDirty)
+        let remote = UITestSyncState.syncedThenRemoteChanges.makeRemote(now: now)
+        let owner = StaticAuthBackend.testAccount.userID
+        let server = try XCTUnwrap(remote.workspace(id: WorkspaceID.legacy, userID: owner))
+        XCTAssertEqual(server.updatedAt, workspace.serverUpdatedAt)
+        XCTAssertEqual([server.termLanguage, server.translationLanguage], ["pl", "ru"])
+        let defaults = UserDefaults(suiteName: "UITestSupportTests.workspaceCursor")!
+        defaults.removePersistentDomain(forName: "UITestSupportTests.workspaceCursor")
+        let repository = UserDefaultsSyncStateRepository(defaults: defaults)
+        UITestSyncState.syncedThenRemoteChanges.seedState(into: repository, now: now)
+        XCTAssertEqual(repository.load().workspacesCursor, SyncCursor(updatedAt: server.updatedAt, id: server.id))
+    }
+
+    func testRemoteVocabularyServerHoldsTheWorkspaceFolderAndMembership() throws {
+        let remote = UITestSyncState.remoteVocabulary.makeRemote(now: now)
+        let owner = StaticAuthBackend.testAccount.userID
+        XCTAssertEqual(remote.server.workspaces.count, 1)
+        XCTAssertEqual(remote.server.memberships.count, 1)
+        XCTAssertTrue(remote.server.folders.values.allSatisfy { $0.workspaceID == WorkspaceID.legacy })
+        XCTAssertTrue(remote.server.workspaces.values.allSatisfy { $0.userID == owner })
     }
 
     func testScriptedChangesAreArmedOnceAndAreNewer() throws {
@@ -194,10 +224,20 @@ final class UITestSupportTests: XCTestCase {
         let folder = try XCTUnwrap(remote.folder(id: UITestSyncState.cloudFolderID, userID: owner))
         XCTAssertEqual(folder.name, "Из облака")
         let most = try XCTUnwrap(remote.server.words.values.first { $0.term == "most" })
-        XCTAssertEqual(most.folderIDs, [UITestSyncState.cloudFolderID])
+        XCTAssertNotNil(remote.membership(wordID: most.id, folderID: UITestSyncState.cloudFolderID, userID: owner),
+                        "the cloud word sits in the cloud folder through a membership row")
         // Every seeded row passes the validator that real pulls use.
+        var known = KnownRemoteIDs(workspaceIDs: [WorkspaceID.legacy])
+        for row in remote.server.words.values { known.words[row.id] = row.workspaceID }
+        known.folders[UITestSyncState.cloudFolderID] = WorkspaceID.legacy
         for row in remote.server.words.values {
-            XCTAssertNoThrow(try RemoteRecordValidator.validate(row, ownerID: owner, knownFolderIDs: [], now: now))
+            XCTAssertNoThrow(try RemoteRecordValidator.validate(row, ownerID: owner, known: known, now: now))
+        }
+        for row in remote.server.workspaces.values {
+            XCTAssertNoThrow(try RemoteRecordValidator.validate(row, ownerID: owner, now: now))
+        }
+        for row in remote.server.memberships.values {
+            XCTAssertNoThrow(try RemoteRecordValidator.validate(row, ownerID: owner, known: known, now: now))
         }
     }
 

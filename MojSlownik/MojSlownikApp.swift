@@ -125,7 +125,7 @@ struct AppResources {
         let stateRepository = UserDefaultsSyncStateRepository(defaults: defaults)
         let syncStore = SwiftDataSyncStore(container: container)
         let engine = syncRemote.map { SyncEngine(remote: $0, local: syncStore, state: stateRepository) }
-        let sync = SyncStore(engine: engine, state: stateRepository, folders: folders,
+        let sync = SyncStore(engine: engine, state: stateRepository, workspaces: workspaces, folders: folders,
                              achievements: achievements, logger: logger)
         self.sync = sync
         changeSignal.handler = { [weak sync] in sync?.localDataChanged() }

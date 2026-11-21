@@ -14,15 +14,19 @@ private final class ScriptedAuthBackend: AuthBackend {
     var signInGate: CheckedContinuation<Void, Never>?
     var onSignOut: (() -> Void)?
     var holdSignIn = false
-    private var continuation: AsyncStream<AuthAccount?>.Continuation?
+    private var continuation: AsyncStream<AuthUpdate>.Continuation?
     private let initial: AuthAccount?
+    private let emitsInitial: Bool
 
-    init(initial: AuthAccount? = nil) { self.initial = initial }
+    init(initial: AuthAccount? = nil, emitsInitial: Bool = true) {
+        self.initial = initial
+        self.emitsInitial = emitsInitial
+    }
 
-    func accountUpdates() -> AsyncStream<AuthAccount?> {
+    func accountUpdates() -> AsyncStream<AuthUpdate> {
         AsyncStream { continuation in
             self.continuation = continuation
-            continuation.yield(initial)
+            if emitsInitial { continuation.yield(.account(initial)) }
         }
     }
 
@@ -30,19 +34,20 @@ private final class ScriptedAuthBackend: AuthBackend {
         signInCalls.append(provider)
         if holdSignIn { await withCheckedContinuation { signInGate = $0 } }
         if let signInError { throw signInError }
-        continuation?.yield(AuthAccount(userID: UUID(), email: "a@b.c", provider: provider))
+        continuation?.yield(.account(AuthAccount(userID: UUID(), email: "a@b.c", provider: provider)))
     }
 
     func signOut() async throws {
         signOutCalls += 1
         onSignOut?()
         if let signOutError { throw signOutError }
-        continuation?.yield(nil)
+        continuation?.yield(.account(nil))
     }
 
     func isCancellation(_ error: Error) -> Bool { error is Cancelled }
 
-    func emit(_ account: AuthAccount?) { continuation?.yield(account) }
+    func emit(_ account: AuthAccount?) { continuation?.yield(.account(account)) }
+    func emit(_ update: AuthUpdate) { continuation?.yield(update) }
 }
 
 /// A logger whose uploads hang until released.
@@ -117,6 +122,36 @@ final class AuthStoreTests: XCTestCase {
         await waitUntil("session") { signedIn.state != .unknown }
         XCTAssertEqual(signedIn.state, .signedIn(account))
         XCTAssertTrue(signedIn.isSignedIn)
+    }
+
+    /// F4: an expired session being refreshed keeps `.unknown`; the account then arrives without an
+    /// intermediate `.signedOut`.
+    func testRestoringKeepsUnknownThenSignsIn() async throws {
+        let backend = ScriptedAuthBackend(emitsInitial: false)
+        let store = AuthStore(backend: backend, restoreTimeout: .seconds(30))
+        var changes: [AuthAccount?] = []
+        store.onAccountChange = { changes.append($0) }
+        store.start()
+        await Task.yield()
+        backend.emit(.restoring)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(store.state, .unknown)
+        XCTAssertTrue(changes.isEmpty, "no account change while restoring")
+        let account = AuthAccount(userID: UUID(), email: "a@b.c", provider: .google)
+        backend.emit(account)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(store.state, .signedIn(account))
+        XCTAssertEqual(changes, [account], "never an intermediate signed-out")
+    }
+
+    func testRestoringTimesOutToSignedOut() async throws {
+        let backend = ScriptedAuthBackend(emitsInitial: false)
+        let store = AuthStore(backend: backend, restoreTimeout: .milliseconds(100))
+        store.start()
+        await Task.yield()
+        backend.emit(.restoring)
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(store.state, .signedOut)
     }
 
     func testStartIsIdempotent() async {

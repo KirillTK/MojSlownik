@@ -39,13 +39,26 @@ enum UITestFixture: String, CaseIterable, Sendable {
         }
     }
 
+    /// Version time of the clean pl ← ru workspace of `syncedVocabulary` (and of the server's copy).
+    static func syncedWorkspaceStamp(now: Date) -> Date {
+        truncatedToMillis(now.addingTimeInterval(-7_200))
+    }
+
     static func truncatedToMillis(_ date: Date) -> Date {
         Date(timeIntervalSince1970: (date.timeIntervalSince1970 * 1000).rounded(.down) / 1000)
     }
 
     @MainActor
     func seed(into context: ModelContext, now: Date) throws {
-        let workspaceID = try WorkspaceCatalog.ensure(term: "pl", translation: "ru", context: context, now: now).id
+        let workspace = try WorkspaceCatalog.ensure(term: "pl", translation: "ru", context: context, now: now)
+        let workspaceID = workspace.id
+        if self == .syncedVocabulary {
+            // Clean, like the server's copy (the `syncedThenRemoteChanges` state mirrors it).
+            let stamp = Self.syncedWorkspaceStamp(now: now)
+            workspace.updatedAt = stamp
+            workspace.serverUpdatedAt = stamp
+        }
+        var memberships: [(word: Word, folderID: UUID)] = []
         var index = 0
         func word(_ russian: String, _ polish: String, _ source: AppLanguage,
                   due: Bool = false, folders: [UUID] = []) -> Word {
@@ -62,8 +75,8 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 word.easeFactor = 2.5
                 word.dueDate = now.addingTimeInterval(30 * 86_400)
             }
-            word.folderIDs = folders
             word.workspaceID = workspaceID
+            memberships += folders.map { (word, $0) }
             return word
         }
 
@@ -105,6 +118,11 @@ enum UITestFixture: String, CaseIterable, Sendable {
                      word("хлеб", "chleb", .russian)]
         }
         words.forEach(context.insert)
+        for (word, folderID) in memberships {
+            guard let uuid = word.uuid else { continue }
+            context.insert(FolderMembership(wordID: uuid, folderID: folderID, workspaceID: workspaceID,
+                                            createdAt: word.createdAt))
+        }
         try context.save()
     }
 }

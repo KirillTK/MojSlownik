@@ -65,3 +65,21 @@ extension FolderLibraryStore {
         return store
     }
 }
+
+extension MembershipIndex {
+    /// An index of detached membership rows linking `words` to `folderID` (no store needed).
+    static func linking(_ words: [Word], to folderID: UUID) -> MembershipIndex {
+        MembershipIndex(words.compactMap { word in
+            word.uuid.map { FolderMembership(wordID: $0, folderID: folderID, workspaceID: word.effectiveWorkspaceID) }
+        })
+    }
+
+    static let empty = MembershipIndex([])
+}
+
+/// Active folder ids of a word, read through its `FolderMembership` rows in the store.
+@MainActor
+func memberFolders(_ word: Word, _ container: ModelContainer) throws -> Set<UUID> {
+    guard let uuid = word.uuid else { return [] }
+    return MembershipIndex(try ModelContext(container).fetch(FetchDescriptor<FolderMembership>())).folderIDs(of: uuid)
+}

@@ -182,7 +182,7 @@ final class WorkspaceScopingTests: XCTestCase {
                                                       workspace: .legacy, container: container))
         XCTAssertTrue(try Kit.words(container).isEmpty)
         try ScanWordStore.add(entry, folderID: folder.id, workspace: .germanRussian, container: container)
-        XCTAssertEqual(try Kit.words(container).first?.folderIDs, [folder.id])
+        XCTAssertEqual(try memberFolders(try XCTUnwrap(Kit.words(container).first), container), [folder.id])
     }
 
     func testVocabularyStoreWritesNeedAWorkspaceAndPassItThrough() throws {
@@ -289,8 +289,11 @@ final class WorkspaceScopingTests: XCTestCase {
         XCTAssertEqual(try Kit.word(container, remoteID)?.workspaceID, pl)
     }
 
-    func testPendingRowsSkipOtherWorkspaces() throws {
+    /// Sync v2 sends every workspace's rows, each tagged with its own workspace id.
+    func testPendingRowsCarryTheirOwnWorkspace() throws {
         let store = SwiftDataSyncStore(container: container, now: { self.t0 })
+        try Kit.insertWorkspace(container)
+        try Kit.insertWorkspace(container, term: "de", translation: "ru")
         let legacyWord = try Kit.insertWord(container, polish: "kot")
         let germanWord = try Kit.insertWord(container, polish: "haus")
         try moveWord(germanWord, to: de)
@@ -301,7 +304,9 @@ final class WorkspaceScopingTests: XCTestCase {
         let words = try store.pendingWords(ownerID: Kit.owner, now: t0, excluding: [])
         let folders = try store.pendingFolders(ownerID: Kit.owner, now: t0, excluding: [])
 
-        XCTAssertEqual(words.rows.map(\.id), [legacyWord])
-        XCTAssertEqual(folders.rows.map(\.payload.name), ["Pl"])
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: words.rows.map { ($0.id, $0.payload.workspaceID) }),
+                       [legacyWord: pl, germanWord: de])
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: folders.rows.map { ($0.payload.name, $0.payload.workspaceID) }),
+                       ["Pl": pl, "De": de])
     }
 }

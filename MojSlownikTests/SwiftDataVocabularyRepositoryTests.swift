@@ -51,13 +51,15 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
 
         clock = created.addingTimeInterval(10)
         try repo.setMembership(wordID: id, folderID: folder.id, included: true)
-        XCTAssertEqual(try rows(container).first?.folderIDs, [folder.id])
-        XCTAssertEqual(try rows(container).first?.updatedAt, clock)
+        XCTAssertEqual(try memberFolders(try XCTUnwrap(rows(container).first), container), [folder.id])
+        XCTAssertEqual(try rows(container).first?.updatedAt, created, "a membership edit does not touch the word")
+        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<FolderMembership>()).first?.updatedAt, clock)
 
-        let afterMembership = clock
+        let afterMembership = created
         clock = created.addingTimeInterval(20)
         try repo.setMembership(wordID: id, folderID: folder.id, included: true)
-        XCTAssertEqual(try rows(container).first?.updatedAt, afterMembership)
+        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<FolderMembership>()).first?.updatedAt,
+                       created.addingTimeInterval(10), "a repeated include is a no-op")
 
         try repo.setCategory(.food, wordID: id)
         XCTAssertEqual(try rows(container).first?.updatedAt, afterMembership)
@@ -67,8 +69,8 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
 
         clock = created.addingTimeInterval(30)
         try repo.removeFromAllFolders(wordID: id)
-        XCTAssertEqual(try rows(container).first?.folderIDs, [])
-        XCTAssertEqual(try rows(container).first?.updatedAt, clock)
+        XCTAssertTrue(try memberFolders(try XCTUnwrap(rows(container).first), container).isEmpty)
+        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<FolderMembership>()).first?.deletedAt, clock)
     }
 
     func testToggleCreatesTombstoneAndThenNewRow() throws {

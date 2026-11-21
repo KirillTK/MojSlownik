@@ -11,27 +11,37 @@ enum ScanWordStore {
         context.autosaveEnabled = false
         let words = WorkspaceScope.words(try context.fetch(FetchDescriptor<Word>()), workspaceID: workspace.id)
         let existing = words.filter { $0.matches(entry) }
+        let memberships = try context.fetch(FetchDescriptor<FolderMembership>())
+        var undo = FolderStore.MembershipUndo()
         let isIncluded: Bool
         if let folderID {
             try FolderStore.requireFolder(folderID, in: context, workspaceID: workspace.id)
             if existing.isEmpty {
                 let word = makeWord(entry, category: category, workspace: workspace, now: now)
-                word.folderIDs = [folderID]
                 context.insert(word)
+                FolderStore.setMembership(wordID: word.uuid ?? UUID(), folderID: folderID, workspaceID: workspace.id,
+                                          included: true, among: memberships, context: context, now: now,
+                                          undo: &undo)
                 isIncluded = true
             } else {
-                let wasIncluded = existing.contains { $0.folderIDs.contains(folderID) }
-                let previousFolders = existing.map(\.folderIDs)
+                let index = MembershipIndex(memberships)
+                let wasIncluded = existing.contains { index.contains(wordID: $0.uuid, folderID: folderID) }
                 // Legacy duplicates must not leave hidden membership behind.
-                for word in existing { word.folderIDs.removeAll { $0 == folderID } }
-                if !wasIncluded { existing[0].folderIDs.append(folderID) }
-                for (word, previous) in zip(existing, previousFolders) where word.folderIDs != previous {
-                    word.updatedAt = now
+                for (offset, word) in existing.enumerated() {
+                    guard let uuid = word.uuid else { continue }
+                    FolderStore.setMembership(wordID: uuid, folderID: folderID, workspaceID: workspace.id,
+                                              included: !wasIncluded && offset == 0, among: memberships,
+                                              context: context, now: now, undo: &undo)
                 }
                 isIncluded = !wasIncluded
             }
         } else if !existing.isEmpty {
-            for word in existing { word.markDeleted(now: now) }
+            for word in existing {
+                word.markDeleted(now: now)
+                if let uuid = word.uuid {
+                    FolderStore.tombstoneMemberships(ofWord: uuid, among: memberships, now: now, undo: &undo)
+                }
+            }
             isIncluded = false
         } else {
             context.insert(makeWord(entry, category: category, workspace: workspace, now: now))
@@ -55,6 +65,11 @@ enum ScanWordStore {
             throw FolderStore.StoreError.missingWord
         }
         word.markDeleted(now: now)
+        if let uuid = word.uuid {
+            var undo = FolderStore.MembershipUndo()
+            FolderStore.tombstoneMemberships(ofWord: uuid, among: try context.fetch(FetchDescriptor<FolderMembership>()),
+                                             now: now, undo: &undo)
+        }
         do { try context.save() }
         catch {
             context.rollback()
@@ -76,15 +91,16 @@ enum ScanWordStore {
                 word.category = category
                 changed = true
             }
-            if let folderID, !word.folderIDs.contains(folderID) {
-                word.folderIDs.append(folderID)
-                changed = true
-            }
             if changed { word.updatedAt = now }
         } else {
             word = makeWord(entry, category: category, workspace: workspace, now: now)
             context.insert(word)
-            if let folderID { word.folderIDs.append(folderID) }
+        }
+        if let folderID, let uuid = word.uuid {
+            var undo = FolderStore.MembershipUndo()
+            FolderStore.setMembership(wordID: uuid, folderID: folderID, workspaceID: workspace.id, included: true,
+                                      among: try context.fetch(FetchDescriptor<FolderMembership>()),
+                                      context: context, now: now, undo: &undo)
         }
         do { try context.save() }
         catch {

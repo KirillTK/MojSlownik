@@ -53,13 +53,13 @@ final class FolderLibraryStoreTests: XCTestCase {
         let id = try library.create(name: "Урок 1")
         let context = ModelContext(container)
         let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        word.folderIDs = [id]
         word.repetitions = 7
         word.intervalDays = 14
         word.easeFactor = 2.8
         let dueDate = Date(timeIntervalSince1970: 1_700_000_000)
         word.dueDate = dueDate
         context.insert(word)
+        context.insert(FolderMembership(wordID: try XCTUnwrap(word.uuid), folderID: id, workspaceID: WorkspaceID.legacy))
         try context.save()
 
         try library.delete(id: id)
@@ -67,7 +67,7 @@ final class FolderLibraryStoreTests: XCTestCase {
         XCTAssertTrue(anotherConsumer.options.isEmpty)
         let readingContext = ModelContext(container)
         let saved = try XCTUnwrap(readingContext.fetch(FetchDescriptor<Word>()).first)
-        XCTAssertTrue(saved.folderIDs.isEmpty)
+        XCTAssertTrue(try memberFolders(saved, container).isEmpty)
         XCTAssertEqual(saved.polish, "woda")
         XCTAssertEqual(saved.repetitions, 7)
         XCTAssertEqual(saved.intervalDays, 14)

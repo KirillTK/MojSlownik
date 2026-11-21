@@ -231,6 +231,8 @@ struct ScanResultView: View {
     @Environment(WorkspaceStore.self) private var workspaces
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var storedSavedWords: [Word]
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
     private var savedWords: [Word] { WorkspaceScope.words(storedSavedWords, workspaceID: workspaces.activeID) }
     @State private var draft: ScanResultDraft
     @State private var selectedWord: SelectedWord?
@@ -542,13 +544,13 @@ struct ScanResultView: View {
         let entry = WordEntry.legacy(source: word, translation: translation)
         let matches = savedWords.filter { $0.matches(entry) }
         if let selectedFolderID,
-           let member = matches.first(where: { $0.folderIDs.contains(selectedFolderID) }) { return member }
+           let member = matches.first(where: { memberships.contains(wordID: $0.uuid, folderID: selectedFolderID) }) { return member }
         return matches.first
     }
 
     private func isIncluded(_ word: Word?) -> Bool {
         guard let word else { return false }
-        return selectedFolderID.map { word.folderIDs.contains($0) } ?? true
+        return selectedFolderID.map { memberships.contains(wordID: word.uuid, folderID: $0) } ?? true
     }
 
     private func toggleSaved(_ text: String) {

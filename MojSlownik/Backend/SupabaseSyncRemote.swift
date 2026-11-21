@@ -6,6 +6,8 @@ import Supabase
 /// reach a log.
 @MainActor
 final class SupabaseSyncRemote: SyncRemote {
+    static let workspacesTable = "workspaces"
+    static let membershipsTable = "word_folders"
     static let wordsTable = "words"
     static let foldersTable = "folders"
 
@@ -13,6 +15,47 @@ final class SupabaseSyncRemote: SyncRemote {
 
     init(provider: SupabaseClientProvider) {
         self.provider = provider
+    }
+
+    func fetchWorkspaces(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteWorkspaceRecord] {
+        let data = try await fetch(table: Self.workspacesTable, columns: RemoteWorkspaceUpsert.selectColumns,
+                                   ownerID: ownerID, after: cursor, limit: limit)
+        return try RemoteRecordDecoder.workspaces(from: data)
+    }
+
+    func fetchMemberships(ownerID: UUID, after cursor: SyncCursor?,
+                          limit: Int) async throws -> [RemoteMembershipRecord] {
+        do {
+            var query = provider.client.from(Self.membershipsTable).select(RemoteMembershipUpsert.selectColumns)
+                .eq("user_id", value: ownerID)
+            if let cursor {
+                query = query.gte("updated_at", value: cursor.timestampString)
+                    .or(Self.membershipKeysetFilter(after: cursor))
+            }
+            let data = try await query.order("updated_at").order("word_id").order("folder_id")
+                .limit(limit).execute().data
+            return try RemoteRecordDecoder.memberships(from: data)
+        } catch {
+            throw Self.classify(error)
+        }
+    }
+
+    func upsertWorkspaces(_ rows: [RemoteWorkspaceUpsert]) async throws -> [RemoteAck] {
+        try await upsert(rows, table: Self.workspacesTable)
+    }
+
+    func upsertMemberships(_ rows: [RemoteMembershipUpsert]) async throws -> [RemoteMembershipAck] {
+        guard !rows.isEmpty else { return [] }
+        do {
+            let response: PostgrestResponse<[RemoteMembershipAck]> = try await provider.client
+                .from(Self.membershipsTable)
+                .upsert(rows, onConflict: "user_id,word_id,folder_id", returning: .representation)
+                .select("word_id,folder_id,updated_at")
+                .execute()
+            return response.value
+        } catch {
+            throw Self.classify(error)
+        }
     }
 
     func fetchFolders(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteFolderRecord] {
@@ -68,6 +111,16 @@ final class SupabaseSyncRemote: SyncRemote {
     nonisolated static func keysetFilter(after cursor: SyncCursor) -> String {
         let timestamp = cursor.timestampString
         return "updated_at.gt.\"\(timestamp)\",and(updated_at.eq.\"\(timestamp)\",id.gt.\(cursor.id.uuidString.lowercased()))"
+    }
+
+    /// Memberships strictly after the cursor in `(updated_at, word_id, folder_id)` order
+    /// (`id` = word_id, `secondaryID` = folder_id).
+    nonisolated static func membershipKeysetFilter(after cursor: SyncCursor) -> String {
+        let timestamp = cursor.timestampString
+        let word = cursor.id.uuidString.lowercased()
+        let folder = cursor.secondaryID?.uuidString.lowercased() ?? "00000000-0000-0000-0000-000000000000"
+        return "updated_at.gt.\"\(timestamp)\",and(updated_at.eq.\"\(timestamp)\",word_id.gt.\(word)),"
+            + "and(updated_at.eq.\"\(timestamp)\",word_id.eq.\(word),folder_id.gt.\(folder))"
     }
 
     /// Permanent row rejections (SQLSTATE 22/23, HTTP 413) become `.rejected` so the engine

@@ -8,11 +8,11 @@ final class FolderTrainingTests: XCTestCase {
         let pairs = [("вода", "woda"), ("хлеб", "chleb"), ("чай", "herbata"), ("кофе", "kawa")]
         let members = pairs.map { russian, polish in
             let word = Word(russian: russian, polish: polish, sourceLanguage: .polish)
-            word.folderIDs = [folderID]
             return word
         }
         let outsider = Word(russian: "поезд", polish: "pociąg", sourceLanguage: .polish)
-        let scoped = FolderStore.words(members + [outsider], in: folderID)
+        let index = MembershipIndex.linking(members, to: folderID)
+        let scoped = FolderStore.words(members + [outsider], in: folderID, memberships: index)
         let questions = QuizQuestion.generate(from: scoped, count: 10)
         XCTAssertEqual(questions.count, 4)
         for question in questions {
@@ -25,6 +25,6 @@ final class FolderTrainingTests: XCTestCase {
             XCTAssertTrue(Set(question.options).isSubset(of: allowedAnswers))
             XCTAssertTrue(question.options.contains(question.correctAnswer))
         }
-        XCTAssertTrue(QuizQuestion.generate(from: FolderStore.words(members, in: UUID()), count: 10).isEmpty)
+        XCTAssertTrue(QuizQuestion.generate(from: FolderStore.words(members, in: UUID(), memberships: index), count: 10).isEmpty)
     }
 }

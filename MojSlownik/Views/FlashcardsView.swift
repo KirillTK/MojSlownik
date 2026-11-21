@@ -11,6 +11,8 @@ struct FlashcardsView: View {
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
     private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var sessionWords: [Word] = []
@@ -48,7 +50,7 @@ struct FlashcardsView: View {
     }
 
     private func startSession() {
-        let words = FolderStore.words(allWords, in: folderID)
+        let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard sessionWords.isEmpty, !words.isEmpty else { return }
         dailyStudy.refresh()
         let due = dailyStudy.reviewWords(for: words).shuffled()

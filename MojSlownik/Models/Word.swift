@@ -10,7 +10,10 @@ final class Word {
     var polish: String
     var sourceLanguageCode: String
     var categoryRawValue: String = "Другое"
+    // Frozen legacy storage: memberships live in FolderMembership. Never written after the
+    // memberships migration (`legacyFolderIDsMigrated`); read only by WorkspaceBackfill.
     var folderIDs: [UUID] = []
+    var legacyFolderIDsMigrated: Bool = false
     var createdAt: Date
     // stable cross-store identity; optional for additive migration; backfilled at launch
     var uuid: UUID? = nil

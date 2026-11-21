@@ -9,6 +9,8 @@ struct ListeningPracticeView: View {
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
     private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var questions: [ListeningQuestion] = []
@@ -64,7 +66,7 @@ struct ListeningPracticeView: View {
     }
 
     private func startSession() {
-        let words = FolderStore.words(allWords, in: folderID)
+        let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard questions.isEmpty, !words.isEmpty else { return }
         dailyStudy.refresh()
         questions = ListeningQuestion.generate(from: words, count: 10)

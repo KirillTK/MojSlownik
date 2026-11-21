@@ -12,9 +12,35 @@ final class InMemorySyncRemote: SyncRemote {
         let id: UUID
     }
 
+    struct MembershipKey: Hashable, Sendable {
+        let userID: UUID
+        let wordID: UUID
+        let folderID: UUID
+    }
+
     struct Server: Sendable {
+        var workspaces: [Key: RemoteWorkspaceRecord] = [:]
         var words: [Key: RemoteWordRecord] = [:]
         var folders: [Key: RemoteFolderRecord] = [:]
+        var memberships: [MembershipKey: RemoteMembershipRecord] = [:]
+
+        mutating func put(_ record: RemoteWorkspaceRecord, at clock: Date) {
+            let key = Key(userID: record.userID, id: record.id)
+            let updatedAt = InMemorySyncRemote.stamp(clock, after: workspaces[key]?.updatedAt)
+            workspaces[key] = RemoteWorkspaceRecord(
+                id: record.id, userID: record.userID, termLanguage: record.termLanguage,
+                translationLanguage: record.translationLanguage, sortOrder: record.sortOrder,
+                createdAt: record.createdAt, updatedAt: updatedAt, deletedAt: record.deletedAt)
+        }
+
+        mutating func put(_ record: RemoteMembershipRecord, at clock: Date) {
+            let key = MembershipKey(userID: record.userID, wordID: record.wordID, folderID: record.folderID)
+            let updatedAt = InMemorySyncRemote.stamp(clock, after: memberships[key]?.updatedAt)
+            memberships[key] = RemoteMembershipRecord(
+                userID: record.userID, workspaceID: record.workspaceID, wordID: record.wordID,
+                folderID: record.folderID, createdAt: record.createdAt, updatedAt: updatedAt,
+                deletedAt: record.deletedAt)
+        }
 
         /// Writes a row as the trigger would: a new, strictly larger `updated_at`.
         mutating func put(_ record: RemoteWordRecord, at clock: Date) {
@@ -26,7 +52,8 @@ final class InMemorySyncRemote: SyncRemote {
         mutating func put(_ record: RemoteFolderRecord, at clock: Date) {
             let key = Key(userID: record.userID, id: record.id)
             let updatedAt = InMemorySyncRemote.stamp(clock, after: folders[key]?.updatedAt)
-            folders[key] = RemoteFolderRecord(id: record.id, userID: record.userID, name: record.name,
+            folders[key] = RemoteFolderRecord(id: record.id, userID: record.userID,
+                                              workspaceID: record.workspaceID, name: record.name,
                                               sortOrder: record.sortOrder, createdAt: record.createdAt,
                                               updatedAt: updatedAt, deletedAt: record.deletedAt)
         }
@@ -62,7 +89,9 @@ final class InMemorySyncRemote: SyncRemote {
     // Assertion logs.
     private(set) var requestedCursors: [SyncCursor?] = []
     private(set) var requestedOwners: [UUID] = []
+    private(set) var upsertedWorkspaceBatches: [[RemoteWorkspaceUpsert]] = []
     private(set) var upsertedWordBatches: [[RemoteWordUpsert]] = []
+    private(set) var upsertedMembershipBatches: [[RemoteMembershipUpsert]] = []
     private(set) var upsertedFolderBatches: [[RemoteFolderUpsert]] = []
     private(set) var callCount = 0
     /// Every fetch and upsert call, in order ("fetchFolders", "fetchWords", "upsertFolders", ...).
@@ -79,7 +108,13 @@ final class InMemorySyncRemote: SyncRemote {
         return max(truncated, previous.addingTimeInterval(0.001))
     }
 
-    func seed(words: [RemoteWordRecord] = [], folders: [RemoteFolderRecord] = []) {
+    func seed(workspaces: [RemoteWorkspaceRecord] = [], words: [RemoteWordRecord] = [],
+              folders: [RemoteFolderRecord] = [], memberships: [RemoteMembershipRecord] = []) {
+        for workspace in workspaces { server.workspaces[Key(userID: workspace.userID, id: workspace.id)] = workspace }
+        for membership in memberships {
+            server.memberships[MembershipKey(userID: membership.userID, wordID: membership.wordID,
+                                             folderID: membership.folderID)] = membership
+        }
         for word in words { server.words[Key(userID: word.userID, id: word.id)] = word }
         for folder in folders { server.folders[Key(userID: folder.userID, id: folder.id)] = folder }
     }
@@ -91,10 +126,33 @@ final class InMemorySyncRemote: SyncRemote {
         changes(&server, clock())
     }
 
+    func workspace(id: UUID, userID: UUID) -> RemoteWorkspaceRecord? { server.workspaces[Key(userID: userID, id: id)] }
+    func membership(wordID: UUID, folderID: UUID, userID: UUID) -> RemoteMembershipRecord? {
+        server.memberships[MembershipKey(userID: userID, wordID: wordID, folderID: folderID)]
+    }
     func word(id: UUID, userID: UUID) -> RemoteWordRecord? { server.words[Key(userID: userID, id: id)] }
     func folder(id: UUID, userID: UUID) -> RemoteFolderRecord? { server.folders[Key(userID: userID, id: id)] }
 
     // MARK: SyncRemote
+
+    func fetchWorkspaces(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteWorkspaceRecord] {
+        try enter("fetchWorkspaces")
+        try await pause()
+        requestedCursors.append(cursor)
+        requestedOwners.append(ownerID)
+        let rows = server.workspaces.values.filter { $0.userID == ownerID }
+        return Self.page(rows, after: cursor, limit: limit, updatedAt: \.updatedAt, id: \.id)
+    }
+
+    func fetchMemberships(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteMembershipRecord] {
+        try enter("fetchMemberships")
+        try await pause()
+        requestedCursors.append(cursor)
+        requestedOwners.append(ownerID)
+        let rows = server.memberships.values.filter { $0.userID == ownerID }
+        return Self.page(rows, after: cursor, limit: limit, updatedAt: \.updatedAt, id: \.wordID,
+                         secondary: \.folderID)
+    }
 
     func fetchFolders(ownerID: UUID, after cursor: SyncCursor?, limit: Int) async throws -> [RemoteFolderRecord] {
         try enter("fetchFolders")
@@ -115,6 +173,54 @@ final class InMemorySyncRemote: SyncRemote {
         return Self.page(rows, after: cursor, limit: limit, updatedAt: \.updatedAt, id: \.id)
     }
 
+    func upsertWorkspaces(_ rows: [RemoteWorkspaceUpsert]) async throws -> [RemoteAck] {
+        try enter("upsertWorkspaces")
+        try await pause()
+        guard rows.allSatisfy({ $0.userID == currentUserID }) else { throw SyncRemoteError.unauthorized }
+        upsertedWorkspaceBatches.append(rows)
+        let at = clock()
+        var acks: [RemoteAck] = []
+        for row in rows {
+            server.put(RemoteWorkspaceRecord(id: row.id, userID: row.userID, termLanguage: row.termLanguage,
+                                             translationLanguage: row.translationLanguage,
+                                             sortOrder: row.sortOrder, createdAt: row.createdAt, updatedAt: at,
+                                             deletedAt: row.deletedAt), at: at)
+            if let stored = workspace(id: row.id, userID: row.userID) {
+                acks.append(RemoteAck(id: stored.id, updatedAt: stored.updatedAt))
+            }
+        }
+        return try finishUpsert(acks)
+    }
+
+    func upsertMemberships(_ rows: [RemoteMembershipUpsert]) async throws -> [RemoteMembershipAck] {
+        try enter("upsertMemberships")
+        try await pause()
+        guard rows.allSatisfy({ $0.userID == currentUserID }) else { throw SyncRemoteError.unauthorized }
+        // The composite foreign keys: word and folder exist in the membership's workspace.
+        guard rows.allSatisfy({ row in
+            server.words[Key(userID: row.userID, id: row.wordID)]?.workspaceID == row.workspaceID
+                && server.folders[Key(userID: row.userID, id: row.folderID)]?.workspaceID == row.workspaceID
+        }) else { throw SyncRemoteError.rejected }
+        upsertedMembershipBatches.append(rows)
+        let at = clock()
+        var acks: [RemoteMembershipAck] = []
+        for row in rows {
+            server.put(RemoteMembershipRecord(userID: row.userID, workspaceID: row.workspaceID, wordID: row.wordID,
+                                              folderID: row.folderID, createdAt: row.createdAt, updatedAt: at,
+                                              deletedAt: row.deletedAt), at: at)
+            if let stored = membership(wordID: row.wordID, folderID: row.folderID, userID: row.userID) {
+                acks.append(RemoteMembershipAck(wordID: stored.wordID, folderID: stored.folderID,
+                                                updatedAt: stored.updatedAt))
+            }
+        }
+        if let error = nextErrorAfterStore {
+            nextErrorAfterStore = nil
+            throw error
+        }
+        beforeAck?()
+        return acks
+    }
+
     func upsertFolders(_ rows: [RemoteFolderUpsert]) async throws -> [RemoteAck] {
         try enter("upsertFolders")
         try await pause()
@@ -123,8 +229,8 @@ final class InMemorySyncRemote: SyncRemote {
         let at = clock()
         var acks: [RemoteAck] = []
         for row in rows {
-            server.put(RemoteFolderRecord(id: row.id, userID: row.userID, name: row.name,
-                                          sortOrder: row.sortOrder, createdAt: row.createdAt,
+            server.put(RemoteFolderRecord(id: row.id, userID: row.userID, workspaceID: row.workspaceID,
+                                          name: row.name, sortOrder: row.sortOrder, createdAt: row.createdAt,
                                           updatedAt: at, deletedAt: row.deletedAt), at: at)
             if let stored = folder(id: row.id, userID: row.userID) {
                 acks.append(RemoteAck(id: stored.id, updatedAt: stored.updatedAt))
@@ -143,9 +249,8 @@ final class InMemorySyncRemote: SyncRemote {
         var acks: [RemoteAck] = []
         for row in rows {
             server.put(RemoteWordRecord(
-                id: row.id, userID: row.userID, term: row.term, termLanguage: row.termLanguage,
-                translation: row.translation, translationLanguage: row.translationLanguage,
-                enteredLanguage: row.enteredLanguage, category: row.category, folderIDs: row.folderIDs,
+                id: row.id, userID: row.userID, workspaceID: row.workspaceID, term: row.term,
+                translation: row.translation, enteredSide: row.enteredSide, category: row.category,
                 createdAt: row.createdAt, updatedAt: at, deletedAt: row.deletedAt,
                 easeFactor: row.easeFactor, intervalDays: row.intervalDays, repetitions: row.repetitions,
                 dueDate: row.dueDate, lastReviewGrade: row.lastReviewGrade, knowledgeTier: row.knowledgeTier,
@@ -187,31 +292,31 @@ final class InMemorySyncRemote: SyncRemote {
         return acks
     }
 
-    /// Keyset: `(updated_at, id)` strictly after the cursor, ordered, limited.
+    /// Keyset: `(updated_at, id[, secondary])` strictly after the cursor, ordered, limited.
     private static func page<Row>(_ rows: [Row], after cursor: SyncCursor?, limit: Int,
-                                  updatedAt: KeyPath<Row, Date>, id: KeyPath<Row, UUID>) -> [Row] {
+                                  updatedAt: KeyPath<Row, Date>, id: KeyPath<Row, UUID>,
+                                  secondary: KeyPath<Row, UUID>? = nil) -> [Row] {
         func millis(_ row: Row) -> Int64 { SyncCursor(updatedAt: row[keyPath: updatedAt], id: row[keyPath: id]).updatedAtMillis }
-        func idText(_ row: Row) -> String { row[keyPath: id].uuidString }
+        func key(_ row: Row) -> String {
+            row[keyPath: id].uuidString + (secondary.map { row[keyPath: $0].uuidString } ?? "")
+        }
+        let cursorKey = cursor.map { $0.id.uuidString + (secondary == nil ? "" : ($0.secondaryID?.uuidString ?? "")) }
         let after = rows.filter { row in
-            guard let cursor else { return true }
+            guard let cursor, let cursorKey else { return true }
             let time = millis(row)
-            return time > cursor.updatedAtMillis
-                || (time == cursor.updatedAtMillis && idText(row) > cursor.id.uuidString)
+            return time > cursor.updatedAtMillis || (time == cursor.updatedAtMillis && key(row) > cursorKey)
         }
-        let sorted = after.sorted { lhs, rhs in
-            (millis(lhs), idText(lhs)) < (millis(rhs), idText(rhs))
-        }
+        let sorted = after.sorted { lhs, rhs in (millis(lhs), key(lhs)) < (millis(rhs), key(rhs)) }
         return Array(sorted.prefix(limit))
     }
 }
 
 extension RemoteWordRecord {
-    func replacing(term: String? = nil, translation: String? = nil, folderIDs: [UUID]? = nil,
+    func replacing(term: String? = nil, translation: String? = nil,
                    deletedAt: Date?? = nil, updatedAt: Date? = nil) -> RemoteWordRecord {
         RemoteWordRecord(
-            id: id, userID: userID, term: term ?? self.term, termLanguage: termLanguage,
-            translation: translation ?? self.translation, translationLanguage: translationLanguage,
-            enteredLanguage: enteredLanguage, category: category, folderIDs: folderIDs ?? self.folderIDs,
+            id: id, userID: userID, workspaceID: workspaceID, term: term ?? self.term,
+            translation: translation ?? self.translation, enteredSide: enteredSide, category: category,
             createdAt: createdAt, updatedAt: updatedAt ?? self.updatedAt,
             deletedAt: deletedAt ?? self.deletedAt, easeFactor: easeFactor, intervalDays: intervalDays,
             repetitions: repetitions, dueDate: dueDate, lastReviewGrade: lastReviewGrade,
@@ -252,24 +357,32 @@ enum UITestSyncState: String, CaseIterable, Sendable {
         case .remoteVocabulary:
             let stamp = UITestFixture.truncatedToMillis(now.addingTimeInterval(-600))
             remote.seed(
+                workspaces: [Self.workspaceRecord(now: now, updatedAt: stamp)],
                 words: [Self.wordRecord(id: Self.cloudWordIDs[0], polish: "most", russian: "мост", category: "other",
-                                        folders: [Self.cloudFolderID], now: now, updatedAt: stamp),
+                                        now: now, updatedAt: stamp),
                         Self.wordRecord(id: Self.cloudWordIDs[1], polish: "ser", russian: "сыр", category: "food",
-                                        folders: [], now: now, updatedAt: stamp),
+                                        now: now, updatedAt: stamp),
                         // Same pair as the `kot` fixture word under another id: adopted, not duplicated.
                         Self.wordRecord(id: Self.cloudWordIDs[2], polish: "kot", russian: "кот", category: "nature",
-                                        folders: [], now: now, updatedAt: stamp)],
-                folders: [RemoteFolderRecord(id: Self.cloudFolderID, userID: Self.owner, name: "Из облака",
+                                        now: now, updatedAt: stamp)],
+                folders: [RemoteFolderRecord(id: Self.cloudFolderID, userID: Self.owner,
+                                             workspaceID: WorkspaceID.legacy, name: "Из облака",
                                              sortOrder: 0, createdAt: now.addingTimeInterval(-3_600),
-                                             updatedAt: stamp, deletedAt: nil)])
+                                             updatedAt: stamp, deletedAt: nil)],
+                memberships: [RemoteMembershipRecord(userID: Self.owner, workspaceID: WorkspaceID.legacy,
+                                                     wordID: Self.cloudWordIDs[0], folderID: Self.cloudFolderID,
+                                                     createdAt: now.addingTimeInterval(-3_600), updatedAt: stamp,
+                                                     deletedAt: nil)])
         case .syncedThenRemoteChanges:
             let specs = UITestFixture.syncedWords(now: now)
-            remote.seed(words: specs.map { spec in
-                Self.wordRecord(id: spec.id, polish: spec.polish, russian: spec.russian,
-                                category: WordCategory.detect(russian: spec.russian, polish: spec.polish).stableID,
-                                folders: [], now: now, updatedAt: spec.syncedAt, createdAt: spec.createdAt,
-                                entered: spec.source)
-            })
+            remote.seed(
+                workspaces: [Self.workspaceRecord(now: now, updatedAt: UITestFixture.syncedWorkspaceStamp(now: now))],
+                words: specs.map { spec in
+                    Self.wordRecord(id: spec.id, polish: spec.polish, russian: spec.russian,
+                                    category: WordCategory.detect(russian: spec.russian, polish: spec.polish).stableID,
+                                    now: now, updatedAt: spec.syncedAt, createdAt: spec.createdAt,
+                                    entered: spec.source)
+                })
             let owner = Self.owner
             remote.scriptedChanges = { server, clock in
                 let ids = UITestFixture.syncedWordIDs
@@ -298,17 +411,25 @@ enum UITestSyncState: String, CaseIterable, Sendable {
             let newest = UITestFixture.syncedWords(now: now).max { $0.syncedAt < $1.syncedAt }
             try? repository.save(SyncState(
                 linkedAccountID: Self.owner, capabilityVersion: SyncEngine.capabilityVersion,
+                workspacesCursor: SyncCursor(updatedAt: UITestFixture.syncedWorkspaceStamp(now: now),
+                                             id: WorkspaceID.legacy),
                 wordsCursor: newest.map { SyncCursor(updatedAt: $0.syncedAt, id: $0.id) }))
         }
     }
 
+    @MainActor private static func workspaceRecord(now: Date, updatedAt: Date) -> RemoteWorkspaceRecord {
+        RemoteWorkspaceRecord(id: WorkspaceID.legacy, userID: owner, termLanguage: "pl", translationLanguage: "ru",
+                              sortOrder: 0, createdAt: now.addingTimeInterval(-7_200), updatedAt: updatedAt,
+                              deletedAt: nil)
+    }
+
     @MainActor private static func wordRecord(id: UUID, polish: String, russian: String, category: String,
-                                   folders: [UUID], now: Date, updatedAt: Date, createdAt: Date? = nil,
-                                   entered: AppLanguage = .russian) -> RemoteWordRecord {
+                                              now: Date, updatedAt: Date, createdAt: Date? = nil,
+                                              entered: AppLanguage = .russian) -> RemoteWordRecord {
         RemoteWordRecord(
-            id: id, userID: owner, term: polish, termLanguage: "pl", translation: russian,
-            translationLanguage: "ru", enteredLanguage: entered.rawValue, category: category,
-            folderIDs: folders, createdAt: createdAt ?? now.addingTimeInterval(-3_600), updatedAt: updatedAt,
+            id: id, userID: owner, workspaceID: WorkspaceID.legacy, term: polish, translation: russian,
+            enteredSide: (entered == .russian ? WordSide.translation : WordSide.term).rawValue, category: category,
+            createdAt: createdAt ?? now.addingTimeInterval(-3_600), updatedAt: updatedAt,
             deletedAt: nil, easeFactor: 2.5, intervalDays: 30, repetitions: 3,
             dueDate: now.addingTimeInterval(30 * 86_400), lastReviewGrade: nil, knowledgeTier: nil,
             consecutiveSoftMisses: 0)

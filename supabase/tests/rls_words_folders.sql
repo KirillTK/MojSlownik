@@ -18,31 +18,36 @@ select set_config('request.jwt.claims',
     '{"sub":"00000000-0000-4000-8000-00000000000a","role":"authenticated","is_anonymous":true}', true);
 set local role authenticated;
 
-insert into public.folders (id, name, created_at)
-values ('00000000-0000-4000-8000-0000000000f1', 'A folder', now());
-insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                          created_at, due_date, folder_ids)
-values ('00000000-0000-4000-8000-0000000000d1', 'kot', 'pl', 'кот', 'ru', 'ru', now(), now(),
-        '{00000000-0000-4000-8000-0000000000f1}');
+insert into public.workspaces (id, term_language, translation_language, created_at)
+values ('0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'pl', 'ru', now());
+insert into public.folders (id, workspace_id, name, created_at)
+values ('00000000-0000-4000-8000-0000000000f1', '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'A folder', now());
+insert into public.words (id, workspace_id, term, translation, entered_side, created_at, due_date)
+values ('00000000-0000-4000-8000-0000000000d1', '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'kot', 'кот',
+        'translation', now(), now());
+insert into public.word_folders (workspace_id, word_id, folder_id, created_at)
+values ('0db61f29-e285-5e06-84f5-d85acfa1b5cc', '00000000-0000-4000-8000-0000000000d1',
+        '00000000-0000-4000-8000-0000000000f1', now());
 
 do $$
 begin
     assert (select count(*) from public.words) = 1, 'A must see its own word';
     assert (select count(*) from public.folders) = 1, 'A must see its own folder';
+    assert (select count(*) from public.word_folders) = 1, 'A must see its own membership';
     assert (select user_id from public.words) = auth.uid(), 'user_id must default to auth.uid()';
 
     begin
-        insert into public.words (user_id, id, term, term_language, translation, translation_language,
-                                  entered_language, created_at, due_date)
+        insert into public.words (user_id, id, workspace_id, term, translation, entered_side, created_at, due_date)
         values ('00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-0000000000d2',
-                'pies', 'pl', 'пёс', 'ru', 'ru', now(), now());
+                '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'pies', 'пёс', 'translation', now(), now());
         raise exception 'FAIL: A inserted a word owned by B';
     exception when insufficient_privilege then null;
     end;
 
     begin
-        insert into public.folders (user_id, id, name, created_at)
-        values ('00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-0000000000f2', 'x', now());
+        insert into public.folders (user_id, id, workspace_id, name, created_at)
+        values ('00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-0000000000f2',
+                '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'x', now());
         raise exception 'FAIL: A inserted a folder owned by B';
     exception when insufficient_privilege then null;
     end;
@@ -74,6 +79,8 @@ declare
 begin
     assert (select count(*) from public.words) = 0, 'B must not see A''s words';
     assert (select count(*) from public.folders) = 0, 'B must not see A''s folders';
+    assert (select count(*) from public.workspaces) = 0, 'B must not see A''s workspaces';
+    assert (select count(*) from public.word_folders) = 0, 'B must not see A''s memberships';
 
     update public.words set term = 'hacked' where id = '00000000-0000-4000-8000-0000000000d1';
     get diagnostics affected = row_count;
@@ -96,45 +103,50 @@ begin
     exception when insufficient_privilege then null;
     end;
 
-    -- Same client-generated id in another account: allowed, no cross-user collision.
-    insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                              created_at, due_date)
-    values ('00000000-0000-4000-8000-0000000000d1', 'dom', 'pl', 'дом', 'ru', 'pl', now(), now());
+    -- Same client-generated ids in another account: allowed, no cross-user collision.
+    insert into public.workspaces (id, term_language, translation_language, created_at)
+    values ('0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'pl', 'ru', now());
+    insert into public.words (id, workspace_id, term, translation, entered_side, created_at, due_date)
+    values ('00000000-0000-4000-8000-0000000000d1', '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'dom', 'дом',
+            'term', now(), now());
     assert (select count(*) from public.words) = 1, 'B must see only its own word';
     assert (select term from public.words) = 'dom', 'B must see its own copy of the id';
 
     -- Any language pair fits (not only ru/pl), with category as a stable id.
-    insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                              category, created_at, due_date)
-    values ('00000000-0000-4000-8000-0000000000d4', 'Haus', 'de', 'house', 'en', 'de', 'home', now(), now());
-    assert (select count(*) from public.words where term_language = 'de' and translation_language = 'en') = 1,
+    insert into public.workspaces (id, term_language, translation_language, created_at)
+    values (extensions.uuid_generate_v5('a4f06f42-4f0b-43f6-bfb4-33545dcf1307', 'de>en'), 'de', 'en', now());
+    insert into public.words (id, workspace_id, term, translation, entered_side, category, created_at, due_date)
+    values ('00000000-0000-4000-8000-0000000000d4',
+            extensions.uuid_generate_v5('a4f06f42-4f0b-43f6-bfb4-33545dcf1307', 'de>en'),
+            'Haus', 'house', 'term', 'home', now(), now());
+    assert (select count(*) from public.words w join public.workspaces s
+                on s.user_id = w.user_id and s.id = w.workspace_id
+            where s.term_language = 'de' and s.translation_language = 'en') = 1,
            'a de/en word must be accepted';
 
     begin
-        insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                                  created_at, due_date)
-        values (gen_random_uuid(), 'a', 'pl', 'b', 'pl', 'pl', now(), now());
+        insert into public.workspaces (id, term_language, translation_language, created_at)
+        values (extensions.uuid_generate_v5('a4f06f42-4f0b-43f6-bfb4-33545dcf1307', 'pl>pl'), 'pl', 'pl', now());
         raise exception 'FAIL: same term and translation language accepted';
     exception when check_violation then null;
     end;
     begin
-        insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                                  created_at, due_date)
-        values (gen_random_uuid(), 'a', 'pl', 'b', 'ru', 'en', now(), now());
-        raise exception 'FAIL: entered_language outside the pair accepted';
+        insert into public.words (id, workspace_id, term, translation, entered_side, created_at, due_date)
+        values (gen_random_uuid(), '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'a', 'b', 'both', now(), now());
+        raise exception 'FAIL: entered_side outside term/translation accepted';
     exception when check_violation then null;
     end;
     begin
-        insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                                  created_at, due_date)
-        values (gen_random_uuid(), 'a', 'Polish', 'b', 'ru', 'ru', now(), now());
+        insert into public.workspaces (id, term_language, translation_language, created_at)
+        values (extensions.uuid_generate_v5('a4f06f42-4f0b-43f6-bfb4-33545dcf1307', 'Polish>ru'),
+                'Polish', 'ru', now());
         raise exception 'FAIL: non-BCP 47 language code accepted';
     exception when check_violation then null;
     end;
     begin
-        insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                                  category, created_at, due_date)
-        values (gen_random_uuid(), 'a', 'pl', 'b', 'ru', 'ru', 'Еда и напитки', now(), now());
+        insert into public.words (id, workspace_id, term, translation, entered_side, category, created_at, due_date)
+        values (gen_random_uuid(), '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'a', 'b', 'term',
+                'Еда и напитки', now(), now());
         raise exception 'FAIL: localized category title accepted';
     exception when check_violation then null;
     end;
@@ -168,10 +180,9 @@ begin
     exception when insufficient_privilege then null;
     end;
     begin
-        insert into public.words (user_id, id, term, term_language, translation, translation_language,
-                                  entered_language, created_at, due_date)
+        insert into public.words (user_id, id, workspace_id, term, translation, entered_side, created_at, due_date)
         values ('00000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-0000000000d3',
-                'a', 'pl', 'b', 'ru', 'ru', now(), now());
+                '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'a', 'b', 'term', now(), now());
         raise exception 'FAIL: anon can insert words';
     exception when insufficient_privilege then null;
     end;
