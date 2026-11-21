@@ -228,9 +228,10 @@ struct ScanResultView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(VocabularyStore.self) private var vocabulary
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var storedSavedWords: [Word]
-    private var savedWords: [Word] { storedSavedWords.filter(\.isActive) }
+    private var savedWords: [Word] { WorkspaceScope.words(storedSavedWords, workspaceID: workspaces.activeID) }
     @State private var draft: ScanResultDraft
     @State private var selectedWord: SelectedWord?
     @State private var saveErrors: [String: String] = [:]
@@ -486,7 +487,7 @@ struct ScanResultView: View {
             return
         }
         do {
-            try vocabulary.changeCategory(category, source: word, translation: translation)
+            try vocabulary.changeCategory(category, entry: WordEntry.legacy(source: word, translation: translation))
             categoryOverrides[word] = category
             saveErrors[word] = nil
         } catch {
@@ -538,10 +539,8 @@ struct ScanResultView: View {
 
     private func existingWord(_ word: String) -> Word? {
         guard let translation = draft.translations[word] else { return nil }
-        let language = LanguageDetector.detect(word)
-        let matches = savedWords.filter {
-            $0.matches(source: word, translation: translation, language: language)
-        }
+        let entry = WordEntry.legacy(source: word, translation: translation)
+        let matches = savedWords.filter { $0.matches(entry) }
         if let selectedFolderID,
            let member = matches.first(where: { $0.folderIDs.contains(selectedFolderID) }) { return member }
         return matches.first
@@ -558,7 +557,7 @@ struct ScanResultView: View {
             ?? category(text, translation: translation)
         do {
             savedOverrides[text] = try vocabulary.toggleScanned(
-                source: text, translation: translation, category: selectedCategory,
+                WordEntry.legacy(source: text, translation: translation), category: selectedCategory,
                 folderID: selectedFolderID
             )
             categoryOverrides[text] = selectedCategory

@@ -7,7 +7,7 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
     private var clock = Date(timeIntervalSince1970: 1_794_225_600)
 
     private func makeRepo() throws -> (SwiftDataVocabularyRepository, ModelContainer) {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let repo = SwiftDataVocabularyRepository(container: container, now: { [unowned self] in self.clock })
         return (repo, container)
@@ -19,8 +19,8 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
 
     func testAddSetsUUIDAndReAddOfActivePairReusesRow() throws {
         let (repo, container) = try makeRepo()
-        try repo.addWord(source: "woda", translation: "вода", category: .food, folderID: nil)
-        try repo.addWord(source: "woda", translation: "вода", category: .food, folderID: nil)
+        try repo.addWord(WordEntry.legacy(source: "woda", translation: "вода"), category: .food, folderID: nil, workspace: .legacy)
+        try repo.addWord(WordEntry.legacy(source: "woda", translation: "вода"), category: .food, folderID: nil, workspace: .legacy)
         let all = try rows(container)
         XCTAssertEqual(all.count, 1)
         XCTAssertNotNil(all[0].uuid)
@@ -30,7 +30,7 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
 
     func testDeleteWordSoftDeletesAndRejectsUnknownOrTombstoned() throws {
         let (repo, container) = try makeRepo()
-        try repo.addWord(source: "woda", translation: "вода", category: nil, folderID: nil)
+        try repo.addWord(WordEntry.legacy(source: "woda", translation: "вода"), category: nil, folderID: nil, workspace: .legacy)
         let id = try XCTUnwrap(rows(container).first?.uuid)
         let deletedAt = clock.addingTimeInterval(60)
         clock = deletedAt
@@ -45,7 +45,7 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
     func testMembershipAndCategoryPersistAndBumpOnlyOnChange() throws {
         let (repo, container) = try makeRepo()
         let folder = try FolderStore.create(name: "Урок", container: container)
-        try repo.addWord(source: "woda", translation: "вода", category: .food, folderID: nil)
+        try repo.addWord(WordEntry.legacy(source: "woda", translation: "вода"), category: .food, folderID: nil, workspace: .legacy)
         let id = try XCTUnwrap(rows(container).first?.uuid)
         let created = clock
 
@@ -73,13 +73,13 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
 
     func testToggleCreatesTombstoneAndThenNewRow() throws {
         let (repo, container) = try makeRepo()
-        XCTAssertTrue(try repo.toggleScannedWord(source: "woda", translation: "вода", category: .food, folderID: nil))
+        XCTAssertTrue(try repo.toggleScannedWord(WordEntry.legacy(source: "woda", translation: "вода"), category: .food, folderID: nil, workspace: .legacy))
         let firstUUID = try XCTUnwrap(rows(container).first?.uuid)
         clock = clock.addingTimeInterval(5)
         let deletedAt = clock
-        XCTAssertFalse(try repo.toggleScannedWord(source: "woda", translation: "вода", category: .food, folderID: nil))
+        XCTAssertFalse(try repo.toggleScannedWord(WordEntry.legacy(source: "woda", translation: "вода"), category: .food, folderID: nil, workspace: .legacy))
         clock = clock.addingTimeInterval(5)
-        XCTAssertTrue(try repo.toggleScannedWord(source: "woda", translation: "вода", category: .food, folderID: nil))
+        XCTAssertTrue(try repo.toggleScannedWord(WordEntry.legacy(source: "woda", translation: "вода"), category: .food, folderID: nil, workspace: .legacy))
         let all = try rows(container)
         XCTAssertEqual(all.count, 2)
         let tombstone = try XCTUnwrap(all.first { !$0.isActive })

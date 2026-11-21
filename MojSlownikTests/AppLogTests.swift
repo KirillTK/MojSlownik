@@ -100,4 +100,15 @@ final class AppLogTests: XCTestCase {
         XCTAssertEqual([LogKey.trigger, .pulled, .pushed, .skipped, .reason, .relink].map(\.rawValue),
                        ["trigger", "pulled", "pushed", "skipped", "reason", "relink"])
     }
+
+    func testWorkspaceEventsAndKeyMatchTheServerContract() {
+        let events: [LogEvent] = [.workspaceCreated, .workspaceSwitched, .workspaceDeleted, .workspaceRestored]
+        XCTAssertEqual(events.map(\.rawValue),
+                       ["workspace.created", "workspace.switched", "workspace.deleted", "workspace.restored"])
+        for event in events {
+            XCTAssertNotNil(event.rawValue.range(of: LogEvent.serverPattern, options: .regularExpression))
+        }
+        XCTAssertEqual(LogKey.termLanguage.rawValue, "term_language")
+        XCTAssertEqual(LogValue.name("de").storage, .name("de"))
+    }
 }

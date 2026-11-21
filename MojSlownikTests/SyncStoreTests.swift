@@ -23,7 +23,7 @@ final class SyncStoreTests: XCTestCase {
         remote = InMemorySyncRemote(currentUserID: owner, clock: { self.t0 })
         suite = "SyncStoreTests.\(UUID().uuidString)"
         state = UserDefaultsSyncStateRepository(defaults: UserDefaults(suiteName: suite)!)
-        folders = FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+        folders = FolderLibraryStore.inLegacyWorkspace(repository: SwiftDataFolderRepository(container: container))
         spy = AppLogSpy()
     }
 

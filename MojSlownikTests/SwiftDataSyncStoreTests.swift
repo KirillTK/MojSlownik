@@ -267,7 +267,7 @@ final class SwiftDataSyncStoreTests: XCTestCase {
         let url = directory.appendingPathComponent("dictionary.store")
         let id = UUID()
         try autoreleasepool {
-            let seed = try ModelContainer(for: Word.self, WordFolder.self,
+            let seed = try ModelContainer(for: AppSchema.schema,
                                           configurations: ModelConfiguration(url: url, cloudKitDatabase: .none))
             let context = ModelContext(seed)
             let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0.addingTimeInterval(-600))
@@ -277,7 +277,7 @@ final class SwiftDataSyncStoreTests: XCTestCase {
             context.insert(word)
             try context.save()
         }
-        let readOnly = try ModelContainer(for: Word.self, WordFolder.self,
+        let readOnly = try ModelContainer(for: AppSchema.schema,
                                           configurations: ModelConfiguration(url: url, allowsSave: false,
                                                                              cloudKitDatabase: .none))
         let failing = SwiftDataSyncStore(container: readOnly, now: { self.t0 })

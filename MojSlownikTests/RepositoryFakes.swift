@@ -7,6 +7,7 @@ enum RepositoryFakeError: Error, Equatable { case forced }
 final class InMemoryFolderRepository: FolderRepository {
     struct Row {
         var id: UUID
+        var workspaceID: UUID
         var name: String
         var sortOrder: Int
         var createdAt: Date
@@ -24,23 +25,26 @@ final class InMemoryFolderRepository: FolderRepository {
         }
     }
 
-    private var active: [Row] { rows.filter { $0.deletedAt == nil } }
+    private func active(_ workspaceID: UUID) -> [Row] {
+        rows.filter { $0.deletedAt == nil && $0.workspaceID == workspaceID }
+    }
 
-    private func records() -> [FolderRecord] {
-        active.sorted { ($0.sortOrder, $0.createdAt, $0.id.uuidString) < ($1.sortOrder, $1.createdAt, $1.id.uuidString) }
+    private func records(_ workspaceID: UUID) -> [FolderRecord] {
+        active(workspaceID).sorted { ($0.sortOrder, $0.createdAt, $0.id.uuidString) < ($1.sortOrder, $1.createdAt, $1.id.uuidString) }
             .map { FolderRecord(id: $0.id, name: $0.name) }
     }
 
-    func folders() throws -> [FolderRecord] {
+    func folders(in workspaceID: UUID) throws -> [FolderRecord] {
         try failIfNeeded()
-        return records()
+        return records(workspaceID)
     }
 
-    func createFolder(name: String) throws -> UUID {
+    func createFolder(name: String, workspaceID: UUID) throws -> UUID {
         try failIfNeeded()
-        let clean = try FolderStore.validatedName(name, excluding: nil, existing: records())
+        let clean = try FolderStore.validatedName(name, excluding: nil, existing: records(workspaceID))
         tick += 1
-        let row = Row(id: UUID(), name: clean, sortOrder: (active.map(\.sortOrder).max() ?? -1) + 1,
+        let row = Row(id: UUID(), workspaceID: workspaceID, name: clean,
+                      sortOrder: (active(workspaceID).map(\.sortOrder).max() ?? -1) + 1,
                       createdAt: Date(timeIntervalSince1970: Double(tick)), deletedAt: nil)
         rows.append(row)
         return row.id
@@ -51,12 +55,13 @@ final class InMemoryFolderRepository: FolderRepository {
         guard let index = rows.firstIndex(where: { $0.id == id && $0.deletedAt == nil }) else {
             throw FolderStore.StoreError.missingFolder
         }
-        rows[index].name = try FolderStore.validatedName(name, excluding: id, existing: records())
+        rows[index].name = try FolderStore.validatedName(name, excluding: id,
+                                                         existing: records(rows[index].workspaceID))
     }
 
-    func reorderFolders(ids: [UUID]) throws {
+    func reorderFolders(ids: [UUID], workspaceID: UUID) throws {
         try failIfNeeded()
-        let current = active
+        let current = active(workspaceID)
         guard ids.count == current.count, Set(ids).count == ids.count, Set(ids) == Set(current.map(\.id)) else {
             throw FolderStore.StoreError.invalidOrder
         }
@@ -76,9 +81,9 @@ final class InMemoryFolderRepository: FolderRepository {
 @MainActor
 final class RecordingVocabularyRepository: VocabularyRepository {
     enum Call: Equatable {
-        case addWord(String, String, WordCategory?, UUID?)
-        case toggle(String, String, WordCategory, UUID?)
-        case changeCategory(WordCategory, String, String)
+        case addWord(WordEntry, WordCategory?, UUID?, WorkspaceContext)
+        case toggle(WordEntry, WordCategory, UUID?, WorkspaceContext)
+        case changeCategory(WordCategory, WordEntry, WorkspaceContext)
         case setCategory(WordCategory, UUID)
         case deleteWord(UUID)
         case setMembership(UUID, UUID, Bool)
@@ -99,18 +104,19 @@ final class RecordingVocabularyRepository: VocabularyRepository {
         }
     }
 
-    func addWord(source: String, translation: String, category: WordCategory?, folderID: UUID?) throws {
-        try record(.addWord(source, translation, category, folderID))
+    func addWord(_ entry: WordEntry, category: WordCategory?, folderID: UUID?,
+                 workspace: WorkspaceContext) throws {
+        try record(.addWord(entry, category, folderID, workspace))
     }
 
-    func toggleScannedWord(source: String, translation: String, category: WordCategory,
-                           folderID: UUID?) throws -> Bool {
-        try record(.toggle(source, translation, category, folderID))
+    func toggleScannedWord(_ entry: WordEntry, category: WordCategory, folderID: UUID?,
+                           workspace: WorkspaceContext) throws -> Bool {
+        try record(.toggle(entry, category, folderID, workspace))
         return toggleResult
     }
 
-    func changeCategory(_ category: WordCategory, source: String, translation: String) throws {
-        try record(.changeCategory(category, source, translation))
+    func changeCategory(_ category: WordCategory, entry: WordEntry, workspace: WorkspaceContext) throws {
+        try record(.changeCategory(category, entry, workspace))
     }
 
     func setCategory(_ category: WordCategory, wordID: UUID) throws { try record(.setCategory(category, wordID)) }

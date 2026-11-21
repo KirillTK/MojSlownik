@@ -100,7 +100,8 @@ final class SwiftDataSyncStore {
         var byID: [UUID: WordFolder] = [:]
         for folder in folders { byID[folder.id] = folder }
         var adoptable: [String: WordFolder] = [:]
-        for folder in folders where folder.isActive && Self.isUnsynced(folder.serverUpdatedAt) {
+        for folder in folders where folder.isActive && folder.effectiveWorkspaceID == WorkspaceID.legacy
+            && Self.isUnsynced(folder.serverUpdatedAt) {
             let key = FolderStore.nameKey(folder.name)
             if adoptable[key] == nil { adoptable[key] = folder }
         }
@@ -115,6 +116,7 @@ final class SwiftDataSyncStore {
                     let oldID = adopted.id
                     adopted.id = remote.id
                     adopted.name = remote.name
+                    adopted.workspaceID = WorkspaceID.legacy
                     adopted.sortOrder = remote.sortOrder
                     adopted.deletedAt = nil
                     stamp(adopted, remote.updatedAt)
@@ -126,6 +128,7 @@ final class SwiftDataSyncStore {
                 } else {
                     let folder = WordFolder(name: remote.name)
                     folder.id = remote.id
+                    folder.workspaceID = WorkspaceID.legacy
                     folder.sortOrder = remote.sortOrder
                     folder.createdAt = remote.createdAt
                     folder.deletedAt = nil
@@ -170,7 +173,7 @@ final class SwiftDataSyncStore {
         var adoptable: [String: Word] = [:]
         for word in words {
             if let id = word.uuid { byID[id] = word }
-            if word.isActive, Self.isUnsynced(word.serverUpdatedAt) {
+            if word.isActive, word.effectiveWorkspaceID == WorkspaceID.legacy, Self.isUnsynced(word.serverUpdatedAt) {
                 let key = word.syncPairKey
                 if adoptable[key] == nil { adoptable[key] = word }
             }
@@ -188,6 +191,7 @@ final class SwiftDataSyncStore {
                     apply(remote, to: adopted)
                     let union = remote.folderIDs + localFolders.filter { !remote.folderIDs.contains($0) }
                     adopted.uuid = remote.id
+                    adopted.workspaceID = WorkspaceID.legacy
                     adopted.folderIDs = union
                     markSynced(adopted, remote.updatedAt)
                     if union.count > remote.folderIDs.count { adopted.updatedAt = stamp }
@@ -198,6 +202,7 @@ final class SwiftDataSyncStore {
                     let word = Word(russian: russian, polish: polish, sourceLanguage: remote.enteredLanguage,
                                     createdAt: remote.createdAt, category: remote.category)
                     word.uuid = remote.id
+                    word.workspaceID = WorkspaceID.legacy
                     apply(remote, to: word)
                     markSynced(word, remote.updatedAt)
                     context.insert(word)
@@ -241,8 +246,8 @@ final class SwiftDataSyncStore {
     /// Remote content onto a local word (text keeps the Word.init lowercase invariant).
     private func apply(_ remote: ValidatedRemoteWord, to word: Word) {
         let (russian, polish) = Self.sides(of: remote)
-        word.russian = russian.lowercased()
-        word.polish = polish.lowercased()
+        word.translation = russian.lowercased()
+        word.term = polish.lowercased()
         word.categoryRawValue = remote.category.rawValue
         word.sourceLanguageCode = remote.enteredLanguage.rawValue
         word.folderIDs = remote.folderIDs
@@ -292,7 +297,7 @@ final class SwiftDataSyncStore {
 
     func pendingFolders(ownerID: UUID, now: Date, excluding: Set<UUID>) throws -> PendingBatch<RemoteFolderUpsert> {
         let folders = try makeContext().fetch(FetchDescriptor<WordFolder>())
-            .filter { $0.isSyncDirty && !excluding.contains($0.id) }
+            .filter { $0.isSyncDirty && !excluding.contains($0.id) && $0.effectiveWorkspaceID == WorkspaceID.legacy }
             .sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
         var batch = PendingBatch<RemoteFolderUpsert>()
         for folder in folders {
@@ -317,7 +322,10 @@ final class SwiftDataSyncStore {
         let context = makeContext()
         _ = try WordIdentityBackfill.assignMissing(in: context, rollbackOnFailure: true)
         let words = try context.fetch(FetchDescriptor<Word>())
-            .filter { word in word.uuid.map { word.isSyncDirty && !excluding.contains($0) } ?? false }
+            .filter { word in
+                word.effectiveWorkspaceID == WorkspaceID.legacy
+                    && (word.uuid.map { word.isSyncDirty && !excluding.contains($0) } ?? false)
+            }
             .sorted { ($0.createdAt, $0.uuid?.uuidString ?? "") < ($1.createdAt, $1.uuid?.uuidString ?? "") }
         let latestDue = now.addingTimeInterval(SRSEngine.maxIntervalDays * 86_400)
         var batch = PendingBatch<RemoteWordUpsert>()
@@ -328,8 +336,8 @@ final class SwiftDataSyncStore {
             let interval = word.intervalDays.isFinite ? word.intervalDays : 0
             let tierRange = KnowledgeProgressService.minimumTier...KnowledgeProgressService.maximumTier
             let record = RemoteWordRecord(
-                id: id, userID: ownerID, term: word.polish, termLanguage: AppLanguage.polish.rawValue,
-                translation: word.russian, translationLanguage: AppLanguage.russian.rawValue,
+                id: id, userID: ownerID, term: word.term, termLanguage: AppLanguage.polish.rawValue,
+                translation: word.translation, translationLanguage: AppLanguage.russian.rawValue,
                 enteredLanguage: AppLanguage(rawValue: word.sourceLanguageCode)?.rawValue
                     ?? AppLanguage.polish.rawValue,
                 category: word.category.stableID, folderIDs: word.folderIDs,

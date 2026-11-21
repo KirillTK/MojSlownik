@@ -45,6 +45,7 @@ enum UITestFixture: String, CaseIterable, Sendable {
 
     @MainActor
     func seed(into context: ModelContext, now: Date) throws {
+        let workspaceID = try WorkspaceCatalog.ensure(term: "pl", translation: "ru", context: context, now: now).id
         var index = 0
         func word(_ russian: String, _ polish: String, _ source: AppLanguage,
                   due: Bool = false, folders: [UUID] = []) -> Word {
@@ -62,6 +63,7 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 word.dueDate = now.addingTimeInterval(30 * 86_400)
             }
             word.folderIDs = folders
+            word.workspaceID = workspaceID
             return word
         }
 
@@ -94,6 +96,7 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 folder.id = id
                 folder.sortOrder = order
                 folder.createdAt = created
+                folder.workspaceID = workspaceID
                 context.insert(folder)
             }
             words = [word("кот", "kot", .russian, folders: [Self.lesson1ID]),

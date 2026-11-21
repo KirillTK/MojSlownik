@@ -7,10 +7,11 @@ struct FlashcardsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
-    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
+    private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var sessionWords: [Word] = []
     @State private var currentIndex = 0
@@ -327,6 +328,7 @@ private struct FaceVisibility: ViewModifier, Animatable {
         FlashcardsView()
     }
     .modelContainer(resources.container)
+    .environment(resources.workspaces)
     .environment(resources.folders)
     .environment(resources.vocabulary)
     .environment(resources.dailyStudy)

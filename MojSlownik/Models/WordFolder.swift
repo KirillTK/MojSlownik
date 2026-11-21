@@ -12,6 +12,8 @@ final class WordFolder {
     // server updated_at of the last synced version; nil = never synced to the linked account;
     // .distantPast = re-link sentinel
     var serverUpdatedAt: Date? = nil
+    // nil = a row from before workspaces; reads treat it as the legacy pl ← ru workspace
+    var workspaceID: UUID? = nil
 
     init(name: String) {
         self.name = name
@@ -21,6 +23,7 @@ final class WordFolder {
 }
 
 extension WordFolder {
+    var effectiveWorkspaceID: UUID { workspaceID ?? WorkspaceID.legacy }
     var isActive: Bool { deletedAt == nil }
     var lastModifiedAt: Date { updatedAt ?? createdAt }
     var isSyncDirty: Bool { serverUpdatedAt != lastModifiedAt }

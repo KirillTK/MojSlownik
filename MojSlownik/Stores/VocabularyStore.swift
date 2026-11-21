@@ -9,6 +9,8 @@ final class VocabularyStore {
     @ObservationIgnored private let logger: any AppLogging
 
     @ObservationIgnored private let changeSignal: LocalChangeSignal?
+    /// The active workspace (set by the app wiring); writes that create or match words need it.
+    @ObservationIgnored var workspace: WorkspaceContext?
 
     init(repository: any VocabularyRepository, logger: (any AppLogging)? = nil,
          changeSignal: LocalChangeSignal? = nil) {
@@ -18,28 +20,31 @@ final class VocabularyStore {
         self.logger = logger
     }
 
-    func add(source: String, translation: String, category: WordCategory? = nil, folderID: UUID? = nil) throws {
-        try repository.addWord(source: source, translation: translation, category: category, folderID: folderID)
+    func add(_ entry: WordEntry, category: WordCategory? = nil, folderID: UUID? = nil) throws {
+        let workspace = try requireWorkspace()
+        try repository.addWord(entry, category: category, folderID: folderID, workspace: workspace)
         changeSignal?.notify()
-        logger.log(.wordAdded, addedProperties(source: source, category: category, folderID: folderID, via: "manual"))
+        logger.log(.wordAdded, addedProperties(entry, workspace: workspace, category: category,
+                                               folderID: folderID, via: "manual"))
     }
 
     @discardableResult
-    func toggleScanned(source: String, translation: String, category: WordCategory,
-                       folderID: UUID? = nil) throws -> Bool {
-        let added = try repository.toggleScannedWord(source: source, translation: translation,
-                                             category: category, folderID: folderID)
+    func toggleScanned(_ entry: WordEntry, category: WordCategory, folderID: UUID? = nil) throws -> Bool {
+        let workspace = try requireWorkspace()
+        let added = try repository.toggleScannedWord(entry, category: category, folderID: folderID,
+                                                     workspace: workspace)
         changeSignal?.notify()
         if added {
-            logger.log(.wordAdded, addedProperties(source: source, category: category, folderID: folderID, via: "scan"))
+            logger.log(.wordAdded, addedProperties(entry, workspace: workspace, category: category,
+                                                   folderID: folderID, via: "scan"))
         } else {
             logger.log(.wordRemoved, [.source: .name("scan")])
         }
         return added
     }
 
-    func changeCategory(_ category: WordCategory, source: String, translation: String) throws {
-        try repository.changeCategory(category, source: source, translation: translation)
+    func changeCategory(_ category: WordCategory, entry: WordEntry) throws {
+        try repository.changeCategory(category, entry: entry, workspace: try requireWorkspace())
         changeSignal?.notify()
         logger.log(.wordCategoryChanged, [.category: .name(category.stableID)])
     }
@@ -74,12 +79,17 @@ final class VocabularyStore {
         return try repository.ensureIdentity(for: word)
     }
 
+    private func requireWorkspace() throws -> WorkspaceContext {
+        guard let workspace else { throw RepositoryError.noWorkspace }
+        return workspace
+    }
+
     /// Never logs the words themselves: only language, category id and folder presence.
-    private func addedProperties(source: String, category: WordCategory?, folderID: UUID?,
-                                 via channel: String) -> [LogKey: LogValue] {
+    private func addedProperties(_ entry: WordEntry, workspace: WorkspaceContext, category: WordCategory?,
+                                 folderID: UUID?, via channel: String) -> [LogKey: LogValue] {
         var properties: [LogKey: LogValue] = [
             .source: .name(channel),
-            .language: .name(LanguageDetector.detect(source)),
+            .language: .name(workspace.code(of: entry.enteredSide)),
             .inFolder: .bool(folderID != nil),
         ]
         if let category { properties[.category] = .name(category.stableID) }

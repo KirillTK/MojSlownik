@@ -127,7 +127,7 @@ final class WordIdentityBackfillTests: XCTestCase {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 }

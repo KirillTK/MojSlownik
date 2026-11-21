@@ -298,7 +298,7 @@ struct AddWordView: View {
         let text = draft.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = draft.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try vocabulary.add(source: text, translation: translation, category: selectedCategory,
+            try vocabulary.add(WordEntry.legacy(source: text, translation: translation), category: selectedCategory,
                                folderID: selectedFolderID)
             dismiss()
         } catch { saveError = error.localizedDescription }
@@ -309,6 +309,7 @@ struct AddWordView: View {
     let resources = AppResources.preview
     AddWordView()
         .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

@@ -324,7 +324,7 @@ final class FolderStoreTests: XCTestCase {
 
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        try ModelContainer(for: AppSchema.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor
@@ -357,7 +357,7 @@ final class FolderStoreTests: XCTestCase {
 extension FolderStoreTests {
     @MainActor
     func testManuallyAddedWordUsesNewlyCreatedFolderInsteadOfOriginalFolder() throws {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = ModelContext(container)
         let original = try FolderStore.create(name: "Урок 1", context: context)

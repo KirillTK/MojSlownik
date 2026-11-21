@@ -2,13 +2,14 @@ import SwiftUI
 import SwiftData
 
 struct TrainingView: View {
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var storedAllWords: [Word]
-    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
+    private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
     @State private var selectedFolderID: UUID?
     @State private var refreshDate = Date.now
     @ScaledMetric(relativeTo: .largeTitle) private var heroNumber: CGFloat = 40
@@ -314,6 +315,7 @@ private struct ModeTile: View {
     let resources = AppResources.preview
     TrainingView()
         .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

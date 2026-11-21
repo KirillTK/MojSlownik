@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Языковые воркспейсы</title>
+<style>
+:root{
+  --bg:#FAF8F2;--card:#FFFFFF;--ink:#1C1B17;--subtle:#6B675C;--border:#E7E2D5;--surface2:#F0ECE1;
+  --accent:#FFD43B;--onAccent:#1C1B17;--accentText:#8A6A00;--accentStrong:#1C1B17;--soft:#FFF3BF;
+  --inverse:#1C1B17;--onInverse:#F4F1E8;--edge:#E7E2D5;--mastery:#25704C;--caution:#C77700;--error:#B3261E;
+  --menu:rgba(250,248,242,.92);--page:#E9E5DA;
+}
+:root[data-theme="dark"]{
+  --bg:#141310;--card:#1F1E1A;--ink:#F4F1E8;--subtle:#A8A293;--border:#2E2C26;--surface2:#2A2823;
+  --accentText:#FFD43B;--accentStrong:#FFD43B;--soft:#3A3318;--inverse:#1C1B17;--edge:#2E2C26;
+  --mastery:#8BD3A8;--caution:#FFA94D;--error:#FF8A80;--menu:rgba(40,38,34,.94);--page:#0B0B09;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
+header.top{position:sticky;top:0;z-index:10;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--page);border-bottom:1px solid var(--border)}
+header.top h1{font-size:18px;margin:0}
+.toggle{border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 14px;font-weight:600;cursor:pointer}
+main{max-width:1400px;margin:0 auto;padding:16px}
+section.group{margin:8px 0 36px}
+section.group>h2{font-size:20px;margin:0 0 4px}
+section.group>p{color:var(--subtle);margin:0 0 16px;max-width:760px}
+.row{display:flex;flex-wrap:wrap;gap:24px}
+figure{margin:0}
+figcaption{font-size:13px;color:var(--subtle);margin-top:8px;max-width:300px}
+figcaption b{color:var(--ink)}
+.phone{width:300px;height:620px;border-radius:44px;background:var(--bg);border:8px solid #111;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.status{height:34px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 26px 4px;font-size:13px;font-weight:600}
+.nav{padding:4px 20px 6px;display:flex;justify-content:space-between;align-items:center;min-height:36px;color:var(--accentText);font-weight:500}
+.nav .icon{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:17px}
+.large{padding:0 20px 8px;font-size:30px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:6px}
+.large .tchev{width:24px;height:24px;border-radius:50%;background:var(--surface2);color:var(--ink);display:inline-grid;place-items:center;margin-left:2px;margin-top:4px}
+.content{flex:1;overflow:hidden;padding:0 20px}
+.tabbar{height:62px;border-top:1px solid var(--border);display:flex;justify-content:space-around;align-items:flex-start;padding-top:8px;background:var(--bg);font-size:10px;color:var(--subtle)}
+.tabbar div{display:flex;flex-direction:column;align-items:center;gap:2px}
+.tabbar .on{color:var(--accentStrong);font-weight:600}
+.tabbar .ti{font-size:20px}
+.search{background:var(--surface2);border-radius:10px;padding:8px 10px;color:var(--subtle);font-size:14px;margin-bottom:10px}
+.chips{display:flex;gap:8px;overflow:hidden;margin-bottom:6px}
+.chip{border-radius:999px;padding:8px 14px;background:var(--surface2);font-size:13px;font-weight:600;white-space:nowrap}
+.chip.sel{background:var(--accent);color:var(--onAccent);font-weight:800}
+.wrow{border-bottom:1px solid var(--border);padding:10px 0}
+.wrow .l1{display:flex;align-items:center;gap:8px}
+.wrow .w{font-size:19px;font-weight:800;flex:1}
+.ring{width:20px;height:20px;border-radius:50%;border:4px solid var(--border)}
+.ring.t2{border-color:var(--accentText) var(--accentText) var(--border) var(--border)}
+.ring.t3{border-color:var(--mastery)}
+.ring.t1{border-color:var(--caution) var(--border) var(--border) var(--border)}
+.spk{width:32px;height:32px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-size:13px}
+.wrow .l2{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--subtle);margin-top:3px}
+.cap{background:var(--surface2);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--ink)}
+.fab{position:absolute;right:18px;bottom:78px;display:flex;flex-direction:column;gap:10px}
+.fab div{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:24px;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.fab .a{background:var(--accent);color:var(--onAccent)}
+.fab .s{background:var(--card);border:1px solid var(--edge)}
+.dim::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.18)}
+.menu{position:absolute;z-index:3;left:18px;top:118px;width:250px;background:var(--menu);backdrop-filter:blur(20px);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.28);overflow:hidden;font-size:14px}
+.menu .mi{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border)}
+.menu .mi:last-child{border-bottom:0}
+.menu .mi .t{flex:1}
+.menu .mi small{display:block;color:var(--subtle);font-size:12px}
+.menu .sep{height:7px;background:var(--surface2)}
+.menu .ck{width:16px;color:var(--accentStrong);font-weight:800}
+.h{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--subtle);margin:14px 0 8px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:18px}
+.btn{display:block;text-align:center;border-radius:16px;padding:15px;font-weight:800;background:var(--accent);color:var(--onAccent)}
+.btn.off{background:var(--surface2);color:var(--subtle)}
+.link{color:var(--accentText);font-weight:600;text-align:center;padding:12px}
+.wiz{padding:8px 24px 24px;display:flex;flex-direction:column;flex:1;min-height:0}
+.dots{display:flex;gap:6px;margin:6px 0 18px}
+.dots i{height:4px;flex:1;border-radius:2px;background:var(--surface2)}
+.dots i.on{background:var(--accentStrong)}
+.kicker{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--subtle)}
+.wiz h3{font-size:25px;line-height:1.15;margin:6px 0 6px;font-weight:800}
+.wiz p{margin:0 0 14px;color:var(--subtle);font-size:14px}
+.list{overflow:hidden;flex:1}
+.lrow{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border);font-size:16px}
+.lrow:last-child{border-bottom:0}
+.lrow .f{font-size:22px}
+.lrow .n{flex:1}
+.lrow .n small{display:block;color:var(--subtle);font-size:12px}
+.lrow.sel{background:var(--soft)}
+.lrow .c{color:var(--accentStrong);font-weight:800}
+.tile{width:64px;height:64px;border-radius:18px;background:var(--soft);display:grid;place-items:center;font-size:30px;margin:10px 0 14px}
+.pair{display:flex;align-items:stretch;gap:10px;margin:10px 0}
+.pside{flex:1;padding:14px}
+.pside .lab{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--subtle)}
+.pside .val{font-size:17px;font-weight:800;margin-top:6px;display:flex;align-items:center;gap:6px}
+.pside .val .chev{color:var(--subtle);font-size:12px;margin-left:auto}
+.swap{width:44px;display:grid;place-items:center;font-size:18px;color:var(--accentText)}
+.sample{padding:14px;margin-top:6px}
+.sample .w{font-size:22px;font-weight:800}
+.sample .t{color:var(--subtle)}
+.info{display:flex;gap:8px;font-size:12px;color:var(--subtle);margin:10px 0}
+.seg{display:flex;background:var(--surface2);border-radius:10px;padding:3px;margin:6px 0 12px}
+.seg div{flex:1;text-align:center;padding:8px 4px;border-radius:8px;font-size:13px;font-weight:600}
+.seg .on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:800}
+.field{background:var(--surface2);border-radius:12px;padding:12px;font-size:18px;font-weight:700;margin-bottom:10px}
+.field small{display:block;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--subtle);margin-bottom:4px}
+.hero{background:var(--accent);color:var(--onAccent);border-radius:24px;padding:16px;margin:6px 0 14px}
+.hero .k{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;opacity:.75}
+.hero .n{font-size:38px;font-weight:900}
+.hero .n span{font-size:18px;opacity:.75}
+.bar{height:8px;border-radius:4px;background:rgba(28,27,23,.18);margin:8px 0 12px}
+.bar i{display:block;height:100%;width:40%;background:var(--onAccent);border-radius:4px}
+.hero .cta{background:var(--inverse);color:var(--accent);border-radius:16px;text-align:center;padding:12px;font-weight:800}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mode{padding:12px;min-height:90px}
+.mode .mt{width:34px;height:34px;border-radius:12px;background:var(--soft);display:grid;place-items:center;margin-bottom:8px}
+.mode b{font-size:14px}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:46px;background:var(--bg);border-radius:14px 14px 0 0;box-shadow:0 -6px 30px rgba(0,0,0,.25);z-index:4;display:flex;flex-direction:column}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--border);margin:6px auto}
+.sheetnav{display:flex;justify-content:space-between;padding:6px 18px 10px;font-weight:700}
+.sheetnav span{color:var(--accentText)}
+.del{background:var(--error);color:#fff;display:grid;place-items:center;width:78px;font-weight:700;font-size:13px}
+.swiped{display:flex;overflow:hidden}
+.swiped .lrow{flex:1;transform:translateX(-0px)}
+.choice{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--ink);font-size:12px;font-weight:700;vertical-align:middle}
+@media (max-width:680px){.row{justify-content:center}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Языковые воркспейсы — макеты</h1>
+  <button class="toggle" id="t">Тёмная тема</button>
+</header>
+<main>
+
+<section class="group">
+  <h2>1. Мини-визард при первом запуске <span class="choice">выберите A или B</span></h2>
+  <p>Показывается только при новой установке. Текущие пользователи сразу попадают в «🇵🇱 Польский ← 🇷🇺 Русский» со всеми словами. Если в этот момент войти в аккаунт, где уже есть воркспейсы, визард не нужен.</p>
+  <div class="row">
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="wiz">
+        <div class="dots"><i class="on"></i><i></i></div>
+        <div class="kicker">Шаг 1 из 2</div>
+        <h3>Какой язык вы учите?</h3>
+        <p>Для каждого языка будет свой словарь, свои папки и своя практика.</p>
+        <div class="card list">
+          <div class="lrow sel"><span class="f">🇵🇱</span><span class="n">Польский<small>Polski</small></span><span class="c">✓</span></div>
+          <div class="lrow"><span class="f">🇬🇧</span><span class="n">Английский<small>English</small></span></div>
+          <div class="lrow"><span class="f">🇩🇪</span><span class="n">Немецкий<small>Deutsch</small></span></div>
+          <div class="lrow"><span class="f">🇪🇸</span><span class="n">Испанский<small>Español</small></span></div>
+          <div class="lrow"><span class="f">🇺🇦</span><span class="n">Украинский<small>Українська</small></span></div>
+          <div class="lrow"><span class="f">🇫🇷</span><span class="n">Французский<small>Français</small></span></div>
+        </div>
+        <div style="height:14px"></div>
+        <div class="btn">Далее</div>
+      </div>
+    </div><figcaption><b>A1 · Пошагово.</b> Полноэкранный список, одно решение на экран.</figcaption></figure>
+
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="nav"><span>‹ Назад</span><span></span></div>
+      <div class="wiz" style="padding-top:0">
+        <div class="dots"><i class="on"></i><i class="on"></i></div>
+        <div class="kicker">Шаг 2 из 2</div>
+        <h3>На какой язык переводить?</h3>
+        <p>Обычно это ваш родной язык. Интерфейс приложения останется на русском.</p>
+        <div class="card list">
+          <div class="lrow sel"><span class="f">🇷🇺</span><span class="n">Русский<small>Русский</small></span><span class="c">✓</span></div>
+          <div class="lrow"><span class="f">🇺🇦</span><span class="n">Украинский<small>Українська</small></span></div>
+          <div class="lrow"><span class="f">🇬🇧</span><span class="n">Английский<small>English</small></span></div>
+          <div class="lrow" style="opacity:.45"><span class="f">🇵🇱</span><span class="n">Польский<small>уже выбран как изучаемый</small></span></div>
+        </div>
+        <div class="info"><span>ⓘ</span><span>Пару можно добавить позже: «Новый язык…» в заголовке словаря.</span></div>
+        <div class="btn">Начать — 🇵🇱 ← 🇷🇺</div>
+      </div>
+    </div><figcaption><b>A2.</b> Уже выбранный язык недоступен. На кнопке видна итоговая пара.</figcaption></figure>
+
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="wiz">
+        <div class="tile">📖</div>
+        <h3>Настроим словарь</h3>
+        <p>Выберите язык, который учите, и язык перевода. Позже можно добавить другие пары.</p>
+        <div class="pair">
+          <div class="card pside"><div class="lab">Учу</div><div class="val">🇵🇱 Польский <span class="chev">⌄</span></div></div>
+          <div class="swap">⇄</div>
+          <div class="card pside"><div class="lab">Перевод</div><div class="val">🇷🇺 Русский <span class="chev">⌄</span></div></div>
+        </div>
+        <div class="h">Так будут выглядеть слова</div>
+        <div class="card sample"><div class="w">dziękuję</div><div class="t">спасибо</div></div>
+        <div class="info"><span>ⓘ</span><span>Интерфейс приложения останется на русском.</span></div>
+        <div style="flex:1"></div>
+        <div class="btn">Начать</div>
+      </div>
+    </div><figcaption><b>B · Один экран.</b> Две карточки с меню, кнопка «поменять местами» и пример слова. Быстрее, но выбор спрятан в меню.</figcaption></figure>
+  </div>
+</section>
+
+<section class="group">
+  <h2>2. Переключатель — меню в заголовке</h2>
+  <p>Заголовок экрана — изучаемый язык. Названия вкладок «Словарь» и «Практика» не меняются. Нажатие на заголовок открывает нативное меню (<code>toolbarTitleMenu</code>), одинаковое на обеих вкладках.</p>
+  <div class="row">
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="nav"><span></span><span class="icon">◯</span></div>
+      <div class="large">🇵🇱 Польский <span class="tchev"><svg viewBox="0 0 12 8" width="11" height="8"><path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+      <div class="content">
+        <div class="search">🔍 Поиск</div>
+        <div class="chips"><span class="chip sel">Все · 248</span><span class="chip">Еда · 31</span><span class="chip">Дом · 18</span></div>
+        <div class="wrow"><div class="l1"><span class="w">dziękuję</span><span class="ring t3"></span><span class="spk">🔊</span></div><div class="l2">спасибо <span class="cap">Другое</span> 📁</div></div>
+        <div class="wrow"><div class="l1"><span class="w">jabłko</span><span class="ring t2"></span><span class="spk">🔊</span></div><div class="l2">яблоко <span class="cap">Еда</span> 📁</div></div>
+        <div class="wrow"><div class="l1"><span class="w">mieszkanie</span><span class="ring t1"></span><span class="spk">🔊</span></div><div class="l2">квартира <span class="cap">Дом</span></div></div>
+      </div>
+      <div class="fab"><div class="s">⌗</div><div class="a">＋</div></div>
+      <div class="tabbar"><div class="on"><span class="ti">📕</span>Словарь</div><div><span class="ti">🗂</span>Практика</div></div>
+    </div><figcaption><b>Словарь, закрыто.</b> Шеврон рядом с заголовком подсказывает, что его можно нажать.</figcaption></figure>
+
+    <figure><div class="phone dim">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="nav"><span></span><span class="icon">◯</span></div>
+      <div class="large">🇵🇱 Польский <span class="tchev"><svg viewBox="0 0 12 8" width="11" height="8"><path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+      <div class="content">
+        <div class="search">🔍 Поиск</div>
+        <div class="wrow"><div class="l1"><span class="w">dziękuję</span></div></div>
+        <div class="wrow"><div class="l1"><span class="w">jabłko</span></div></div>
+      </div>
+      <div class="tabbar"><div class="on"><span class="ti">📕</span>Словарь</div><div><span class="ti">🗂</span>Практика</div></div>
+      <div class="menu">
+        <div class="mi"><span class="ck">✓</span><span class="t">🇵🇱 Польский ← 🇷🇺<small>248 слов</small></span></div>
+        <div class="mi"><span class="ck"></span><span class="t">🇬🇧 Английский ← 🇷🇺<small>12 слов</small></span></div>
+        <div class="mi"><span class="ck"></span><span class="t">🇩🇪 Немецкий ← 🇷🇺<small>40 слов</small></span></div>
+        <div class="sep"></div>
+        <div class="mi"><span class="ck"></span><span class="t">Новый язык…</span><span>＋</span></div>
+        <div class="mi"><span class="ck"></span><span class="t">Управлять языками</span><span>⚙︎</span></div>
+      </div>
+    </div><figcaption><b>Меню открыто.</b> В каждой строке пара и число слов, у текущей — галочка. «Новый язык…» открывает визард в виде шита.</figcaption></figure>
+
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="nav"><span></span><span class="icon">🏆</span></div>
+      <div class="large">🇵🇱 Польский <span class="tchev"><svg viewBox="0 0 12 8" width="11" height="8"><path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+      <div class="content">
+        <div class="chips"><span class="chip sel">Все слова</span><span class="chip">📁 Работа</span></div>
+        <div class="hero"><div class="k">Сегодня</div><div class="n">6 <span>из 15</span></div><div class="bar"><i></i></div><div class="cta">Повторить</div></div>
+        <div class="modes">
+          <div class="card mode"><div class="mt">▭</div><b>Карточки</b></div>
+          <div class="card mode"><div class="mt">☑︎</div><b>Тест</b></div>
+          <div class="card mode"><div class="mt">👂</div><b>На слух</b></div>
+        </div>
+      </div>
+      <div class="tabbar"><div><span class="ti">📕</span>Словарь</div><div class="on"><span class="ti">🗂</span>Практика</div></div>
+    </div><figcaption><b>Практика.</b> То же меню. Кольцо «Сегодня», папки и режимы считаются только по текущему языку; достижения общие.</figcaption></figure>
+  </div>
+</section>
+
+<section class="group">
+  <h2>3. Новые языки в работе</h2>
+  <p>Регистр букв сохраняется (немецкий «das Haus»). Для пар с одним алфавитом (украинский ↔ русский, английский ↔ польский) язык ввода нельзя определить автоматически, поэтому в «Добавить слово» есть переключатель.</p>
+  <div class="row">
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="nav"><span></span><span class="icon">◯</span></div>
+      <div class="large">🇩🇪 Немецкий <span class="tchev"><svg viewBox="0 0 12 8" width="11" height="8"><path d="M1.5 1.5 6 6l4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+      <div class="content">
+        <div class="search">🔍 Поиск</div>
+        <div class="chips"><span class="chip sel">Все · 40</span><span class="chip">Дом · 6</span><span class="chip">Другое · 30</span></div>
+        <div class="wrow"><div class="l1"><span class="w">das Haus</span><span class="ring t2"></span><span class="spk">🔊</span></div><div class="l2">дом <span class="cap">Другое</span> 📁</div></div>
+        <div class="wrow"><div class="l1"><span class="w">Entschuldigung</span><span class="ring t1"></span><span class="spk">🔊</span></div><div class="l2">извините <span class="cap">Другое</span></div></div>
+        <div class="wrow"><div class="l1"><span class="w">lernen</span><span class="ring"></span><span class="spk">🔊</span></div><div class="l2">учить <span class="cap">Другое</span></div></div>
+      </div>
+      <div class="fab"><div class="s">⌗</div><div class="a">＋</div></div>
+      <div class="tabbar"><div class="on"><span class="ti">📕</span>Словарь</div><div><span class="ti">🗂</span>Практика</div></div>
+    </div><figcaption><b>Немецкий словарь.</b> Свои слова и папки. Автокатегории для новых языков пока не работают, поэтому почти всё попадает в «Другое».</figcaption></figure>
+
+    <figure><div class="phone">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="nav"><span>Отмена</span><span style="color:var(--ink);font-weight:700">Новое слово</span><span>Сохранить</span></div>
+      <div class="content" style="padding-top:8px">
+        <div class="h" style="margin-top:4px">Ввожу на</div>
+        <div class="seg"><div class="on">🇺🇦 Украинском</div><div>🇷🇺 Русском</div></div>
+        <div class="field"><small>Слово · 🇺🇦</small>дякую 🎙</div>
+        <div class="field"><small>Перевод · 🇷🇺</small>спасибо</div>
+        <div class="h">Варианты</div>
+        <div class="chips"><span class="chip">благодарю</span><span class="chip">спасибки</span></div>
+        <div class="info"><span>ⓘ</span><span>У украинского и русского один алфавит, поэтому язык ввода выбирается вручную. Выбор запоминается.</span></div>
+      </div>
+    </div><figcaption><b>Добавить слово, пара с одним алфавитом.</b> Переключатель появляется только когда алфавиты совпадают. Для 🇵🇱 ← 🇷🇺 экран останется как сейчас.</figcaption></figure>
+
+    <figure><div class="phone dim">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="large">🇵🇱 Польский</div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sheetnav"><span>Править</span><b>Языки</b><span>Готово</span></div>
+        <div style="padding:0 18px;display:flex;flex-direction:column;flex:1">
+          <div class="card" style="overflow:hidden">
+            <div class="lrow"><span class="f">🇵🇱</span><span class="n">Польский ← Русский<small>248 слов · 4 папки</small></span><span class="c">✓</span></div>
+            <div class="lrow"><span class="f">🇬🇧</span><span class="n">Английский ← Русский<small>12 слов · 0 папок</small></span></div>
+            <div class="swiped"><div class="lrow" style="margin-left:-78px;padding-left:92px"><span class="f">🇩🇪</span><span class="n">Немецкий ← Русский<small>40 слов · 1 папка</small></span></div><div class="del">Удалить</div></div>
+          </div>
+          <div class="link">＋ Добавить язык</div>
+          <div class="info"><span>ⓘ</span><span>Удалённый язык скрывается вместе со словами и папками. Если добавить ту же пару снова, всё вернётся.</span></div>
+        </div>
+      </div>
+    </div><figcaption><b>Управлять языками.</b> Список, удаление свайпом с подтверждением. Удаление мягкое: слова не стираются (вопрос 7 ещё открыт).</figcaption></figure>
+  </div>
+</section>
+</main>
+<script>
+const b=document.getElementById('t'),r=document.documentElement;
+b.onclick=()=>{const d=r.dataset.theme!=='dark';r.dataset.theme=d?'dark':'light';b.textContent=d?'Светлая тема':'Тёмная тема'};
+</script>
+</body>
+</html>

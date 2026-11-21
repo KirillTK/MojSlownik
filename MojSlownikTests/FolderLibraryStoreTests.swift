@@ -114,7 +114,7 @@ final class FolderLibraryStoreTests: XCTestCase {
     @MainActor
     func testStoreWorksOverInMemoryFakeRepository() throws {
         let fake = InMemoryFolderRepository()
-        let library = FolderLibraryStore(repository: fake)
+        let library = FolderLibraryStore.inLegacyWorkspace(repository: fake)
         let id = try library.create(name: " Урок 1 ")
         XCTAssertEqual(library.options, [.init(id: id, name: "Урок 1")])
         fake.nextError = RepositoryFakeError.forced
@@ -126,13 +126,13 @@ final class FolderLibraryStoreTests: XCTestCase {
 
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor
     private func makeLibrary(_ container: ModelContainer) -> FolderLibraryStore {
-        FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+        FolderLibraryStore.inLegacyWorkspace(repository: SwiftDataFolderRepository(container: container))
     }
 
     @MainActor
@@ -141,7 +141,7 @@ final class FolderLibraryStoreTests: XCTestCase {
         let signal = LocalChangeSignal()
         var fired = 0
         signal.handler = { fired += 1 }
-        let library = FolderLibraryStore(repository: fake, changeSignal: signal)
+        let library = FolderLibraryStore.inLegacyWorkspace(repository: fake, changeSignal: signal)
 
         let first = try library.create(name: "Урок 1")
         let second = try library.create(name: "Урок 2")

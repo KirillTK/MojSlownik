@@ -21,16 +21,19 @@ enum FolderStore {
         }
     }
 
-    static func create(name: String, container: ModelContainer, now: Date = .now) throws -> WordFolder {
+    static func create(name: String, workspaceID: UUID, container: ModelContainer,
+                       now: Date = .now) throws -> WordFolder {
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        return try create(name: name, context: context, now: now)
+        return try create(name: name, workspaceID: workspaceID, context: context, now: now)
     }
 
-    static func create(name: String, context: ModelContext, now: Date = .now) throws -> WordFolder {
-        let name = try validatedName(name, excluding: nil, context: context)
-        let folders = try context.fetch(FetchDescriptor<WordFolder>()).filter(\.isActive)
+    static func create(name: String, workspaceID: UUID, context: ModelContext,
+                       now: Date = .now) throws -> WordFolder {
+        let name = try validatedName(name, excluding: nil, workspaceID: workspaceID, context: context)
+        let folders = try scoped(context, workspaceID: workspaceID)
         let folder = WordFolder(name: name)
+        folder.workspaceID = workspaceID
         folder.createdAt = now
         folder.updatedAt = now
         folder.sortOrder = (folders.map(\.sortOrder).max() ?? -1) + 1
@@ -49,7 +52,8 @@ enum FolderStore {
         guard let folder = folders.first(where: { $0.id == id }) else {
             throw StoreError.missingFolder
         }
-        let normalizedName = try validatedName(name, excluding: id, context: context)
+        let normalizedName = try validatedName(name, excluding: id, workspaceID: folder.effectiveWorkspaceID,
+                                               context: context)
         guard normalizedName != folder.name else { return }
         let previousName = folder.name
         let previousUpdatedAt = folder.updatedAt
@@ -63,10 +67,10 @@ enum FolderStore {
         }
     }
 
-    static func reorder(ids: [UUID], container: ModelContainer, now: Date = .now) throws {
+    static func reorder(ids: [UUID], workspaceID: UUID, container: ModelContainer, now: Date = .now) throws {
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        let folders = try context.fetch(FetchDescriptor<WordFolder>()).filter(\.isActive)
+        let folders = try scoped(context, workspaceID: workspaceID)
         let currentIDs = Set(folders.map(\.id))
         guard ids.count == folders.count, Set(ids).count == ids.count, Set(ids) == currentIDs else {
             throw StoreError.invalidOrder
@@ -89,8 +93,13 @@ enum FolderStore {
         }
     }
 
-    static func folders(in context: ModelContext) throws -> [WordFolder] {
-        try context.fetch(FetchDescriptor<WordFolder>()).filter(\.isActive).sorted { lhs, rhs in
+    /// Active folders of one workspace, unsorted.
+    private static func scoped(_ context: ModelContext, workspaceID: UUID) throws -> [WordFolder] {
+        WorkspaceScope.folders(try context.fetch(FetchDescriptor<WordFolder>()), workspaceID: workspaceID)
+    }
+
+    static func folders(in context: ModelContext, workspaceID: UUID) throws -> [WordFolder] {
+        try scoped(context, workspaceID: workspaceID).sorted { lhs, rhs in
             if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
             if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
             return lhs.id.uuidString < rhs.id.uuidString
@@ -106,8 +115,9 @@ enum FolderStore {
         name.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
-    private static func validatedName(_ name: String, excluding id: UUID?, context: ModelContext) throws -> String {
-        let folders = try context.fetch(FetchDescriptor<WordFolder>()).filter(\.isActive)
+    private static func validatedName(_ name: String, excluding id: UUID?, workspaceID: UUID,
+                                      context: ModelContext) throws -> String {
+        let folders = try scoped(context, workspaceID: workspaceID)
         return try validatedName(name, excluding: id, existing: folders.map { FolderRecord(id: $0.id, name: $0.name) })
     }
 
@@ -145,11 +155,11 @@ enum FolderStore {
 
     static func setMembership(wordID: PersistentIdentifier, folderID: UUID,
                               included: Bool, context: ModelContext, now: Date = .now) throws {
-        try requireFolder(folderID, in: context)
         let words = try context.fetch(FetchDescriptor<Word>()).filter(\.isActive)
         guard let word = words.first(where: { $0.persistentModelID == wordID }) else {
             throw StoreError.missingWord
         }
+        try requireFolder(folderID, in: context, workspaceID: word.effectiveWorkspaceID)
         let previousFolderIDs = word.folderIDs
         word.folderIDs.removeAll { $0 == folderID }
         if included { word.folderIDs.append(folderID) }
@@ -173,8 +183,8 @@ enum FolderStore {
         return words.filter { $0.folderIDs.contains(folderID) }
     }
 
-    static func requireFolder(_ id: UUID, in context: ModelContext) throws {
-        guard try context.fetch(FetchDescriptor<WordFolder>()).contains(where: { $0.id == id && $0.isActive }) else {
+    static func requireFolder(_ id: UUID, in context: ModelContext, workspaceID: UUID) throws {
+        guard try scoped(context, workspaceID: workspaceID).contains(where: { $0.id == id }) else {
             throw StoreError.missingFolder
         }
     }

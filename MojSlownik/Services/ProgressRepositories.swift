@@ -103,3 +103,29 @@ final class UserDefaultsDailyActivityRepository: DailyActivityRepository {
         defaults.removeObject(forKey: key)
     }
 }
+
+/// The workspace the user last opened (device-local, never synced).
+@MainActor
+protocol ActiveWorkspaceRepository: AnyObject {
+    func load() -> UUID?
+    func save(_ id: UUID)
+}
+
+@MainActor
+final class UserDefaultsActiveWorkspaceRepository: ActiveWorkspaceRepository {
+    private let defaults: UserDefaults
+    private let key: String
+
+    init(defaults: UserDefaults, key: String = "workspace.active.v1") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    func load() -> UUID? {
+        defaults.string(forKey: key).flatMap(UUID.init(uuidString:))
+    }
+
+    func save(_ id: UUID) {
+        defaults.set(id.uuidString, forKey: key)
+    }
+}

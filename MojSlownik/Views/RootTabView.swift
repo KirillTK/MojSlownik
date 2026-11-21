@@ -20,6 +20,7 @@ struct RootTabView: View {
     let resources = AppResources.preview
     RootTabView()
         .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

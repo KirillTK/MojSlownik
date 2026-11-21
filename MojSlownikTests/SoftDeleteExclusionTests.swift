@@ -7,7 +7,7 @@ final class SoftDeleteExclusionTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_794_225_600)
 
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 

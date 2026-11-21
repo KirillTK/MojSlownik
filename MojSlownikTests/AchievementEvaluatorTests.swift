@@ -87,7 +87,7 @@ final class AchievementEvaluatorTests: XCTestCase {
 
     @MainActor
     func testVocabularyMetrics() throws {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         _ = container
         let empty = AchievementMetrics.vocabulary(words: [], folderCount: 0)

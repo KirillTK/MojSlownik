@@ -15,21 +15,23 @@ final class LoggingVocabularyRepository: VocabularyRepository {
         self.logger = logger
     }
 
-    func addWord(source: String, translation: String, category: WordCategory?, folderID: UUID?) throws {
+    func addWord(_ entry: WordEntry, category: WordCategory?, folderID: UUID?,
+                 workspace: WorkspaceContext) throws {
         try logger.logged("vocabulary.add_word") {
-            try base.addWord(source: source, translation: translation, category: category, folderID: folderID)
+            try base.addWord(entry, category: category, folderID: folderID, workspace: workspace)
         }
     }
 
-    func toggleScannedWord(source: String, translation: String, category: WordCategory, folderID: UUID?) throws -> Bool {
+    func toggleScannedWord(_ entry: WordEntry, category: WordCategory, folderID: UUID?,
+                           workspace: WorkspaceContext) throws -> Bool {
         try logger.logged("vocabulary.toggle_scanned_word") {
-            try base.toggleScannedWord(source: source, translation: translation, category: category, folderID: folderID)
+            try base.toggleScannedWord(entry, category: category, folderID: folderID, workspace: workspace)
         }
     }
 
-    func changeCategory(_ category: WordCategory, source: String, translation: String) throws {
+    func changeCategory(_ category: WordCategory, entry: WordEntry, workspace: WorkspaceContext) throws {
         try logger.logged("vocabulary.change_category") {
-            try base.changeCategory(category, source: source, translation: translation)
+            try base.changeCategory(category, entry: entry, workspace: workspace)
         }
     }
 
@@ -57,6 +59,33 @@ final class LoggingVocabularyRepository: VocabularyRepository {
 }
 
 @MainActor
+final class LoggingWorkspaceRepository: WorkspaceRepository {
+    private let base: any WorkspaceRepository
+    private let logger: any AppLogging
+
+    init(_ base: any WorkspaceRepository, logger: any AppLogging) {
+        self.base = base
+        self.logger = logger
+    }
+
+    func workspaces() throws -> [WorkspaceRecord] {
+        try logger.logged("workspaces.load") { try base.workspaces() }
+    }
+
+    func ensure(term: String, translation: String) throws -> UUID {
+        try logger.logged("workspaces.ensure") { try base.ensure(term: term, translation: translation) }
+    }
+
+    func delete(id: UUID) throws {
+        try logger.logged("workspaces.delete") { try base.delete(id: id) }
+    }
+
+    func reorder(ids: [UUID]) throws {
+        try logger.logged("workspaces.reorder") { try base.reorder(ids: ids) }
+    }
+}
+
+@MainActor
 final class LoggingFolderRepository: FolderRepository {
     private let base: any FolderRepository
     private let logger: any AppLogging
@@ -66,20 +95,20 @@ final class LoggingFolderRepository: FolderRepository {
         self.logger = logger
     }
 
-    func folders() throws -> [FolderRecord] {
-        try logger.logged("folders.load") { try base.folders() }
+    func folders(in workspaceID: UUID) throws -> [FolderRecord] {
+        try logger.logged("folders.load") { try base.folders(in: workspaceID) }
     }
 
-    func createFolder(name: String) throws -> UUID {
-        try logger.logged("folders.create") { try base.createFolder(name: name) }
+    func createFolder(name: String, workspaceID: UUID) throws -> UUID {
+        try logger.logged("folders.create") { try base.createFolder(name: name, workspaceID: workspaceID) }
     }
 
     func renameFolder(id: UUID, name: String) throws {
         try logger.logged("folders.rename") { try base.renameFolder(id: id, name: name) }
     }
 
-    func reorderFolders(ids: [UUID]) throws {
-        try logger.logged("folders.reorder") { try base.reorderFolders(ids: ids) }
+    func reorderFolders(ids: [UUID], workspaceID: UUID) throws {
+        try logger.logged("folders.reorder") { try base.reorderFolders(ids: ids, workspaceID: workspaceID) }
     }
 
     func deleteFolder(id: UUID) throws {

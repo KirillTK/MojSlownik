@@ -187,7 +187,7 @@ final class ScanWordStoreTests: XCTestCase {
 
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        try ModelContainer(for: AppSchema.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor

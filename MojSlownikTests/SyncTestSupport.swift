@@ -9,7 +9,7 @@ enum SyncTestKit {
     nonisolated static let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
     static func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 

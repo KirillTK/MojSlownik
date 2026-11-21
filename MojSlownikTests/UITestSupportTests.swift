@@ -14,7 +14,7 @@ final class UITestSupportTests: XCTestCase {
 
     /// Returns the container too: the context must not outlive it.
     private func seeded(_ fixture: UITestFixture) throws -> ModelContainer {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         try fixture.seed(into: container.mainContext, now: now)
         return container
@@ -64,6 +64,19 @@ final class UITestSupportTests: XCTestCase {
         XCTAssertEqual(byPolish["dom"], [UITestFixture.lesson1ID])
         XCTAssertEqual(byPolish["woda"], [UITestFixture.lesson2ID])
         XCTAssertEqual(byPolish["chleb"], [])
+    }
+
+    func testEveryFixtureSeedsExactlyOneLegacyWorkspaceAndAssignsIt() throws {
+        for fixture in UITestFixture.allCases {
+            let container = try seeded(fixture)
+            let workspaces = try container.mainContext.fetch(FetchDescriptor<Workspace>())
+            XCTAssertEqual(workspaces.map(\.id), [WorkspaceID.legacy], "\(fixture)")
+            XCTAssertEqual(workspaces.map(\.termLanguageCode), ["pl"], "\(fixture)")
+            XCTAssertEqual(workspaces.map(\.translationLanguageCode), ["ru"], "\(fixture)")
+            XCTAssertTrue(try words(container).allSatisfy { $0.workspaceID == WorkspaceID.legacy }, "\(fixture)")
+            let folders = try container.mainContext.fetch(FetchDescriptor<WordFolder>())
+            XCTAssertTrue(folders.allSatisfy { $0.workspaceID == WorkspaceID.legacy }, "\(fixture)")
+        }
     }
 
     // MARK: Launch configuration
@@ -249,6 +262,11 @@ final class UITestSupportTests: XCTestCase {
             UITestLaunchConfiguration(fixture: .dueForReview, prefill: nil), now: now)
         XCTAssertNil(UserDefaults(suiteName: suite)!.object(forKey: "sentinel"))
         XCTAssertEqual(try resources.container.mainContext.fetch(FetchDescriptor<Word>()).count, 5)
+        XCTAssertEqual(try resources.container.mainContext.fetch(FetchDescriptor<Workspace>()).count, 1,
+                       "the backfill fallback and the fixture share one workspace")
+        XCTAssertEqual(resources.workspaces.activeID, WorkspaceID.legacy)
+        XCTAssertEqual(resources.vocabulary.workspace?.id, WorkspaceID.legacy)
+        XCTAssertEqual(resources.folders.workspaceID, WorkspaceID.legacy)
     }
 }
 #endif

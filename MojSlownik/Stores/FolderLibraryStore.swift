@@ -10,6 +10,8 @@ final class FolderLibraryStore {
     }
 
     private(set) var options: [Option] = []
+    /// The active workspace (set by the app wiring); nil lists no folders.
+    @ObservationIgnored var workspaceID: UUID?
     @ObservationIgnored private let repository: any FolderRepository
     @ObservationIgnored private let logger: any AppLogging
 
@@ -24,13 +26,18 @@ final class FolderLibraryStore {
     }
 
     func load() throws {
-        options = try repository.folders().map { Option(id: $0.id, name: $0.name) }
+        guard let workspaceID else {
+            options = []
+            return
+        }
+        options = try repository.folders(in: workspaceID).map { Option(id: $0.id, name: $0.name) }
     }
 
     /// Folder names are user content and are never logged.
     @discardableResult
     func create(name: String) throws -> UUID {
-        let id = try repository.createFolder(name: name)
+        guard let workspaceID else { throw RepositoryError.noWorkspace }
+        let id = try repository.createFolder(name: name, workspaceID: workspaceID)
         changeSignal?.notify()
         logger.log(.folderCreated)
         try load()
@@ -52,7 +59,8 @@ final class FolderLibraryStore {
     }
 
     func reorder(ids: [UUID]) throws {
-        try repository.reorderFolders(ids: ids)
+        guard let workspaceID else { throw RepositoryError.noWorkspace }
+        try repository.reorderFolders(ids: ids, workspaceID: workspaceID)
         changeSignal?.notify()
         logger.log(.foldersReordered, [.count: .int(ids.count)])
         try load()

@@ -310,7 +310,7 @@ final class DailyStudyStoreTests: XCTestCase {
                 // Exercise the same bootstrap as the app, not a preconstructed test container.
                 let resources = try AppResources(configuration: configuration, defaults: defaults,
                                                  calendar: calendar, now: now)
-                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder"])
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace"])
                 let context = resources.container.mainContext
                 let words = try context.fetch(FetchDescriptor<Word>())
                 let folders = try context.fetch(FetchDescriptor<WordFolder>())
@@ -340,7 +340,7 @@ final class DailyStudyStoreTests: XCTestCase {
                 defaults.set(activity, forKey: "dailyStudyActivity.v1")
                 let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
                                                  defaults: defaults, calendar: calendar, now: now)
-                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder"])
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace"])
                 XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<Word>()).isEmpty)
                 XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<WordFolder>()).isEmpty)
                 XCTAssertEqual(resources.dailyStudy.progress(for: [], now: now).total, 0)
@@ -394,7 +394,7 @@ final class DailyStudyStoreTests: XCTestCase {
 
     private func makeWords(_ count: Int) throws -> (ModelContainer, [Word]) {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Word.self, WordFolder.self, configurations: configuration)
+        let container = try ModelContainer(for: AppSchema.schema, configurations: configuration)
         let words = (0..<count).map { index in
             Word(russian: "слово \(index)", polish: "słowo \(index)", sourceLanguage: .polish, createdAt: now)
         }

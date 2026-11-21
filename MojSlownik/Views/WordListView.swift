@@ -3,8 +3,9 @@ import SwiftData
 
 struct WordListView: View {
     @Query(sort: \Word.createdAt, order: .reverse) private var storedWords: [Word]
-    private var words: [Word] { storedWords.filter(\.isActive) }
+    private var words: [Word] { WorkspaceScope.words(storedWords, workspaceID: workspaces.activeID) }
 
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @Environment(VocabularyStore.self) private var vocabulary
     @State private var selectedFolderID: UUID?
@@ -410,6 +411,7 @@ private struct WordRow: View {
     let resources = AppResources.preview
     WordListView()
         .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

@@ -48,17 +48,16 @@ final class WordTests: XCTestCase {
 
     func testDuplicatePairMatchesEitherInputDirectionIgnoringCaseAndWhitespace() {
         let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        XCTAssertTrue(word.matches(source: " WODA\n", translation: " ВОДА ", language: .polish))
-        XCTAssertTrue(word.matches(source: " ВОДА ", translation: "WODA", language: .russian))
-        XCTAssertFalse(word.matches(source: "woda", translation: "кофе", language: .polish))
-        XCTAssertFalse(word.matches(source: "kawa", translation: "вода", language: .polish))
+        XCTAssertTrue(word.matches(WordEntry.legacy(source: " WODA\n", translation: " ВОДА ")))
+        XCTAssertTrue(word.matches(WordEntry.legacy(source: " ВОДА ", translation: "WODA")))
+        XCTAssertFalse(word.matches(WordEntry.legacy(source: "woda", translation: "кофе")))
+        XCTAssertFalse(word.matches(WordEntry.legacy(source: "kawa", translation: "вода")))
     }
 
     func testDuplicatePairMatchesCanonicalUnicodeButPreservesMeaningfulDiacritics() {
         let word = Word(russian: "спасибо", polish: "dziękuję", sourceLanguage: .polish)
-        XCTAssertTrue(word.matches(source: "DZIĘKUJĘ".decomposedStringWithCanonicalMapping,
-                                   translation: "СПАСИБО", language: .polish))
-        XCTAssertFalse(word.matches(source: "dziekuje", translation: "спасибо", language: .polish))
+        XCTAssertTrue(word.matches(WordEntry.legacy(source: "DZIĘKUJĘ".decomposedStringWithCanonicalMapping, translation: "СПАСИБО")))
+        XCTAssertFalse(word.matches(WordEntry.legacy(source: "dziekuje", translation: "спасибо")))
     }
 
     @MainActor
@@ -99,9 +98,9 @@ final class WordTests: XCTestCase {
 
     func testMatchesBehaviourIsUnchangedByNormalizationExtraction() {
         let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian)
-        XCTAssertTrue(word.matches(source: " KOT ", translation: "Кот", language: .polish))
-        XCTAssertTrue(word.matches(source: "кот", translation: "kot", language: .russian))
-        XCTAssertFalse(word.matches(source: "kot", translation: "пёс", language: .polish))
+        XCTAssertTrue(word.matches(WordEntry.legacy(source: " KOT ", translation: "Кот")))
+        XCTAssertTrue(word.matches(WordEntry.legacy(source: "кот", translation: "kot")))
+        XCTAssertFalse(word.matches(WordEntry.legacy(source: "kot", translation: "пёс")))
     }
 
     func testNewWordIsSyncDirtyUntilServerTimeEqualsItsModificationTime() {

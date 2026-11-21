@@ -22,7 +22,7 @@ final class SaveFailureRestoreTests: XCTestCase {
     private func readOnlyContainer() throws -> ModelContainer {
         let url = directory.appendingPathComponent("dictionary.store")
         try autoreleasepool {
-            let container = try ModelContainer(for: Word.self, WordFolder.self,
+            let container = try ModelContainer(for: AppSchema.schema,
                                                configurations: ModelConfiguration(url: url, cloudKitDatabase: .none))
             let context = ModelContext(container)
             context.insert(Word(russian: "вода", polish: "woda", sourceLanguage: .polish, createdAt: t0,
@@ -30,7 +30,7 @@ final class SaveFailureRestoreTests: XCTestCase {
             context.insert(WordFolder(name: "Урок"))
             try context.save()
         }
-        return try ModelContainer(for: Word.self, WordFolder.self,
+        return try ModelContainer(for: AppSchema.schema,
                                   configurations: ModelConfiguration(url: url, allowsSave: false,
                                                                      cloudKitDatabase: .none))
     }
