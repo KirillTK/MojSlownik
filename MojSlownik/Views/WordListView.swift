@@ -30,8 +30,8 @@ struct WordListView: View {
         let query = searchText.lowercased()
         return FolderStore.words(words, in: selectedFolderID, memberships: memberships).filter { word in
             (selectedCategory == nil || word.category == selectedCategory)
-                && (query.isEmpty || word.russian.lowercased().contains(query)
-                    || word.polish.lowercased().contains(query))
+                && (query.isEmpty || word.translation.lowercased().contains(query)
+                    || word.term.lowercased().contains(query))
         }
     }
 
@@ -121,13 +121,14 @@ struct WordListView: View {
             .errorAlert(title: "Не удалось изменить папку", error: $folderError)
             .errorAlert(title: "Не удалось удалить слово", error: $deletionError)
             .sheet(isPresented: $showAddSheet) {
-                AddWordView(initialFolderID: selectedFolderID)
+                AddWordView(initialFolderID: selectedFolderID, pair: workspaces.pair,
+                           inputSide: workspaces.activeInputSide)
             }
             .sheet(item: $scannedResult) { scanned in
-                ScanResultView(scannedText: scanned.text)
+                ScanResultView(scannedText: scanned.text, pair: workspaces.pair)
             }
             .fullScreenCover(isPresented: $showScanner) {
-                ScannerScreen { text in
+                ScannerScreen(pair: workspaces.pair) { text in
                     showScanner = false
                     // Небольшая задержка, чтобы fullScreenCover успел закрыться до открытия sheet.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -283,6 +284,7 @@ private struct WordRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @Environment(VocabularyStore.self) private var vocabulary
+    @Environment(WorkspaceStore.self) private var workspaces
     @State private var folderError: String?
     @State private var categoryError: String?
 
@@ -294,7 +296,7 @@ private struct WordRow: View {
                     translation
                     HStack(spacing: AppSpacing.xs) {
                         ring
-                        PronounceButton(text: word.polish, language: .polish)
+                        PronounceButton(text: word.term, language: workspaces.pair.term)
                     }
                     HStack(spacing: AppSpacing.xs) {
                         categoryMenu
@@ -307,7 +309,7 @@ private struct WordRow: View {
                         wordText
                         Spacer(minLength: 0)
                         ring
-                        PronounceButton(text: word.polish, language: .polish)
+                        PronounceButton(text: word.term, language: workspaces.pair.term)
                     }
                     HStack(spacing: AppSpacing.xs) {
                         translation
@@ -326,7 +328,7 @@ private struct WordRow: View {
     }
 
     private var wordText: some View {
-        Text(word.polish)
+        Text(word.term)
             .font(.title3.weight(.bold))
             .foregroundStyle(Color.appInk)
             .frame(minWidth: 160, alignment: .leading)
@@ -335,7 +337,7 @@ private struct WordRow: View {
     }
 
     private var translation: some View {
-        Text(word.russian)
+        Text(word.translation)
             .font(.subheadline)
             .foregroundStyle(Color.subtleText)
             .layoutPriority(1)
@@ -373,7 +375,7 @@ private struct WordRow: View {
             .frame(maxWidth: 120, minHeight: 44)
             .contentShape(Rectangle())
         }
-        .accessibilityLabel("Категория слова \(word.polish): \(word.category.rawValue)")
+        .accessibilityLabel("Категория слова \(word.term): \(word.category.rawValue)")
         .accessibilityHint("Выбрать другую категорию")
     }
 
@@ -408,7 +410,7 @@ private struct WordRow: View {
                     .frame(minWidth: 44, minHeight: 44)
             }
             .fixedSize(horizontal: true, vertical: false)
-            .accessibilityLabel("Папки слова \(word.polish)")
+            .accessibilityLabel("Папки слова \(word.term)")
         }
     }
 }

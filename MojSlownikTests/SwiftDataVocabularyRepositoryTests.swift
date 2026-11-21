@@ -94,7 +94,7 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
     func testEnsureIdentityAssignsMissingUUIDAndKeepsExisting() throws {
         let (repo, container) = try makeRepo()
         let context = container.mainContext
-        let legacy = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let legacy = Word(russian: "вода", polish: "woda", side: .term)
         legacy.uuid = nil
         context.insert(legacy)
         try context.save()

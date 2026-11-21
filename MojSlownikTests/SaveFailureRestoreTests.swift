@@ -25,7 +25,7 @@ final class SaveFailureRestoreTests: XCTestCase {
             let container = try ModelContainer(for: AppSchema.schema,
                                                configurations: ModelConfiguration(url: url, cloudKitDatabase: .none))
             let context = ModelContext(container)
-            context.insert(Word(russian: "вода", polish: "woda", sourceLanguage: .polish, createdAt: t0,
+            context.insert(Word(russian: "вода", polish: "woda", side: .term, createdAt: t0,
                                 category: .food))
             context.insert(WordFolder(name: "Урок"))
             try context.save()

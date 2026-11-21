@@ -38,7 +38,7 @@ final class StoreLoggingTests: XCTestCase {
         let spy = AppLogSpy()
         let store = VocabularyStore(repository: RecordingVocabularyRepository(), logger: spy)
         store.workspace = .legacy
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: now)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: now)
         try store.changeCategory(.food, entry: WordEntry.legacy(source: "кот", translation: "kot"))
         try store.setCategory(.home, for: word)
         try store.setMembership(of: word, folderID: UUID(), included: true)
@@ -102,7 +102,7 @@ final class StoreLoggingTests: XCTestCase {
         let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: now)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: now)
         context.insert(word)
         try context.save()
         let spy = AppLogSpy()
@@ -128,7 +128,7 @@ final class StoreLoggingTests: XCTestCase {
         let store = DailyStudyStore(repository: repository, now: now, logger: spy)
         let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: now)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: now)
         container.mainContext.insert(word)
         try container.mainContext.save()
 

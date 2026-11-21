@@ -95,8 +95,10 @@ enum UITestAuthState: String, CaseIterable, Sendable {
 enum UITestTranslationStub {
     private static let toPolish: [String: String] = [
         "привет": "cześć", "мир": "świat", "привет мир": "cześć świecie",
-        "собака": "pies", "кот": "kot", "дом": "dom",
+        "собака": "pies", "кот": "kot", "дом": "dom", "house": "dom",
     ]
+    private static let toGerman: [String: String] = ["дом": "das Haus", "учить": "lernen"]
+    private static let toEnglish: [String: String] = ["dom": "house"]
     private static let toRussian: [String: String] = [
         "dom": "дом", "kot": "кот", "woda": "вода", "dziękuję": "спасибо",
         "bardzo": "очень", "dziękuję bardzo": "спасибо большое",
@@ -106,11 +108,14 @@ enum UITestTranslationStub {
         text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    static func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) -> String {
+    static func translate(_ text: String, from source: Language, to target: Language) -> String {
         let key = key(text)
-        switch target {
-        case .polish: return toPolish[key] ?? "słowo"
-        case .russian: return toRussian[key] ?? "слово"
+        switch target.code {
+        case "pl": return toPolish[key] ?? "słowo"
+        case "ru": return toRussian[key] ?? "слово"
+        case "de": return toGerman[key] ?? "Wort"
+        case "en": return toEnglish[key] ?? "word"
+        default: return "word"
         }
     }
 

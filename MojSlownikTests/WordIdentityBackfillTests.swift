@@ -11,7 +11,7 @@ final class WordIdentityBackfillTests: XCTestCase {
         let context = ModelContext(container)
         let updated = t0.addingTimeInterval(5)
         for index in 0..<3 {
-            let word = Word(russian: "в\(index)", polish: "w\(index)", sourceLanguage: .polish,
+            let word = Word(russian: "в\(index)", polish: "w\(index)", side: .term,
                             createdAt: t0.addingTimeInterval(Double(index)))
             word.uuid = nil
             word.updatedAt = index == 0 ? nil : updated
@@ -34,9 +34,9 @@ final class WordIdentityBackfillTests: XCTestCase {
     func testExistingUUIDsAreKeptAndSecondRunReturnsZero() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
-        let kept = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let kept = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
         let keptID = try XCTUnwrap(kept.uuid)
-        let missing = Word(russian: "к", polish: "k", sourceLanguage: .polish, createdAt: t0)
+        let missing = Word(russian: "к", polish: "k", side: .term, createdAt: t0)
         missing.uuid = nil
         context.insert(kept)
         context.insert(missing)
@@ -54,7 +54,7 @@ final class WordIdentityBackfillTests: XCTestCase {
         let context = ModelContext(container)
         let shared = UUID()
         func word(_ polish: String, _ offset: Double) -> Word {
-            let word = Word(russian: "в", polish: polish, sourceLanguage: .polish,
+            let word = Word(russian: "в", polish: polish, side: .term,
                             createdAt: t0.addingTimeInterval(offset))
             word.uuid = shared
             return word
@@ -74,7 +74,7 @@ final class WordIdentityBackfillTests: XCTestCase {
         let context = ModelContext(container)
         let shared = UUID()
         for polish in ["b", "a"] {
-            let word = Word(russian: "в", polish: polish, sourceLanguage: .polish, createdAt: t0)
+            let word = Word(russian: "в", polish: polish, side: .term, createdAt: t0)
             word.uuid = shared
             context.insert(word)
         }
@@ -88,11 +88,11 @@ final class WordIdentityBackfillTests: XCTestCase {
     func testRollbackFalseKeepsUnrelatedPendingEdits() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let legacy = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let legacy = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
         legacy.uuid = nil
         context.insert(legacy)
         try context.save()
-        let pending = Word(russian: "к", polish: "k", sourceLanguage: .polish, createdAt: t0.addingTimeInterval(1))
+        let pending = Word(russian: "к", polish: "k", side: .term, createdAt: t0.addingTimeInterval(1))
         context.insert(pending)
         legacy.repetitions = 9
 
@@ -109,7 +109,7 @@ final class WordIdentityBackfillTests: XCTestCase {
         let context = ModelContext(container)
         let shared = UUID()
         for (polish, offset) in [("a", 0.0), ("b", 10.0)] {
-            let word = Word(russian: "в", polish: polish, sourceLanguage: .polish,
+            let word = Word(russian: "в", polish: polish, side: .term,
                             createdAt: t0.addingTimeInterval(offset))
             word.uuid = shared
             word.serverUpdatedAt = word.lastModifiedAt

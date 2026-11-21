@@ -34,11 +34,14 @@ final class Word {
     var knowledgeTier: Int? = nil
     var consecutiveSoftMisses: Int = 0
 
-    init(russian: String, polish: String, sourceLanguage: AppLanguage, createdAt: Date = .now, category: WordCategory? = nil) {
-        self.russian = russian.lowercased()
-        self.polish = polish.lowercased()
-        self.sourceLanguageCode = sourceLanguage.rawValue
-        self.categoryRawValue = (category ?? WordCategory.detect(russian: russian, polish: polish)).rawValue
+    /// A word entered on `entry.enteredSide` of `pair`; texts are stored in each side's stored form.
+    init(entry: WordEntry, pair: LanguagePair, workspaceID: UUID?, createdAt: Date = .now,
+         category: WordCategory? = nil) {
+        self.russian = pair.translation.storedForm(entry.translation)
+        self.polish = pair.term.storedForm(entry.term)
+        self.sourceLanguageCode = pair.language(of: entry.enteredSide).code
+        self.workspaceID = workspaceID
+        self.categoryRawValue = (category ?? WordCategory.detect(term: entry.term, translation: entry.translation)).rawValue
         self.createdAt = createdAt
         self.uuid = UUID()
         self.updatedAt = createdAt
@@ -104,8 +107,4 @@ extension Word {
     }
 
     var isDue: Bool { dueDate <= .now }
-
-    func text(in language: AppLanguage) -> String {
-        language == .russian ? russian : polish
-    }
 }

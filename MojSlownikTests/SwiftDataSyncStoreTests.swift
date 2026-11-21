@@ -180,7 +180,7 @@ final class SwiftDataSyncStoreTests: XCTestCase {
         var remote: [ValidatedRemoteWord] = []
         let context = ModelContext(container)
         for index in 0..<count {
-            context.insert(Word(russian: "р\(index)", polish: "p\(index)", sourceLanguage: .polish,
+            context.insert(Word(russian: "р\(index)", polish: "p\(index)", side: .term,
                                 createdAt: t0.addingTimeInterval(-7_200)))
             remote.append(try Kit.validated(Kit.remoteWord(term: "P\(index)", translation: "Р\(index)",
                                                            updatedAt: t0.addingTimeInterval(-60))))
@@ -210,7 +210,7 @@ final class SwiftDataSyncStoreTests: XCTestCase {
     // MARK: pending rows
 
     func testPendingWordsMapsWireFormatAndSkipsHeldAndCleanRows() throws {
-        let dirty = try Kit.insertWord(container, russian: " Кот ", polish: " Kot\n", source: .polish,
+        let dirty = try Kit.insertWord(container, russian: " Кот ", polish: " Kot\n", source: .term,
                                        category: .nature)
         let held = try Kit.insertWord(container, polish: "held")
         _ = try Kit.insertWord(container, polish: "clean", syncedAt: t0.addingTimeInterval(-60))
@@ -239,7 +239,7 @@ final class SwiftDataSyncStoreTests: XCTestCase {
 
     func testPendingWordsBackfillsMissingIdentity() throws {
         let context = ModelContext(container)
-        let legacy = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0.addingTimeInterval(-60))
+        let legacy = Word(russian: "в", polish: "w", side: .term, createdAt: t0.addingTimeInterval(-60))
         legacy.uuid = nil
         context.insert(legacy)
         try context.save()
@@ -497,7 +497,7 @@ final class SwiftDataSyncStoreTests: XCTestCase {
             let seed = try ModelContainer(for: AppSchema.schema,
                                           configurations: ModelConfiguration(url: url, cloudKitDatabase: .none))
             let context = ModelContext(seed)
-            let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0.addingTimeInterval(-600))
+            let word = Word(russian: "в", polish: "w", side: .term, createdAt: t0.addingTimeInterval(-600))
             word.uuid = id
             word.updatedAt = word.createdAt
             word.serverUpdatedAt = word.createdAt

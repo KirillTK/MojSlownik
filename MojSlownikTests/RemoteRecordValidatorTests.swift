@@ -92,7 +92,7 @@ final class RemoteRecordValidatorTests: XCTestCase {
 
     /// Review finding: the validator rejected schedules SRSEngine itself produces.
     func testEveryLocalScheduleIsAccepted() throws {
-        let local = Word(russian: "кот", polish: "kot", sourceLanguage: .russian)
+        let local = Word(russian: "кот", polish: "kot", side: .translation)
         for _ in 0..<80 { SRSEngine.apply(.easy, to: local, now: now) }
         let validated = try validate(word(easeFactor: local.easeFactor, intervalDays: local.intervalDays,
                                           repetitions: local.repetitions, dueDate: local.dueDate, grade: "easy"))

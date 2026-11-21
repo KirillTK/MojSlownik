@@ -61,7 +61,7 @@ final class WorkspaceCatalogTests: XCTestCase {
         try WorkspaceCatalog.ensure(term: "de", translation: "ru", container: container, now: t0)
         let germanID = WorkspaceID.make(term: "de", translation: "ru")
         let context = ModelContext(container)
-        let word = Word(russian: "дом", polish: "das haus", sourceLanguage: .polish, createdAt: t0)
+        let word = Word(russian: "дом", polish: "das haus", side: .term, createdAt: t0)
         word.workspaceID = germanID
         let folder = WordFolder(name: "Lektion 1")
         folder.workspaceID = germanID

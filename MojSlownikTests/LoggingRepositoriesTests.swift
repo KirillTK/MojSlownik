@@ -36,7 +36,7 @@ final class LoggingRepositoriesTests: XCTestCase {
             assertLoggedFailure(spy, operation)
         }
         base.identityResult = .failure(UserTextError(text: "кот"))
-        XCTAssertThrowsError(try repository.ensureIdentity(for: Word(russian: "кот", polish: "kot", sourceLanguage: .russian)))
+        XCTAssertThrowsError(try repository.ensureIdentity(for: Word(russian: "кот", polish: "kot", side: .translation)))
         assertLoggedFailure(spy, "vocabulary.ensure_identity")
         XCTAssertEqual(spy.entries.count, cases.count + 1, "exactly one entry per failure")
     }

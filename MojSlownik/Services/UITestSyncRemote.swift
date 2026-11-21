@@ -379,7 +379,7 @@ enum UITestSyncState: String, CaseIterable, Sendable {
                 workspaces: [Self.workspaceRecord(now: now, updatedAt: UITestFixture.syncedWorkspaceStamp(now: now))],
                 words: specs.map { spec in
                     Self.wordRecord(id: spec.id, polish: spec.polish, russian: spec.russian,
-                                    category: WordCategory.detect(russian: spec.russian, polish: spec.polish).stableID,
+                                    category: WordCategory.detect(term: spec.polish, translation: spec.russian).stableID,
                                     now: now, updatedAt: spec.syncedAt, createdAt: spec.createdAt,
                                     entered: spec.source)
                 })
@@ -425,10 +425,10 @@ enum UITestSyncState: String, CaseIterable, Sendable {
 
     @MainActor private static func wordRecord(id: UUID, polish: String, russian: String, category: String,
                                               now: Date, updatedAt: Date, createdAt: Date? = nil,
-                                              entered: AppLanguage = .russian) -> RemoteWordRecord {
+                                              entered: WordSide = .translation) -> RemoteWordRecord {
         RemoteWordRecord(
             id: id, userID: owner, workspaceID: WorkspaceID.legacy, term: polish, translation: russian,
-            enteredSide: (entered == .russian ? WordSide.translation : WordSide.term).rawValue, category: category,
+            enteredSide: entered.rawValue, category: category,
             createdAt: createdAt ?? now.addingTimeInterval(-3_600), updatedAt: updatedAt,
             deletedAt: nil, easeFactor: 2.5, intervalDays: 30, repetitions: 3,
             dueDate: now.addingTimeInterval(30 * 86_400), lastReviewGrade: nil, knowledgeTier: nil,

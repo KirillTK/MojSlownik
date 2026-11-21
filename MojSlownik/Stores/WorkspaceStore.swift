@@ -10,6 +10,11 @@ final class WorkspaceStore {
         let termCode: String
         let translationCode: String
         let sortOrder: Int
+
+        /// Falls back to pl ← ru for a code this build does not know (not creatable here).
+        var pair: LanguagePair {
+            LanguagePair(termCode: termCode, translationCode: translationCode) ?? .polishRussian
+        }
     }
 
     private(set) var options: [Option] = []
@@ -19,14 +24,17 @@ final class WorkspaceStore {
 
     @ObservationIgnored private let repository: any WorkspaceRepository
     @ObservationIgnored private let activeRepository: any ActiveWorkspaceRepository
+    @ObservationIgnored private let inputSides: any InputSideRepository
     @ObservationIgnored private let logger: any AppLogging
     @ObservationIgnored private let changeSignal: LocalChangeSignal?
 
     init(repository: any WorkspaceRepository, activeRepository: any ActiveWorkspaceRepository,
+         inputSides: (any InputSideRepository)? = nil,
          logger: (any AppLogging)? = nil, changeSignal: LocalChangeSignal? = nil) {
         let logger = logger ?? NoopAppLogger()
         self.repository = LoggingWorkspaceRepository(repository, logger: logger)
         self.activeRepository = activeRepository
+        self.inputSides = inputSides ?? InMemoryInputSideRepository()
         self.logger = logger
         self.changeSignal = changeSignal
     }
@@ -35,6 +43,24 @@ final class WorkspaceStore {
 
     var context: WorkspaceContext? {
         active.map { WorkspaceContext(id: $0.id, termCode: $0.termCode, translationCode: $0.translationCode) }
+    }
+
+    /// Languages of the active workspace (pl ← ru before the first load).
+    var pair: LanguagePair { active?.pair ?? .polishRussian }
+
+    /// The side typed on in a workspace (default `.term`). Only same-script pairs use it.
+    func inputSide(for id: UUID) -> WordSide {
+        inputSides.side(for: id) ?? .term
+    }
+
+    func setInputSide(_ side: WordSide, for id: UUID) {
+        inputSides.setSide(side, for: id)
+    }
+
+    /// Input side for AddWord: the stored choice for same-script pairs, nil (auto-detect) otherwise.
+    var activeInputSide: WordSide? {
+        guard let active, active.pair.isSameScript else { return nil }
+        return inputSide(for: active.id)
     }
 
     /// Reads the options; the active one is the persisted id if still active, else the first option.

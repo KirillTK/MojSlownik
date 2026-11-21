@@ -34,7 +34,7 @@ final class SpeechRecognitionService {
         self.finishTimeout = finishTimeout
     }
 
-    func start(onRecognized: @escaping @MainActor (String) -> Void) {
+    func start(locale: String, onRecognized: @escaping @MainActor (String) -> Void) {
         guard !isBusy else { return }
         token = UUID()
         let session = token
@@ -52,7 +52,7 @@ final class SpeechRecognitionService {
                 return
             }
             do {
-                try self.backend.start(locale: AppLanguage.polish.speechCode, onResult: { [weak self] text, final in
+                try self.backend.start(locale: locale, onResult: { [weak self] text, final in
                     guard let self, self.token == session, self.isBusy else { return }
                     self.draft = text
                     if final { self.commit(session: session) }

@@ -52,7 +52,7 @@ final class FolderLibraryStoreTests: XCTestCase {
         let anotherConsumer = library
         let id = try library.create(name: "Урок 1")
         let context = ModelContext(container)
-        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let word = Word(russian: "вода", polish: "woda", side: .term)
         word.repetitions = 7
         word.intervalDays = 14
         word.easeFactor = 2.8

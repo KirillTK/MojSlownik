@@ -16,11 +16,11 @@ enum SyncTestKit {
     /// A local word that is clean (synced at `serverTime`).
     @discardableResult
     static func insertWord(_ container: ModelContainer, russian: String = "кот", polish: String = "kot",
-                           source: AppLanguage = .russian, id: UUID = UUID(), category: WordCategory = .other,
+                           source: WordSide = .translation, id: UUID = UUID(), category: WordCategory = .other,
                            folders: [UUID] = [], workspace: UUID = WorkspaceID.legacy, createdAt: Date? = nil,
                            syncedAt serverTime: Date? = nil, deletedAt: Date? = nil) throws -> UUID {
         let context = ModelContext(container)
-        let word = Word(russian: russian, polish: polish, sourceLanguage: source,
+        let word = Word(russian: russian, polish: polish, side: source,
                         createdAt: createdAt ?? t0.addingTimeInterval(-7_200), category: category)
         word.uuid = id
         word.workspaceID = workspace

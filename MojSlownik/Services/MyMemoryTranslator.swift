@@ -8,8 +8,8 @@ struct MyMemoryTranslator: TranslationService {
     /// Необязательно; можно заменить или убрать.
     var contactEmail: String? = "ktkachyov@gmail.com"
 
-    func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
-        let pair = TranslationPair(source: source.translationLanguage, target: target.translationLanguage)
+    func translate(_ text: String, from source: Language, to target: Language) async throws -> String {
+        let pair = TranslationPair(source: source, target: target)
         let url = Self.url(for: text, pair: pair, contactEmail: contactEmail)
 
         let (data, response) = try await URLSession.shared.data(from: url)

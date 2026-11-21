@@ -85,7 +85,7 @@ final class RemoteMergePolicyTests: XCTestCase {
     }
 
     func testLocalStateComesFromWordAndFolder() {
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: t0)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: t0)
         XCTAssertEqual(word.localRecordState, LocalRecordState(serverUpdatedAt: nil, isDirty: true, isDeleted: false))
         word.serverUpdatedAt = t0
         XCTAssertFalse(word.isSyncDirty)
@@ -107,7 +107,7 @@ final class RemoteMergePolicyTests: XCTestCase {
 
     /// Dirty state is equality, not ordering: a backwards device clock still marks a row dirty.
     func testDirtyIsEqualityNotOrdering() {
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: t1)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: t1)
         word.serverUpdatedAt = t1
         word.updatedAt = t0
         XCTAssertTrue(word.isSyncDirty)
@@ -122,7 +122,7 @@ final class RemoteMergePolicyTests: XCTestCase {
     }
 
     func testEditedSinceLinkComesFromTheRowsOwnModificationTime() {
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: t0)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: t0)
         word.serverUpdatedAt = sentinel
         XCTAssertFalse(word.localRecordState(linkedAt: t1).editedSinceLink)
         XCTAssertFalse(word.localRecordState(linkedAt: nil).editedSinceLink)

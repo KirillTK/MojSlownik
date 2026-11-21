@@ -128,11 +128,6 @@ enum ScanWordStore {
 
     private static func makeWord(_ entry: WordEntry, category: WordCategory?, workspace: WorkspaceContext,
                                  now: Date) -> Word {
-        let word = Word(russian: entry.translation, polish: entry.term,
-                        sourceLanguage: entry.enteredSide == .term ? .polish : .russian,
-                        createdAt: now, category: category)
-        word.sourceLanguageCode = workspace.code(of: entry.enteredSide)
-        word.workspaceID = workspace.id
-        return word
+        Word(entry: entry, pair: workspace.pair, workspaceID: workspace.id, createdAt: now, category: category)
     }
 }

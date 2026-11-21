@@ -185,7 +185,7 @@ struct TrainingView: View {
             NavigationLink {
                 ListeningPracticeView(folderID: selectedFolderID)
             } label: {
-                ModeTile(title: "На слух", subtitle: "Слушать и писать по-польски", icon: "ear",
+                ModeTile(title: "На слух", subtitle: "Слушать и писать \(workspaces.pair.term.adverbRU)", icon: "ear",
                          iconSize: modeTile, isWide: true)
             }
             .buttonStyle(TileButtonStyle())

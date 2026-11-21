@@ -5,7 +5,7 @@ final class WorkspaceScopeTests: XCTestCase {
     private let german = WorkspaceID.make(term: "de", translation: "ru")
 
     private func word(_ polish: String, workspace: UUID?, deleted: Bool = false) -> Word {
-        let word = Word(russian: "x", polish: polish, sourceLanguage: .polish)
+        let word = Word(russian: "x", polish: polish, side: .term)
         word.workspaceID = workspace
         if deleted { word.markDeleted(now: .now) }
         return word

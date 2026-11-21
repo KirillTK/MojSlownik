@@ -145,7 +145,7 @@ final class FolderStoreTests: XCTestCase {
         let word = try insertWord(in: container)
         try FolderStore.setMembership(wordID: word.persistentModelID, folderID: folder.id, included: true, container: container)
         let context = ModelContext(container)
-        context.insert(Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish))
+        context.insert(Word(russian: "кофе", polish: "kawa", side: .term))
         try context.save()
         let all = try words(in: container)
         let index = MembershipIndex(try ModelContext(container).fetch(FetchDescriptor<FolderMembership>()))
@@ -208,8 +208,8 @@ final class FolderStoreTests: XCTestCase {
         let t2 = Date(timeIntervalSince1970: 6_000)
         let folder = try FolderStore.create(name: "Урок", container: container)
         let context = ModelContext(container)
-        let active = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        let deleted = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
+        let active = Word(russian: "вода", polish: "woda", side: .term)
+        let deleted = Word(russian: "кофе", polish: "kawa", side: .term)
         for word in [active, deleted] {
             context.insert(word)
             context.insert(FolderMembership(wordID: try XCTUnwrap(word.uuid), folderID: folder.id,
@@ -352,7 +352,7 @@ final class FolderStoreTests: XCTestCase {
         let observedContext = ModelContext(container)
         observedContext.autosaveEnabled = false
         _ = try FolderStore.create(name: "Урок 1", context: observedContext)
-        let pending = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
+        let pending = Word(russian: "кофе", polish: "kawa", side: .term)
         observedContext.insert(pending)
 
         XCTAssertThrowsError(try FolderStore.create(name: " УРОК 1 ", context: observedContext))
@@ -383,7 +383,7 @@ final class FolderStoreTests: XCTestCase {
     @MainActor
     private func insertWord(in container: ModelContainer) throws -> Word {
         let context = ModelContext(container)
-        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let word = Word(russian: "вода", polish: "woda", side: .term)
         word.repetitions = 7
         word.intervalDays = 14
         word.easeFactor = 2.8

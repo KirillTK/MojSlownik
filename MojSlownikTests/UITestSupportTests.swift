@@ -284,6 +284,13 @@ final class UITestSupportTests: XCTestCase {
         XCTAssertEqual(UITestTranslationStub.translate("zzz", from: .polish, to: .russian), "слово")
     }
 
+    func testStubIsKeyedByTheTargetLanguage() {
+        XCTAssertEqual(UITestTranslationStub.translate("дом", from: .russian, to: .german), "das Haus")
+        XCTAssertEqual(UITestTranslationStub.translate("учить", from: .russian, to: .german), "lernen")
+        XCTAssertEqual(UITestTranslationStub.translate("dom", from: .polish, to: .english), "house")
+        XCTAssertEqual(UITestTranslationStub.translate("house", from: .english, to: .polish), "dom")
+    }
+
     func testStubAlternativesFlowThroughRealMerge() {
         let pair = TranslationPair(source: .polish, target: .russian)
         let groups = UITestTranslationStub.alternatives("dom", pair: pair)

@@ -11,6 +11,23 @@ extension WorkspaceContext {
                                                 termCode: "de", translationCode: "ru")
 }
 
+extension WordEntry {
+    /// Test shorthand for the pl ← ru pair: a Cyrillic source is the translation side.
+    static func legacy(source: String, translation: String) -> WordEntry {
+        let side = LanguagePair.polishRussian.detectSide(source) ?? .term
+        return WordEntry.make(input: source, translation: translation, side: side)
+    }
+}
+
+extension Word {
+    /// Test shorthand: a pl ← ru word without a workspace id, entered on `side`.
+    convenience init(russian: String, polish: String, side: WordSide, createdAt: Date = .now,
+                     category: WordCategory? = nil) {
+        self.init(entry: WordEntry(term: polish, translation: russian, enteredSide: side),
+                  pair: .polishRussian, workspaceID: nil, createdAt: createdAt, category: category)
+    }
+}
+
 @MainActor
 extension FolderStore {
     static func create(name: String, container: ModelContainer, now: Date = .now) throws -> WordFolder {

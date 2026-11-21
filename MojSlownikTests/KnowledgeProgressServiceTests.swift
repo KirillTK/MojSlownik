@@ -85,7 +85,7 @@ final class KnowledgeProgressServiceTests: XCTestCase {
     }
 
     private func makeWord(tier: Int?, softMisses: Int = 0) -> Word {
-        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let word = Word(russian: "вода", polish: "woda", side: .term)
         word.knowledgeTier = tier
         word.consecutiveSoftMisses = softMisses
         return word

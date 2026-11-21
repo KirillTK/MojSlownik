@@ -29,6 +29,37 @@ final class WorkspaceStoreTests: XCTestCase {
                        logger: spy, changeSignal: signal)
     }
 
+    func testInputSideIsPerWorkspaceAndPersists() throws {
+        let sides = UserDefaultsInputSideRepository(defaults: defaults)
+        let store = WorkspaceStore(repository: SwiftDataWorkspaceRepository(container: container),
+                                   activeRepository: UserDefaultsActiveWorkspaceRepository(defaults: defaults),
+                                   inputSides: sides, logger: spy, changeSignal: signal)
+        try store.load()
+        XCTAssertEqual(store.inputSide(for: de), .term)
+        store.setInputSide(.translation, for: de)
+        XCTAssertEqual(store.inputSide(for: de), .translation)
+        XCTAssertEqual(store.inputSide(for: WorkspaceID.legacy), .term)
+        let reloaded = WorkspaceStore(repository: SwiftDataWorkspaceRepository(container: container),
+                                      activeRepository: UserDefaultsActiveWorkspaceRepository(defaults: defaults),
+                                      inputSides: UserDefaultsInputSideRepository(defaults: defaults),
+                                      logger: spy, changeSignal: signal)
+        XCTAssertEqual(reloaded.inputSide(for: de), .translation)
+        XCTAssertNotNil(defaults.dictionary(forKey: "workspace.inputSide.v1"))
+    }
+
+    func testActiveInputSideAppliesToSameScriptPairsOnly() throws {
+        let enPl = try WorkspaceCatalog.ensure(term: "en", translation: "pl", container: container)
+        let store = makeStore()
+        try store.load()
+        XCTAssertEqual(store.pair, .polishRussian)
+        XCTAssertNil(store.activeInputSide, "pl ← ru detects the side by script")
+        store.select(id: enPl)
+        XCTAssertEqual(store.pair, LanguagePair(term: .english, translation: .polish))
+        XCTAssertEqual(store.activeInputSide, .term)
+        store.setInputSide(.translation, for: enPl)
+        XCTAssertEqual(store.activeInputSide, .translation)
+    }
+
     func testLoadFallsBackToTheFirstOptionAndPersistsIt() throws {
         let store = makeStore()
         try store.load()

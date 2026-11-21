@@ -113,6 +113,7 @@ struct AppResources {
                                      changeSignal: changeSignal)
         let workspaces = WorkspaceStore(repository: SwiftDataWorkspaceRepository(container: container),
                                         activeRepository: UserDefaultsActiveWorkspaceRepository(defaults: defaults),
+                                        inputSides: UserDefaultsInputSideRepository(defaults: defaults),
                                         logger: logger, changeSignal: changeSignal)
         self.workspaces = workspaces
         workspaces.onActiveChange = { [folders, vocabulary] context in

@@ -220,7 +220,7 @@ final class WorkspaceScopingTests: XCTestCase {
     }
 
     func testWordAccessorsAreTheStoredProperties() {
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian)
+        let word = Word(russian: "кот", polish: "kot", side: .translation)
         XCTAssertEqual(word.term, "kot")
         XCTAssertEqual(word.translation, "кот")
         XCTAssertEqual(word.text(on: .term), "kot")
@@ -231,13 +231,13 @@ final class WorkspaceScopingTests: XCTestCase {
         XCTAssertEqual(word.russian, "пёс")
         XCTAssertEqual(word.effectiveWorkspaceID, WorkspaceID.legacy)
         XCTAssertEqual(word.enteredSide(in: .legacy), .translation)
-        XCTAssertEqual(Word(russian: "в", polish: "w", sourceLanguage: .polish).enteredSide(in: .legacy), .term)
+        XCTAssertEqual(Word(russian: "в", polish: "w", side: .term).enteredSide(in: .legacy), .term)
         word.workspaceID = de
         XCTAssertEqual(word.effectiveWorkspaceID, de)
     }
 
     func testMatchesEntryIgnoresCaseWhitespaceAndUnicodeForm() {
-        let word = Word(russian: "спасибо", polish: "dziękuję", sourceLanguage: .polish)
+        let word = Word(russian: "спасибо", polish: "dziękuję", side: .term)
         XCTAssertTrue(word.matches(WordEntry(term: " DZIĘKUJĘ".decomposedStringWithCanonicalMapping,
                                              translation: "СПАСИБО ", enteredSide: .term)))
         XCTAssertFalse(word.matches(WordEntry(term: "dziekuje", translation: "спасибо", enteredSide: .term)))

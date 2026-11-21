@@ -55,14 +55,14 @@ final class FolderPersistenceTests: XCTestCase {
         let library = FolderLibraryStore.inLegacyWorkspace(repository: SwiftDataFolderRepository(container: container))
         let id = try library.create(name: "Урок 1")
         XCTAssertEqual(library.options, [.init(id: id, name: "Урок 1")])
-        let word = Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .polish)
+        let word = Word(russian: "ВОДА", polish: "WODA", side: .term)
         word.folderIDs = [id]
         word.repetitions = 7
         word.intervalDays = 14
         word.easeFactor = 2.8
         word.dueDate = Date(timeIntervalSince1970: 1_700_000_000)
         context.insert(word)
-        context.insert(Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish))
+        context.insert(Word(russian: "кофе", polish: "kawa", side: .term))
         try context.save()
         return id
     }

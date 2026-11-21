@@ -24,7 +24,7 @@ final class WorkspaceBackfillTests: XCTestCase {
     private func insertLegacyRows(updated: Date? = nil, synced: Date? = nil) throws {
         let context = ModelContext(container)
         for index in 0..<2 {
-            let word = Word(russian: "в\(index)", polish: "w\(index)", sourceLanguage: .polish,
+            let word = Word(russian: "в\(index)", polish: "w\(index)", side: .term,
                             createdAt: t0.addingTimeInterval(Double(index) * 10))
             word.updatedAt = updated
             word.serverUpdatedAt = synced
@@ -108,7 +108,7 @@ final class WorkspaceBackfillTests: XCTestCase {
     func testMarkerPresentAndNothingToAssignInsertsNoInferredWorkspaceBeyondTheFallback() throws {
         defaults.set(true, forKey: WorkspaceBackfill.markerKey)
         let context = ModelContext(container)
-        let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let word = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
         word.workspaceID = WorkspaceID.make(term: "de", translation: "ru")
         context.insert(word)
         let german = Workspace(termLanguageCode: "de", translationLanguageCode: "ru", createdAt: t0)
@@ -160,7 +160,7 @@ final class WorkspaceBackfillTests: XCTestCase {
         latest.updatedAt = t0.addingTimeInterval(50)
         let other = Workspace(termLanguageCode: "de", translationLanguageCode: "ru", sortOrder: 1, createdAt: t0)
         [old, latest, other].forEach(context.insert)
-        let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let word = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
         context.insert(word)
         try context.save()
 
@@ -207,10 +207,10 @@ final class WorkspaceBackfillTests: XCTestCase {
         let live = WordFolder(name: "Живая")
         let dead = WordFolder(name: "Удалённая")
         dead.markDeleted(now: t0)
-        let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let word = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
         let dangling = UUID()
         word.folderIDs = [live.id, live.id, dead.id, dangling]
-        let noUUID = Word(russian: "н", polish: "n", sourceLanguage: .polish, createdAt: t0)
+        let noUUID = Word(russian: "н", polish: "n", side: .term, createdAt: t0)
         noUUID.uuid = nil
         noUUID.folderIDs = [live.id]
         for model in [live, dead] as [any PersistentModel] { context.insert(model) }
@@ -244,7 +244,7 @@ final class WorkspaceBackfillTests: XCTestCase {
     func testMembershipsCreatedAfterTheMigrationAreNeverRecreatedFromTheArray() throws {
         let context = ModelContext(container)
         let folder = WordFolder(name: "Урок")
-        let word = Word(russian: "в", polish: "w", sourceLanguage: .polish, createdAt: t0)
+        let word = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
         word.folderIDs = [folder.id]
         context.insert(folder)
         context.insert(word)

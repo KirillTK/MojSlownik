@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PronounceButton: View {
     let text: String
-    let language: AppLanguage
+    let language: Language
 
     var body: some View {
         Button {

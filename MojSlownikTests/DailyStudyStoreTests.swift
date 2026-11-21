@@ -127,7 +127,7 @@ final class DailyStudyStoreTests: XCTestCase {
             // Deleted words and moved memberships disappear from the supplied live scope.
             XCTAssertEqual(store.progress(for: [words[1]], now: now), .init(completed: 0, remaining: 1))
             XCTAssertEqual(store.progress(for: FolderStore.words(words, in: UUID(), memberships: index), now: now).total, 0)
-            let added = Word(russian: "новое", polish: "nowe", sourceLanguage: .polish, createdAt: now)
+            let added = Word(russian: "новое", polish: "nowe", side: .term, createdAt: now)
             container.mainContext.insert(added)
             try container.mainContext.save()
             XCTAssertEqual(store.progress(for: words + [added], now: now), .init(completed: 2, remaining: 2))
@@ -352,8 +352,8 @@ final class DailyStudyStoreTests: XCTestCase {
         let context = resources.container.mainContext
         let folder = WordFolder(name: "Урок 1")
         context.insert(folder)
-        let completed = Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .polish, createdAt: now)
-        let pending = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, createdAt: now)
+        let completed = Word(russian: "ВОДА", polish: "WODA", side: .term, createdAt: now)
+        let pending = Word(russian: "кофе", polish: "kawa", side: .term, createdAt: now)
         context.insert(completed)
         context.insert(pending)
         context.insert(FolderMembership(wordID: try XCTUnwrap(completed.uuid), folderID: folder.id,
@@ -395,7 +395,7 @@ final class DailyStudyStoreTests: XCTestCase {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: AppSchema.schema, configurations: configuration)
         let words = (0..<count).map { index in
-            Word(russian: "слово \(index)", polish: "słowo \(index)", sourceLanguage: .polish, createdAt: now)
+            Word(russian: "слово \(index)", polish: "słowo \(index)", side: .term, createdAt: now)
         }
         words.forEach { container.mainContext.insert($0) }
         try container.mainContext.save()

@@ -211,7 +211,7 @@ struct ListeningPracticeView: View {
 
     private func spellingAnswer(_ question: ListeningQuestion) -> some View {
         VStack(spacing: 12) {
-            TextField("Польское слово", text: $answer)
+            TextField("\(workspaces.pair.term.neuterRU) слово", text: $answer)
                 .font(.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -288,7 +288,7 @@ struct ListeningPracticeView: View {
 
     private func speakCurrentQuestion() {
         guard let question = currentQuestion, question.mode != .translation else { return }
-        SpeechService.shared.speak(question.correctAnswer, language: .polish)
+        SpeechService.shared.speak(question.correctAnswer, language: workspaces.pair.term)
     }
 
     private func scheduleAdvance() {

@@ -262,10 +262,13 @@ final class SwiftDataSyncStore {
                     byID[remote.id] = adopted
                     result.adopted += 1
                 } else {
-                    let word = Word(russian: remote.translation, polish: remote.term, sourceLanguage: .polish,
+                    let word = Word(entry: WordEntry(term: remote.term, translation: remote.translation,
+                                                     enteredSide: remote.enteredSide),
+                                    pair: LanguagePair(termCode: pair.term, translationCode: pair.translation)
+                                        ?? .polishRussian,
+                                    workspaceID: remote.workspaceID,
                                     createdAt: remote.createdAt, category: remote.category)
                     word.uuid = remote.id
-                    word.workspaceID = remote.workspaceID
                     apply(remote, to: word, pair: pair)
                     markSynced(word, remote.updatedAt)
                     context.insert(word)

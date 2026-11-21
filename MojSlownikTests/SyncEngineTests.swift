@@ -52,9 +52,9 @@ final class SyncEngineTests: XCTestCase {
 
     func testFirstLinkUploadsEveryRowWithTheV2WireMapping() async throws {
         let folder = try Kit.insertFolder(container, name: " Урок ")
-        let word = try Kit.insertWord(container, russian: "кот ", polish: " kot", source: .russian,
+        let word = try Kit.insertWord(container, russian: "кот ", polish: " kot", source: .translation,
                                       category: .nature, folders: [folder])
-        let other = try Kit.insertWord(container, russian: "дом", polish: "dom", source: .polish)
+        let other = try Kit.insertWord(container, russian: "дом", polish: "dom", source: .term)
 
         try engine.link(to: owner)
         let report = try await engine.run(ownerID: owner)

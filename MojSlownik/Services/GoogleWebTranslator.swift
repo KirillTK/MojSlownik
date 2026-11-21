@@ -23,8 +23,8 @@ struct GoogleWebTranslator: TranslationService {
         return components.url!
     }
 
-    func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
-        let pair = TranslationPair(source: source.translationLanguage, target: target.translationLanguage)
+    func translate(_ text: String, from source: Language, to target: Language) async throws -> String {
+        let pair = TranslationPair(source: source, target: target)
         let url = Self.url(for: text, pair: pair, dt: ["t"])
 
         let (data, response) = try await URLSession.shared.data(from: url)

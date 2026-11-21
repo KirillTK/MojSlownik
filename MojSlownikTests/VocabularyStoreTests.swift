@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class VocabularyStoreTests: XCTestCase {
     private func word(uuid: UUID?) -> Word {
-        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let word = Word(russian: "вода", polish: "woda", side: .term)
         word.uuid = uuid
         return word
     }

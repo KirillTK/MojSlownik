@@ -20,7 +20,7 @@ enum UITestFixture: String, CaseIterable, Sendable {
         let id: UUID
         let russian: String
         let polish: String
-        let source: AppLanguage
+        let source: WordSide
         let createdAt: Date
         let dueDate: Date
 
@@ -29,9 +29,9 @@ enum UITestFixture: String, CaseIterable, Sendable {
     }
 
     static func syncedWords(now: Date) -> [SyncedWord] {
-        let pairs: [(String, String, AppLanguage)] = [("кот", "kot", .russian), ("дом", "dom", .polish),
-                                                      ("вода", "woda", .polish), ("хлеб", "chleb", .russian),
-                                                      ("книга", "książka", .russian)]
+        let pairs: [(String, String, WordSide)] = [("кот", "kot", .translation), ("дом", "dom", .term),
+                                                      ("вода", "woda", .term), ("хлеб", "chleb", .translation),
+                                                      ("книга", "książka", .translation)]
         return pairs.enumerated().map { index, pair in
             SyncedWord(id: syncedWordIDs[index], russian: pair.0, polish: pair.1, source: pair.2,
                        createdAt: now.addingTimeInterval(-Double(index + 1) * 3600),
@@ -60,9 +60,10 @@ enum UITestFixture: String, CaseIterable, Sendable {
         }
         var memberships: [(word: Word, folderID: UUID)] = []
         var index = 0
-        func word(_ russian: String, _ polish: String, _ source: AppLanguage,
+        func word(_ russian: String, _ polish: String, _ source: WordSide,
                   due: Bool = false, folders: [UUID] = []) -> Word {
-            let word = Word(russian: russian, polish: polish, sourceLanguage: source,
+            let word = Word(entry: WordEntry(term: polish, translation: russian, enteredSide: source),
+                            pair: .polishRussian, workspaceID: workspaceID,
                             createdAt: now.addingTimeInterval(-Double(index + 1) * 3600))
             index += 1
             if due {
@@ -75,7 +76,6 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 word.easeFactor = 2.5
                 word.dueDate = now.addingTimeInterval(30 * 86_400)
             }
-            word.workspaceID = workspaceID
             memberships += folders.map { (word, $0) }
             return word
         }
@@ -85,9 +85,9 @@ enum UITestFixture: String, CaseIterable, Sendable {
         case .empty:
             break
         case .basicVocabulary:
-            words = [word("кот", "kot", .russian), word("дом", "dom", .polish),
-                     word("вода", "woda", .polish), word("хлеб", "chleb", .russian),
-                     word("книга", "książka", .russian)]
+            words = [word("кот", "kot", .translation), word("дом", "dom", .term),
+                     word("вода", "woda", .term), word("хлеб", "chleb", .translation),
+                     word("книга", "książka", .translation)]
         case .syncedVocabulary:
             words = Self.syncedWords(now: now).map { spec in
                 let item = word(spec.russian, spec.polish, spec.source)
@@ -97,10 +97,10 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 return item
             }
         case .dueForReview:
-            words = [word("кот", "kot", .russian), word("дом", "dom", .polish),
-                     word("вода", "woda", .polish),
-                     word("яблоко", "jabłko", .russian, due: true),
-                     word("окно", "okno", .polish, due: true)]
+            words = [word("кот", "kot", .translation), word("дом", "dom", .term),
+                     word("вода", "woda", .term),
+                     word("яблоко", "jabłko", .translation, due: true),
+                     word("окно", "okno", .term, due: true)]
         case .foldersOrdered:
             let created = now.addingTimeInterval(-86_400)
             for (name, id, order) in [("Урок 3", Self.lesson3ID, 2), ("Урок 1", Self.lesson1ID, 0),
@@ -112,10 +112,10 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 folder.workspaceID = workspaceID
                 context.insert(folder)
             }
-            words = [word("кот", "kot", .russian, folders: [Self.lesson1ID]),
-                     word("дом", "dom", .polish, folders: [Self.lesson1ID]),
-                     word("вода", "woda", .polish, folders: [Self.lesson2ID]),
-                     word("хлеб", "chleb", .russian)]
+            words = [word("кот", "kot", .translation, folders: [Self.lesson1ID]),
+                     word("дом", "dom", .term, folders: [Self.lesson1ID]),
+                     word("вода", "woda", .term, folders: [Self.lesson2ID]),
+                     word("хлеб", "chleb", .translation)]
         }
         words.forEach(context.insert)
         for (word, folderID) in memberships {

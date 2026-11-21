@@ -53,6 +53,17 @@ final class TranslatorLoggingTests: XCTestCase {
         XCTAssertFalse(spy.loggedNames.contains { $0.contains("кот") })
     }
 
+    func testLogsLanguageCodesOfAnyPair() async {
+        do {
+            _ = try await Translator.webFallback(from: .german, to: .ukrainian,
+                                                 primary: { throw ProviderDown() },
+                                                 fallback: { throw ProviderDown() })
+            XCTFail("expected an error")
+        } catch {}
+        XCTAssertEqual(spy.entries[0].properties[.language], .name("de"))
+        XCTAssertEqual(spy.entries[0].properties[.targetLanguage], .name("uk"))
+    }
+
     func testCancelledRequestsAreNotLogged() async {
         _ = try? await fallback(primary: { throw URLError(.cancelled) }, fallback: { throw URLError(.cancelled) })
         _ = try? await fallback(primary: { throw CancellationError() }, fallback: { "unused" })

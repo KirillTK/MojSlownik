@@ -22,6 +22,12 @@ struct WorkspaceContext: Equatable, Sendable {
     let termCode: String
     let translationCode: String
 
+    /// The workspace languages. Codes are validated when a workspace is created or pulled; an
+    /// unsupported pair (not creatable) falls back to pl ← ru rather than crashing.
+    var pair: LanguagePair {
+        LanguagePair(termCode: termCode, translationCode: translationCode) ?? .polishRussian
+    }
+
     /// Language code of the side that was entered.
     func code(of side: WordSide) -> String {
         side == .term ? termCode : translationCode
