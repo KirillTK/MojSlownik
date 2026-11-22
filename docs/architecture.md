@@ -10,21 +10,37 @@ translation sends entered or recognized text to an external service.
 
 Paths below are relative to `MojSlownik/` unless stated otherwise.
 
+### Source layout
+
+Layers stay at the top of `MojSlownik/`; domain sub-folders sit inside them.
+
+- `Models/` SwiftData models; `Stores/` observable stores views write through; `Theme/`;
+  `Backend/` Supabase adapters (the only Supabase import).
+- `Services/Data/` repository seams and implementations, SwiftData writers, word identity and
+  value types; `Services/Workspaces/`, `Services/Language/`, `Services/Translation/`,
+  `Services/Speech/`, `Services/Scanning/` (OCR), `Services/Practice/` (SRS, confidence,
+  listening), `Services/Achievements/`, `Services/Sync/`, `Services/Account/`,
+  `Services/Logging/`, `Services/UITestSupport/` (DEBUG UI-test mode).
+- `Views/RootTabView.swift` plus `Views/Dictionary/`, `Views/Practice/`, `Views/Workspaces/`,
+  `Views/Account/`; shared views in `Views/Components/`.
+- Tests stay flat in `MojSlownikTests/` and `MojSlownikUITests/` (several tests locate the repo
+  root relative to their own file).
+
 | Area | Files and responsibilities |
 | --- | --- |
 | Startup | `MojSlownikApp.swift` creates a model container for `Word` and `WordFolder`, injects the shared folder, daily-study and achievement stores, and presents `RootTabView`. |
 | Navigation | `Views/RootTabView.swift`: Dictionary and Training tabs (Achievements is pushed from Training), root `AppleTranslationHost`, `AchievementTracker` and `achievementBanner()`. |
-| Data access | Protocols `VocabularyRepository`/`FolderRepository` (`Services/DataRepositories.swift`) and `AchievementStateRepository`/`DailyActivityRepository` (`Services/ProgressRepositories.swift`). SwiftData implementations (`Services/SwiftDataRepositories.swift`, over `ScanWordStore`/`FolderStore`) and UserDefaults implementations are built in `AppResources`. Views write through `Stores/VocabularyStore.swift` and `Stores/FolderLibraryStore.swift`; `Services/WordIdentityBackfill.swift` assigns `Word.uuid`. |
+| Data access | Protocols `VocabularyRepository`/`FolderRepository` (`Services/Data/DataRepositories.swift`) and `AchievementStateRepository`/`DailyActivityRepository` (`Services/Data/ProgressRepositories.swift`). SwiftData implementations (`Services/Data/SwiftDataRepositories.swift`, over `ScanWordStore`/`FolderStore`) and UserDefaults implementations are built in `AppResources`. Views write through `Stores/VocabularyStore.swift` and `Stores/FolderLibraryStore.swift`; `Services/Data/WordIdentityBackfill.swift` assigns `Word.uuid`. |
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
-| Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
-| Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
-| Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `Language.swift` is the central descriptor table (10 languages: names, speech/OCR/provider codes, Apple identifier, script, case rule) and `LanguagePair`; `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
-| Camera and results | `Views/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
-| Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
-| Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue (`recordNextUnlocksSilently` skips banners for unlocks caused by just-pulled vocabulary); `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
-| Speech and styling | `Services/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
+| Dictionary | `Views/Dictionary/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
+| Adding words | `Views/Dictionary/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
+| Translation | `Services/Translation/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `Services/Language/Language.swift` is the central descriptor table (10 languages: names, speech/OCR/provider codes, Apple identifier, script, case rule) and `LanguagePair`; `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
+| Camera and results | `Views/Dictionary/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/Scanning/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
+| Practice | `Views/Practice/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/Practice/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/Practice/ListeningPracticeView.swift`/`Services/Practice/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/Practice/SRSEngine.swift`: card scheduling and last card grade. |
+| Achievements | `Services/Achievements/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/Achievements/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue (`recordNextUnlocksSilently` skips banners for unlocks caused by just-pulled vocabulary); `Views/Practice/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
+| Speech and styling | `Services/Speech/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
 | Backend | `Backend/`: remote backend code, kept apart from `Services/`; the only place that imports `Supabase`. `SupabaseConfiguration.swift` (URL, publishable key, OAuth redirect), `SupabaseClientProvider.swift` (lazy client, no SDK logger), `SupabaseAuthBackend.swift` (native SDK OAuth), `SupabaseLogUploader.swift` (app_logs inserts), `SupabaseSyncRemote.swift` (PostgREST transport of the sync engine), `RemoteRecords.swift`/`RemoteMergePolicy.swift` (DTOs, validator, merge rule). Schema: `supabase/migrations`, tests: `supabase/tests`. |
-| Account and logs | `Stores/AuthStore.swift` over `Services/Auth.swift` (`AuthBackend`; `StaticAuthBackend` for previews/UI tests); `Views/AccountView.swift` from the Словарь toolbar. `Services/AppLog.swift` (typed events) and `Services/AppLogQueue.swift` (on-disk queue, uploads while signed in, flush on threshold/sign-in/sign-out/background). Stores take an `AppLogging`; static services use `AppLog.shared`. `Stores/SyncStore.swift` owns sync triggers, status and linking (see Sync). |
+| Account and logs | `Stores/AuthStore.swift` over `Services/Account/Auth.swift` (`AuthBackend`; `StaticAuthBackend` for previews/UI tests); `Views/Account/AccountView.swift` from the Словарь toolbar. `Services/Logging/AppLog.swift` (typed events) and `Services/Logging/AppLogQueue.swift` (on-disk queue, uploads while signed in, flush on threshold/sign-in/sign-out/background). Stores take an `AppLogging`; static services use `AppLog.shared`. `Stores/SyncStore.swift` owns sync triggers, status and linking (see Sync). |
 | Build | Root `project.yml`: XcodeGen, application, `MojSlownikTests` and `MojSlownikUITests`, iOS 17.0, Swift 5.9. Schemes: `MojSlownik` (app), `MojSlownikUnitTests` and `MojSlownikE2E` (UI tests, parallel classes). CI: `.github/workflows/ci.yml`. Swift package `supabase-swift` (product `Supabase`, exact 2.55.7; needs Xcode 16.3+). |
 
 ## Data Flows
@@ -74,7 +90,7 @@ uses the existing translation providers. No audio or transcript history is store
 **Scanning:** tap a recognized line while live or freeze the current frame with VisionKit `capturePhoto()`. The scanner then stops and is removed from the view hierarchy; Vision `VNRecognizeTextRequest` analyzes the captured UIImage itself. The still fills the screen while tappable OCR text-block bubbles let users select/deselect several blocks, or translate all still-image OCR text. Selected blocks stay accented and a compact count/translate action lets users revise their selection before translation. Vision's normalized bottom-left bounds are converted to top-left image coordinates and mapped through the image's aspect-fill scale/crop into the full-screen viewport; observations cropped entirely outside the displayed image are omitted. Text blocks group nearby OCR lines with a three-line cap so dense pages remain selectable; each ID derives from sorted member observation UUIDs, so state recomputation keeps selection stable. The still and OCR results remain in screen memory; retake clears both and resumes the live camera. No image is saved to Photos or disk. Verify image orientation/crop alignment on a physical device because the captured still and live preview may frame slightly differently. Selected blocks and lines are ordered top-to-bottom/left-to-right and joined with newlines; repeated OCR observations remain separate. The scan dismisses the camera and presents `ScanResultView` after 0.4 seconds, translating the text and each unique word sequentially.
 Chips show original, translation and category. With no destination folder, tapping a ready card toggles its pair in the dictionary: add, remove, then add again.
 The saved state shows a checkmark and an explicit removal hint. Removing a word also
-removes its SRS progress; re-adding starts a new record. `Services/ScanWordStore.swift`
+removes its SRS progress; re-adding starts a new record. `Services/Data/ScanWordStore.swift`
 uses a fresh context for each operation, normalizes pair lookup with `Word.matches`,
 and rolls back only that operation on failure. It does not save or roll back unrelated
 pending edits in the screen context.
@@ -87,7 +103,7 @@ word-correction menu opens `AddWordView(initialText:)`; scan translation pauses 
 that sheet is open and resumes on dismissal. Closing either screen cancels its
 translation work. Translation failures can be retried.
 
-**Categories:** `Services/WordCategory.swift` assigns one of seven topics using
+**Categories:** `Services/Data/WordCategory.swift` assigns one of seven topics using
 exact normalized Russian/Polish keyword matches, falling back to Other. This is a
 small local vocabulary, not semantic classification; inflections may be unrecognized.
 `Word.categoryRawValue` has a declaration-level Other default for existing stores;
@@ -182,7 +198,7 @@ Achievements stay global.
   revives a tombstone (`WorkspaceEnsureResult.outcome`). Changing the active workspace re-points
   `VocabularyStore`/`FolderLibraryStore` (`onActiveChange`). Deleting is soft: words and folders stay hidden
   and return when the pair is added again; the last active workspace cannot be deleted.
-- **Gate (`RootTabView`, `Services/WorkspaceGate.swift`).** No active workspace: `loading` while the session
+- **Gate (`RootTabView`, `Services/Workspaces/WorkspaceGate.swift`).** No active workspace: `loading` while the session
   is restored (`AuthStore.unknown`), `waitingForAccount` while a signed-in, linked account's first workspace
   pull is running (`SyncStore.workspacePullFinished`, set after the pulled workspaces are loaded), else
   `needsSetup` = the first-launch wizard as a full-screen cover. One 10 s timer covers loading and waiting.
@@ -199,8 +215,8 @@ Achievements stay global.
 Workspaces, folders, words and memberships (with SRS state) sync with `public.workspaces`, `public.folders`,
 `public.words` and `public.word_folders`;
 achievements and daily activity stay per device. Local SwiftData is the source of truth and the
-app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/SwiftDataSyncStore.swift`
-(the SwiftData side), `Services/SyncRemote.swift` (transport protocol, cursor), `Services/SyncState.swift`
+app works offline. Pieces: `Services/Sync/SyncEngine.swift` (one cycle), `Services/Sync/SwiftDataSyncStore.swift`
+(the SwiftData side), `Services/Sync/SyncRemote.swift` (transport protocol, cursor), `Services/Sync/SyncState.swift`
 (`sync.v1` in UserDefaults), `Backend/SupabaseSyncRemote.swift` (the only Supabase import),
 `Stores/SyncStore.swift` (triggers, status). `InMemorySyncRemote` (DEBUG) serves unit and UI tests.
 
@@ -215,7 +231,7 @@ app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/Sw
   enforces it), `term` = `polish`, `translation` = `russian` (storage names), `entered_side` (`term` |
   `translation`) = `sourceLanguageCode` against the workspace's codes (an unknown code pushes `term`),
   `category` = `WordCategory.stableID`. Pulled text is stored with the per-language case rule
-  (`Services/LanguageCodes.swift`: only German keeps case). Workspace languages are validated against
+  (`Services/Language/LanguageCodes.swift`: only German keeps case). Workspace languages are validated against
   the supported list (`pl ru uk en de fr es it cs pt`); a word/folder whose workspace is unknown is
   held until it arrives. Text length counts Unicode scalars; interior tab/newline are allowed. Every
   upsert row encodes every key (explicit `null`s); the legacy columns no longer exist.
@@ -267,7 +283,7 @@ app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/Sw
   system language and falls back to English. Code gets strings through `Text("…")` /
   `String(localized:)`; key style is the English sentence (`language.<code>.<form>` for language
   names).
-- **`LanguageNames`** (`Services/Language.swift`): localized forms of a language name (name,
+- **`LanguageNames`** (`Services/Language/Language.swift`): localized forms of a language name (name,
   inline, input option, genitive, adverb, placeholder) read from the catalog; `Language` keeps
   only codes, flags and endonyms.
 - **`AppLocale.current`:** the language iOS resolved (`Bundle.main.preferredLocalizations`) with
@@ -295,10 +311,10 @@ display order. Existing folders whose additive ordering value is equal retain a
 deterministic legacy order by creation date and UUID; the first explicit reorder
 replaces that fallback with contiguous saved positions. New folders append after
 the current order, and deletion keeps the relative order of the remaining folders.
-Memberships are `FolderMembership` rows (`Models/FolderMembership.swift`; `Services/MembershipIndex.swift`
+Memberships are `FolderMembership` rows (`Models/FolderMembership.swift`; `Services/Data/MembershipIndex.swift`
 reads them): one vocabulary entry can belong to multiple folders, sharing its SRS progress.
 `Word.folderIDs` is frozen legacy storage, migrated into memberships once. Categories remain independent.
-`Services/FolderStore.swift` validates folder names, prevents case-equivalent duplicates,
+`Services/Data/FolderStore.swift` validates folder names, prevents case-equivalent duplicates,
 changes memberships and soft-deletes folders (`FolderLibraryStore` over `FolderRepository`)
 without deleting vocabulary or SRS.
 `Stores/FolderLibraryStore.swift` is the single app-scoped observable catalog, injected through
@@ -399,8 +415,8 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 - Quiz requires at least 4 records and generates **up to** 10 questions. Options
   are deduplicated by exact text, so duplicate translations may yield fewer than
   four choices; questions without distractors are skipped.
-- UI-test mode is DEBUG-only (`Services/UITestLaunchConfiguration.swift`,
-  `Services/UITestFixtures.swift`) and is activated by `UITEST_FIXTURE=<name>` and/or
+- UI-test mode is DEBUG-only (`Services/UITestSupport/UITestLaunchConfiguration.swift`,
+  `Services/UITestSupport/UITestFixtures.swift`) and is activated by `UITEST_FIXTURE=<name>` and/or
   `UITEST_PREFILL=<text>`. `UITEST_PREFILL` opens a scan result without the camera and
   implies fixture `empty` when no fixture is given. The app then uses an in-memory store
   seeded from `UITestFixture`, and the `MojSlownik.UITest` defaults suite (daily study,
