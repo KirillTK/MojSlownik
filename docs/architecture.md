@@ -260,6 +260,34 @@ app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/Sw
 - **Logging.** `sync.completed/failed/rows_skipped/linked/account_mismatch` with counts, trigger and
   reason names, error domain/code; never text, ids or emails.
 
+## Localization
+
+- **Catalogs:** `MojSlownik/Localizable.xcstrings` (UI copy) and `InfoPlist.xcstrings` (camera,
+  microphone and speech usage descriptions). Source language `en`, translation `ru`; iOS picks the
+  system language and falls back to English. Code gets strings through `Text("…")` /
+  `String(localized:)`; key style is the English sentence (`language.<code>.<form>` for language
+  names).
+- **`LanguageNames`** (`Services/Language.swift`): localized forms of a language name (name,
+  inline, input option, genitive, adverb, placeholder) read from the catalog; `Language` keeps
+  only codes, flags and endonyms.
+- **`AppLocale.current`:** the language iOS resolved (`Bundle.main.preferredLocalizations`) with
+  the system region; use it for dates and numbers instead of a fixed locale.
+- **Plurals:** one numeric argument per key (`%lld words`, `%lld folders`, `%lld points`,
+  `%lld days`) with en one/other and ru one/few/many/other variations; no `%#@` or
+  substitutions. `WorkspaceLabels` has the helpers.
+- **Data regions:** domain data that contains Cyrillic (`WordCategory` raw values, fixtures,
+  language endonyms) is never localized and sits in `// l10n:data-begin` / `// l10n:data-end`
+  blocks or on lines ending `// l10n:data`.
+- **Checks:** `scripts/check-localization.sh <DerivedData>` compares the `.stringsdata` the
+  compiler emits (`SWIFT_EMIT_LOC_STRINGS`) with the catalog (missing and dead keys; CI runs it
+  after the build). `LocalizationCatalogTests` validates both languages and format specifiers;
+  `SourceHygieneTests` rejects Cyrillic in comments everywhere and in app string literals outside
+  data regions.
+- **Test language:** the `MojSlownikUnitTests` scheme pins `language: en`, `region: US`. E2E
+  launches in Russian by default; `E2ETestCase.launch(language:)` takes `.russian`, `.english`,
+  `.german` (falls back to English) or `.germanThenRussian` and passes `-AppleLanguages` /
+  `-AppleLocale`.
+
 ## Study Folders
 
 `Models/WordFolder.swift` stores a UUID, display name, creation date and persisted
@@ -435,12 +463,12 @@ Run the isolated `MojSlownikUnitTests` scheme (see AGENTS.md); it does not inclu
 Network translation and physical-camera behavior are not exercised by these tests.
 
 E2E: `MojSlownikUITests/` holds XCUITest classes (AddWordFlow, EditTranslationFlow,
-FlashcardsFlow, QuizFlow, FoldersFlow, AccountFlow, SyncFlow) on the shared `E2ETestCase`, each launching a
+FlashcardsFlow, QuizFlow, FoldersFlow, AccountFlow, SyncFlow, LocalizationFlow) on the shared `E2ETestCase`, each launching a
 named fixture. Rule: when a user-facing flow changes, add or update E2E scenarios; reuse
 fixtures or add new ones (with unit tests in `UITestSupportTests`) and never seed data
 through UI steps. Typed E2E input must be ASCII; Cyrillic sources arrive via
 `UITEST_PREFILL`. Run with the `MojSlownikE2E` scheme (parallel classes on simulator
-clones). Camera, OCR and physical-device checks stay manual.
+clones). Existing classes run in Russian (the `language:` default); `LocalizationFlowTests` covers English, Russian, an unsupported language and a preferred-language list. Camera, OCR and physical-device checks stay manual.
 
 CI (`.github/workflows/ci.yml`, PRs to `main`, pushes to `main`, manual dispatch):
 `Build & unit tests`, E2E shards `practice` (Flashcards, Quiz) and `dictionary` and

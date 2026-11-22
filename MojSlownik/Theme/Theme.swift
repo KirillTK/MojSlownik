@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-// «Маркер»: warm paper, ink, highlighter-yellow fills. DESIGN.md is the source of truth;
+// "Marker": warm paper, ink, highlighter-yellow fills. DESIGN.md is the source of truth;
 // change this file, DESIGN.md and ThemeTests together.
 
 extension UIColor {

@@ -12,11 +12,11 @@ enum FolderStore {
 
         var errorDescription: String? {
             switch self {
-            case .emptyName: "Введите название папки"
-            case .duplicateName: "Папка с таким названием уже существует"
-            case .missingFolder: "Папка больше не существует"
-            case .missingWord: "Слово больше не существует"
-            case .invalidOrder: "Не удалось изменить порядок папок"
+            case .emptyName: String(localized: "Enter a folder name")
+            case .duplicateName: String(localized: "A folder with this name already exists")
+            case .missingFolder: String(localized: "The folder no longer exists")
+            case .missingWord: String(localized: "The word no longer exists")
+            case .invalidOrder: String(localized: "Couldn’t change the order of folders")
             }
         }
     }

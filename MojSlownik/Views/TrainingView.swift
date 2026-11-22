@@ -32,7 +32,7 @@ struct TrainingView: View {
                         todayHero(progress: progress, answers: answers)
                         modeGrid
                         achievementsRow(now: now)
-                        Text("Слов в выбранном наборе: \(words.count)")
+                        Text("Words in the selected set: \(words.count)")
                             .font(.footnote)
                             .foregroundStyle(Color.subtleText)
                     }
@@ -60,7 +60,7 @@ struct TrainingView: View {
 
     // MARK: Today hero
 
-    private func sectionHeader(_ title: String, color: Color = .subtleText) -> some View {
+    private func sectionHeader(_ title: LocalizedStringKey, color: Color = .subtleText) -> some View {
         Text(title)
             .font(.footnote.weight(.bold))
             .textCase(.uppercase)
@@ -76,27 +76,29 @@ struct TrainingView: View {
         return VStack(alignment: .leading, spacing: AppSpacing.s) {
             layout {
                 VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    sectionHeader("Сегодня", color: secondary)
+                    sectionHeader("Today", color: secondary)
                     heroLine(progress: progress)
                 }
                 if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
-                Text(words.isEmpty ? "Начните со словаря" : progress.remaining > 0 ? "Осталось слов: \(progress.remaining)" : progress.completed > 0 ? "Всё повторено" : "Доступна свободная практика")
+                Text(words.isEmpty ? "Start with the dictionary"
+                     : progress.remaining > 0 ? "Words left: \(progress.remaining)"
+                     : progress.completed > 0 ? "All reviewed" : "Free practice is available")
                     .font(.subheadline)
                     .foregroundStyle(secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             MarkerProgressBar(value: progress.fraction, track: Color.appOnAccent.opacity(0.12), fill: .appOnAccent)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Повторено сегодня")
-                .accessibilityValue("\(progress.completed) из \(progress.total). Осталось: \(progress.remaining)")
+                .accessibilityLabel("Reviewed today")
+                .accessibilityValue("\(progress.completed) of \(progress.total). Remaining: \(progress.remaining)")
                 .accessibilityIdentifier("todayProgress")
             practiceButton(progress: progress)
             layout {
-                answerBadge(count: answers.correct, title: "Верных", icon: "checkmark")
-                answerBadge(count: answers.incorrect, title: "Ошибок", icon: "xmark")
+                answerBadge("Correct: \(answers.correct)", icon: "checkmark")
+                answerBadge("Incorrect: \(answers.incorrect)", icon: "xmark")
                 if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
             }
-            Text("Ответов: \(answers.total)")
+            Text("Answers: \(answers.total)")
                 .font(.caption)
                 .foregroundStyle(secondary)
                 .accessibilityIdentifier("answerTotal")
@@ -111,17 +113,17 @@ struct TrainingView: View {
     private func heroLine(progress: DailyStudyStore.Summary) -> some View {
         Group {
             if words.isEmpty {
-                Text("Добавьте первое слово")
+                Text("Add your first word")
                     .font(.title2.weight(.bold))
             } else if progress.total > 0 {
                 Text("\(progress.completed)")
                     .font(.system(size: heroNumber, weight: .heavy))
                     .monospacedDigit()
-                + Text(" из \(progress.total)")
+                + Text(" of \(progress.total)")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Color.appOnAccent.opacity(0.75))
             } else {
-                Text("Нет повторений")
+                Text("No reviews")
                     .font(.title2.weight(.bold))
             }
         }
@@ -130,8 +132,8 @@ struct TrainingView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func answerBadge(count: Int, title: String, icon: String) -> some View {
-        Label("\(title): \(count)", systemImage: icon)
+    private func answerBadge(_ label: LocalizedStringKey, icon: String) -> some View {
+        Label(label, systemImage: icon)
             .font(.subheadline.weight(.medium))
             .monospacedDigit()
             .fixedSize(horizontal: false, vertical: true)
@@ -146,12 +148,12 @@ struct TrainingView: View {
             FlashcardsView(folderID: selectedFolderID)
         } label: {
             Text(progress.remaining > 0
-                 ? progress.completed == 0 ? "Начать повторение · \(progress.remaining)" : "Продолжить · \(progress.remaining)"
-                 : "Свободная практика")
+                 ? progress.completed == 0 ? "Start review · \(progress.remaining)" : "Continue · \(progress.remaining)"
+                 : "Free practice")
         }
         .buttonStyle(PrimaryButtonStyle(kind: .inverse))
         .disabled(words.isEmpty)
-        .accessibilityHint(progress.remaining > 0 ? "Открыть карточки для повторения" : "Потренировать до десяти случайных слов")
+        .accessibilityHint(progress.remaining > 0 ? "Open flashcards for review" : "Practice up to ten random words")
         .accessibilityIdentifier("practiceStartButton")
     }
 
@@ -163,12 +165,12 @@ struct TrainingView: View {
             ? [GridItem(.flexible(), spacing: AppSpacing.s)]
             : [GridItem(.flexible(), spacing: AppSpacing.s), GridItem(.flexible(), spacing: AppSpacing.s)]
         return VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            sectionHeader("Режимы")
+            sectionHeader("Modes")
             LazyVGrid(columns: columns, spacing: AppSpacing.s) {
                 NavigationLink {
                     FlashcardsView(folderID: selectedFolderID)
                 } label: {
-                    ModeTile(title: "Карточки", subtitle: "Вспомнить перевод", icon: "rectangle.on.rectangle",
+                    ModeTile(title: "Flashcards", subtitle: "Recall the translation", icon: "rectangle.on.rectangle",
                              iconSize: modeTile, isWide: isAX)
                 }
                 .disabled(words.isEmpty)
@@ -176,7 +178,7 @@ struct TrainingView: View {
                 NavigationLink {
                     QuizView(folderID: selectedFolderID)
                 } label: {
-                    ModeTile(title: "Викторина", subtitle: words.count >= 4 ? "Выбрать правильный ответ" : "Нужно минимум 4 слова",
+                    ModeTile(title: "Quiz", subtitle: words.count >= 4 ? "Choose the correct answer" : "At least 4 words needed",
                              icon: "checklist", iconSize: modeTile, isWide: isAX)
                 }
                 .disabled(words.count < 4)
@@ -186,7 +188,7 @@ struct TrainingView: View {
             NavigationLink {
                 ListeningPracticeView(folderID: selectedFolderID)
             } label: {
-                ModeTile(title: "На слух", subtitle: "Слушать и писать \(workspaces.pair.term.adverbRU)", icon: "ear",
+                ModeTile(title: "Listening", subtitle: "Listen and write \(workspaces.pair.term.names.adverb)", icon: "ear",
                          iconSize: modeTile, isWide: true)
             }
             .buttonStyle(TileButtonStyle())
@@ -212,14 +214,14 @@ struct TrainingView: View {
                     .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text("Достижения").font(.headline).foregroundStyle(Color.appInk)
-                    Text("\(achievements.totalPoints) очков · Серия: \(achievements.currentStreak(now: now)) дн.")
+                    Text("Achievements").font(.headline).foregroundStyle(Color.appInk)
+                    Text(verbatim: "\(String(localized: "\(achievements.totalPoints) points")) · \(String(localized: "Streak: \(achievements.currentStreak(now: now)) days"))")
                         .font(.subheadline)
                         .foregroundStyle(Color.subtleText)
                 }
                 if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
                 HStack(spacing: AppSpacing.xs) {
-                    Text("\(achievements.unlockedCount) из \(achievements.catalog.count)")
+                    Text("\(achievements.unlockedCount) of \(achievements.catalog.count)")
                         .font(.subheadline)
                         .monospacedDigit()
                         .foregroundStyle(Color.subtleText)
@@ -252,8 +254,8 @@ private struct TileButtonStyle: ButtonStyle {
 }
 
 private struct ModeTile: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     let icon: String
     let iconSize: CGFloat
     let isWide: Bool

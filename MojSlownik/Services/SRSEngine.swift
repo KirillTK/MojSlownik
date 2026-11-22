@@ -6,10 +6,10 @@ enum ReviewGrade: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .again: "Не помню"
-        case .hard: "Трудно"
-        case .good: "Хорошо"
-        case .easy: "Легко"
+        case .again: String(localized: "Again")
+        case .hard: String(localized: "Hard")
+        case .good: String(localized: "Good")
+        case .easy: String(localized: "Easy")
         }
     }
 
@@ -23,7 +23,7 @@ enum ReviewGrade: String, CaseIterable {
     }
 }
 
-/// Упрощённый SM-2 (как в Anki): каждый ответ двигает интервал и дату следующего показа.
+/// Simplified SM-2 (as in Anki): every answer moves the interval and the next review date.
 enum SRSEngine {
     static let minEaseFactor = 1.3
     /// Upper bounds keep every schedule representable and inside what sync accepts
@@ -47,7 +47,7 @@ enum SRSEngine {
             word.repetitions = 0
             word.easeFactor = max(minEaseFactor, word.easeFactor - 0.2)
             word.intervalDays = 0
-            word.dueDate = now.addingTimeInterval(10 * 60) // показать ещё раз через 10 минут
+            word.dueDate = now.addingTimeInterval(10 * 60) // show again in 10 minutes
 
         case .hard:
             word.repetitions += 1

@@ -269,29 +269,30 @@ final class SyncStore {
 
     // MARK: Copy
 
-    static func text(for status: Status, now: Date = .now, calendar: Calendar = .autoupdatingCurrent) -> String {
+    static func text(for status: Status, now: Date = .now, calendar: Calendar = .autoupdatingCurrent,
+                     locale: Locale = AppLocale.current) -> String {
         switch status {
-        case .unavailable: "Синхронизация недоступна"
-        case .signedOut: "Войдите, чтобы синхронизировать словарь"
-        case .idle: "Ещё не синхронизировано"
-        case .syncing: "Синхронизация…"
-        case .synced(let date): "Синхронизировано: " + whenText(date, now: now, calendar: calendar)
-        case .failed: "Не удалось синхронизировать. Повторим позже."
-        case .accountMismatch: "Словарь на этом iPhone связан с другим аккаунтом. Синхронизация выключена."
+        case .unavailable: String(localized: "Sync is unavailable")
+        case .signedOut: String(localized: "Sign in to sync your dictionary")
+        case .idle: String(localized: "Not synced yet")
+        case .syncing: String(localized: "Syncing…")
+        case .synced(let date):
+            String(localized: "Synced: \(whenText(date, now: now, calendar: calendar, locale: locale))")
+        case .failed: String(localized: "Couldn’t sync. We’ll try again later.")
+        case .accountMismatch: String(localized: "The dictionary on this iPhone is linked to a different account. Sync is turned off.")
         }
     }
 
-    /// «сегодня, 12:14», «вчера, 12:14» or «19 нояб., 12:14» (no year).
-    static func whenText(_ date: Date, now: Date, calendar: Calendar) -> String {
-        let ru = Locale(identifier: "ru_RU")
-        let time = date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: ru,
+    /// "today, 12:14", "yesterday, 12:14" or "19 Nov, 12:14" (no year), in the UI language.
+    static func whenText(_ date: Date, now: Date, calendar: Calendar, locale: Locale = AppLocale.current) -> String {
+        let time = date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
                                                    calendar: calendar, timeZone: calendar.timeZone))
-        if calendar.isDate(date, inSameDayAs: now) { return "сегодня, \(time)" }
+        if calendar.isDate(date, inSameDayAs: now) { return String(localized: "today, \(time)") }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(date, inSameDayAs: yesterday) {
-            return "вчера, \(time)"
+            return String(localized: "yesterday, \(time)")
         }
-        let day = date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, locale: ru, calendar: calendar,
+        let day = date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, locale: locale, calendar: calendar,
                                                   timeZone: calendar.timeZone).day().month(.abbreviated))
         return "\(day), \(time)"
     }

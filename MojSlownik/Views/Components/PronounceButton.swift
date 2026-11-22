@@ -16,6 +16,6 @@ struct PronounceButton: View {
                 .background(Color.appSecondarySurface, in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Произнести: \(text)")
+        .accessibilityLabel("Pronounce: \(text)")
     }
 }

@@ -1,5 +1,6 @@
 name: MojSlownik
 options:
+  developmentLanguage: en
   bundleIdPrefix: com.kirill.personal
   deploymentTarget:
     iOS: "17.0"
@@ -14,6 +15,8 @@ settings:
     # Project-level, so it covers app and test targets but not Swift packages.
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
 packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
@@ -35,9 +38,13 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        NSCameraUsageDescription: Камера нужна для сканирования слов и их добавления в словарь.
-        NSMicrophoneUsageDescription: Микрофон нужен, чтобы диктовать польские слова для добавления в словарь.
-        NSSpeechRecognitionUsageDescription: Распознавание нужно для ввода польских слов голосом. Речь может обрабатываться на серверах Apple.
+        # Fallback (English) texts; InfoPlist.xcstrings localizes them (en, ru).
+        CFBundleLocalizations:
+          - en
+          - ru
+        NSCameraUsageDescription: The camera is used to scan words and add them to your dictionary.
+        NSMicrophoneUsageDescription: The microphone is used to dictate Polish words to add to your dictionary.
+        NSSpeechRecognitionUsageDescription: Speech recognition is used to enter Polish words by voice. Speech may be processed on Apple servers.
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
@@ -88,6 +95,9 @@ schemes:
         MojSlownikTests: [test]
     test:
       config: Debug
+      # Unit tests run in English; Russian is checked through explicit ru bundle lookups.
+      language: en
+      region: US
       targets:
         - MojSlownikTests
   MojSlownikE2E:

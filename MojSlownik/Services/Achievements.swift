@@ -13,11 +13,11 @@ enum AchievementCategory: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .vocabulary: "Словарь"
-        case .practice: "Практика"
-        case .streak: "Постоянство"
-        case .mastery: "Мастерство"
-        case .feats: "Подвиги"
+        case .vocabulary: String(localized: "Dictionary")
+        case .practice: String(localized: "Practice")
+        case .streak: String(localized: "Consistency")
+        case .mastery: String(localized: "Mastery")
+        case .feats: String(localized: "Feats")
         }
     }
 }
@@ -87,46 +87,46 @@ struct AchievementProgress: Equatable {
 
 enum AchievementCatalog {
     static let all: [AchievementDefinition] = [
-        .init(id: "vocabulary.words.1", category: .vocabulary, title: "Первое слово", detail: "Добавьте первое слово",
+        .init(id: "vocabulary.words.1", category: .vocabulary, title: String(localized: "First word"), detail: String(localized: "Add your first word"),
               symbol: "text.badge.plus", points: 5, criterion: .threshold(.wordCount, 1)),
-        .init(id: "vocabulary.words.50", category: .vocabulary, title: "Полсотни", detail: "Соберите 50 слов",
+        .init(id: "vocabulary.words.50", category: .vocabulary, title: String(localized: "Fifty"), detail: String(localized: "Collect 50 words"),
               symbol: "book", points: 10, criterion: .threshold(.wordCount, 50)),
-        .init(id: "vocabulary.words.200", category: .vocabulary, title: "Библиотекарь", detail: "Соберите 200 слов",
+        .init(id: "vocabulary.words.200", category: .vocabulary, title: String(localized: "Librarian"), detail: String(localized: "Collect 200 words"),
               symbol: "books.vertical", points: 25, criterion: .threshold(.wordCount, 200)),
-        .init(id: "vocabulary.folders.3", category: .vocabulary, title: "Организатор", detail: "Создайте 3 папки",
+        .init(id: "vocabulary.folders.3", category: .vocabulary, title: String(localized: "Organizer"), detail: String(localized: "Create 3 folders"),
               symbol: "folder", points: 10, criterion: .threshold(.folderCount, 3)),
-        .init(id: "vocabulary.categories.all", category: .vocabulary, title: "Эрудит",
-              detail: "Слова во всех темах, кроме «Другое»", symbol: "square.grid.3x3", points: 15,
+        .init(id: "vocabulary.categories.all", category: .vocabulary, title: String(localized: "Scholar"),
+              detail: String(localized: "Words in every topic except “Other”"), symbol: "square.grid.3x3", points: 15,
               criterion: .threshold(.categoriesCovered, WordCategory.allCases.count - 1)),
-        .init(id: "practice.answers.100", category: .practice, title: "Сотня ответов",
-              detail: "Дайте 100 ответов в практике", symbol: "checkmark.circle", points: 10,
+        .init(id: "practice.answers.100", category: .practice, title: String(localized: "A hundred answers"),
+              detail: String(localized: "Give 100 answers in practice"), symbol: "checkmark.circle", points: 10,
               criterion: .threshold(.totalAnswers, 100)),
-        .init(id: "practice.answers.500", category: .practice, title: "Упорство",
-              detail: "Дайте 500 ответов в практике", symbol: "checkmark.seal", points: 25,
+        .init(id: "practice.answers.500", category: .practice, title: String(localized: "Persistence"),
+              detail: String(localized: "Give 500 answers in practice"), symbol: "checkmark.seal", points: 25,
               criterion: .threshold(.totalAnswers, 500)),
-        .init(id: "practice.quiz.perfect", category: .practice, title: "Без ошибок",
-              detail: "Пройдите викторину без единой ошибки", symbol: "trophy", points: 10,
+        .init(id: "practice.quiz.perfect", category: .practice, title: String(localized: "Flawless"),
+              detail: String(localized: "Finish a quiz without a single mistake"), symbol: "trophy", points: 10,
               criterion: .threshold(.perfectQuizzes, 1)),
-        .init(id: "practice.listening.50", category: .practice, title: "Острый слух",
-              detail: "50 верных ответов «На слух»", symbol: "ear", points: 15,
+        .init(id: "practice.listening.50", category: .practice, title: String(localized: "Sharp ear"),
+              detail: String(localized: "50 correct answers in “Listening”"), symbol: "ear", points: 15,
               criterion: .threshold(.listeningCorrect, 50)),
-        .init(id: "streak.days.3", category: .streak, title: "Три дня подряд",
-              detail: "Занимайтесь 3 дня подряд", symbol: "flame", points: 10,
+        .init(id: "streak.days.3", category: .streak, title: String(localized: "Three days in a row"),
+              detail: String(localized: "Practice 3 days in a row"), symbol: "flame", points: 10,
               criterion: .threshold(.longestStreakDays, 3)),
-        .init(id: "streak.days.7", category: .streak, title: "Неделя практики",
-              detail: "Занимайтесь 7 дней подряд", symbol: "medal", points: 25,
+        .init(id: "streak.days.7", category: .streak, title: String(localized: "Practice week"),
+              detail: String(localized: "Practice 7 days in a row"), symbol: "medal", points: 25,
               criterion: .threshold(.longestStreakDays, 7)),
-        .init(id: "mastery.learned.10", category: .mastery, title: "Закреплено",
-              detail: "10 слов повторены 3 раза подряд", symbol: "brain", points: 10,
+        .init(id: "mastery.learned.10", category: .mastery, title: String(localized: "Locked in"),
+              detail: String(localized: "10 words repeated correctly 3 times in a row"), symbol: "brain", points: 10,
               criterion: .threshold(.learnedWords, 10)),
-        .init(id: "mastery.tier.25", category: .mastery, title: "Знаток",
-              detail: "25 слов на высшем уровне знания", symbol: "star", points: 25,
+        .init(id: "mastery.tier.25", category: .mastery, title: String(localized: "Connoisseur"),
+              detail: String(localized: "25 words at the highest knowledge level"), symbol: "star", points: 25,
               criterion: .threshold(.masteredWords, 25)),
-        .init(id: "mastery.interval.30", category: .mastery, title: "Долгая память",
-              detail: "Слово с интервалом повторения от 30 дней", symbol: "calendar.badge.clock", points: 20,
+        .init(id: "mastery.interval.30", category: .mastery, title: String(localized: "Long memory"),
+              detail: String(localized: "A word with a review interval of 30 days or more"), symbol: "calendar.badge.clock", points: 20,
               criterion: .threshold(.maxIntervalDays, 30)),
-        .init(id: "meta.polyglot", category: .feats, title: "Полиглот",
-              detail: "Получите «Библиотекарь», «Неделя практики», «Знаток» и «Без ошибок»",
+        .init(id: "meta.polyglot", category: .feats, title: String(localized: "Polyglot"),
+              detail: String(localized: "Earn “Librarian”, “Practice week”, “Connoisseur” and “Flawless”"),
               symbol: "crown", points: 25,
               criterion: .allOf(["vocabulary.words.200", "streak.days.7", "mastery.tier.25", "practice.quiz.perfect"]))
     ]

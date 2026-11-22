@@ -41,16 +41,16 @@ struct WordListView: View {
                 categoryFilters
                 Group {
                     if words.isEmpty {
-                        EmptyStateView(icon: "character.book.closed", title: "Словарь пуст",
-                                       message: "Добавьте первое слово кнопкой «плюс» или отсканируйте его камерой.")
+                        EmptyStateView(icon: "character.book.closed", title: "The dictionary is empty",
+                                       message: "Add your first word with the plus button or scan it with the camera.")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.bottom, fabSize)
                     } else {
                         List {
                             if filteredWords.isEmpty {
-                                EmptyStateView(icon: "magnifyingglass", title: "Нет подходящих слов",
-                                               message: "Проверьте выбранную папку, категорию и поисковый запрос.") {
-                                    Button("Показать все слова") {
+                                EmptyStateView(icon: "magnifyingglass", title: "No matching words",
+                                               message: "Check the selected folder, category and search query.") {
+                                    Button("Show all words") {
                                         selectedFolderID = nil
                                         selectedCategory = nil
                                         searchText = ""
@@ -71,7 +71,7 @@ struct WordListView: View {
                                         Button(role: .destructive) {
                                             deleteWord(word)
                                         } label: {
-                                            Label("Удалить", systemImage: "trash")
+                                            Label("Delete", systemImage: "trash")
                                         }
                                         .tint(.red)
                                     }
@@ -80,7 +80,7 @@ struct WordListView: View {
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                         .contentMargins(.bottom, fabSize + AppSpacing.m + AppSpacing.m, for: .scrollContent)
-                        .searchable(text: $searchText, prompt: "Найти слово")
+                        .searchable(text: $searchText, prompt: "Find a word")
                     }
                 }
             }
@@ -92,11 +92,11 @@ struct WordListView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if selectedFolderID != nil {
-                        Button("Удалить папку", systemImage: "folder.badge.minus") { showDeleteFolder = true }
+                        Button("Delete folder", systemImage: "folder.badge.minus") { showDeleteFolder = true }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Аккаунт", systemImage: "person.crop.circle") { showAccount = true }
+                    Button("Account", systemImage: "person.crop.circle") { showAccount = true }
                         .tint(Color.appAccentText)
                         .accessibilityIdentifier("accountButton")
                 }
@@ -108,8 +108,8 @@ struct WordListView: View {
             .sensoryFeedback(trigger: words.count) { old, new in
                 new > old ? .impact(weight: .light) : nil
             }
-            .confirmationDialog("Удалить папку «\(folderLibrary.options.first { $0.id == selectedFolderID }?.name ?? "")»? Слова останутся в словаре.", isPresented: $showDeleteFolder, titleVisibility: .visible) {
-                Button("Удалить папку", role: .destructive) {
+            .confirmationDialog("Delete folder “\(folderLibrary.options.first { $0.id == selectedFolderID }?.name ?? "")”? Words stay in the dictionary.", isPresented: $showDeleteFolder, titleVisibility: .visible) {
+                Button("Delete folder", role: .destructive) {
                     guard let id = selectedFolderID else { return }
                     do {
                         try folderLibrary.delete(id: id)
@@ -117,8 +117,8 @@ struct WordListView: View {
                     } catch { folderError = error.localizedDescription }
                 }
             }
-            .errorAlert(title: "Не удалось изменить папку", error: $folderError)
-            .errorAlert(title: "Не удалось удалить слово", error: $deletionError)
+            .errorAlert(title: "Couldn’t change the folder", error: $folderError)
+            .errorAlert(title: "Couldn’t delete the word", error: $deletionError)
             .sheet(isPresented: $showAddSheet) {
                 AddWordView(initialFolderID: selectedFolderID, pair: workspaces.pair,
                            inputSide: workspaces.activeInputSide)
@@ -129,7 +129,7 @@ struct WordListView: View {
             .fullScreenCover(isPresented: $showScanner) {
                 ScannerScreen(pair: workspaces.pair) { text in
                     showScanner = false
-                    // Небольшая задержка, чтобы fullScreenCover успел закрыться до открытия sheet.
+                    // A short delay so the fullScreenCover finishes closing before the sheet opens.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         scannedResult = ScannedText(text: text)
                     }
@@ -145,8 +145,8 @@ struct WordListView: View {
                 searchText = ""
             }
             .onAppear {
-                // Вход для UI-тестов: имитирует префилл из сканера (ввод кириллицы
-                // с тестовой клавиатуры ненадёжен).
+                // UI-test entry point: simulates the scanner prefill (typing Cyrillic
+                // from the test keyboard is unreliable).
                 #if DEBUG
                 if !didHandleTestPrefill,
                    let prefill = UITestLaunchConfiguration.current?.prefill {
@@ -173,7 +173,7 @@ struct WordListView: View {
                     .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Сканировать текст")
+            .accessibilityLabel("Scan text")
             .accessibilityIdentifier("scanButton")
             Button {
                 showAddSheet = true
@@ -186,7 +186,7 @@ struct WordListView: View {
                     .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Добавить слово")
+            .accessibilityLabel("Add word")
             .accessibilityIdentifier("addWordButton")
         }
         .padding(.trailing, AppSpacing.l)
@@ -203,19 +203,19 @@ struct WordListView: View {
                     .frame(width: 1, height: 24)
                     .padding(.horizontal, 4)
                     .accessibilityHidden(true)
-                categoryFilter(nil, title: "Все темы", count: FolderStore.words(words, in: selectedFolderID, memberships: memberships).count)
+                categoryFilter(nil, title: String(localized: "All topics"), count: FolderStore.words(words, in: selectedFolderID, memberships: memberships).count)
                 let inFolder = FolderStore.words(words, in: selectedFolderID, memberships: memberships)
                 ForEach(WordCategory.allCases) { category in
                     let count = inFolder.filter { $0.category == category }.count
                     if count > 0 || selectedCategory == category {
-                        categoryFilter(category, title: category.rawValue, count: count)
+                        categoryFilter(category, title: category.title, count: count)
                     }
                 }
             }
             .padding(.horizontal, AppSpacing.l)
             .padding(.bottom, AppSpacing.xs)
         }
-        .accessibilityLabel("Папка и фильтр по теме")
+        .accessibilityLabel("Folder and topic filter")
     }
 
     private func categoryFilter(_ category: WordCategory?, title: String, count: Int) -> some View {
@@ -231,7 +231,7 @@ struct WordListView: View {
             .chipStyle(isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), слов: \(count)")
+        .accessibilityLabel(String(localized: "\(title), words: \(count)"))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -250,8 +250,8 @@ struct ScannedText: Identifiable {
 /// Empty/no-result state: soft-yellow icon tile, title, explanation and an optional text action.
 private struct EmptyStateView<Actions: View>: View {
     let icon: String
-    let title: String
-    let message: String
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
     @ViewBuilder var actions: Actions
     @ScaledMetric(relativeTo: .title) private var tile: CGFloat = 64
 
@@ -281,7 +281,7 @@ private struct EmptyStateView<Actions: View>: View {
 }
 
 extension EmptyStateView where Actions == EmptyView {
-    init(icon: String, title: String, message: String) {
+    init(icon: String, title: LocalizedStringKey, message: LocalizedStringKey) {
         self.init(icon: icon, title: title, message: message) { EmptyView() }
     }
 }
@@ -331,8 +331,8 @@ private struct WordRow: View {
             }
         }
         .padding(.vertical, 2)
-        .errorAlert(title: "Не удалось изменить папку", error: $folderError)
-        .errorAlert(title: "Не удалось изменить категорию", error: $categoryError)
+        .errorAlert(title: "Couldn’t change the folder", error: $folderError)
+        .errorAlert(title: "Couldn’t change the category", error: $categoryError)
     }
 
     private var wordText: some View {
@@ -368,7 +368,7 @@ private struct WordRow: View {
                 Image(systemName: "tag")
                     .font(.caption2)
                     .fixedSize()
-                Text(word.category.rawValue)
+                Text(word.category.title)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Image(systemName: "chevron.down")
@@ -383,8 +383,8 @@ private struct WordRow: View {
             .frame(maxWidth: 120, minHeight: 44)
             .contentShape(Rectangle())
         }
-        .accessibilityLabel("Категория слова \(word.term): \(word.category.rawValue)")
-        .accessibilityHint("Выбрать другую категорию")
+        .accessibilityLabel("Word category \(word.term): \(word.category.title)")
+        .accessibilityHint("Choose another category")
     }
 
     @ViewBuilder
@@ -397,7 +397,7 @@ private struct WordRow: View {
                             try vocabulary.removeFromAllFolders(word)
                         } catch { folderError = error.localizedDescription }
                     } label: {
-                        Label("Убрать из всех папок", systemImage: "folder.badge.minus")
+                        Label("Remove from all folders", systemImage: "folder.badge.minus")
                     }
                 }
                 ForEach(folderLibrary.options) { folder in
@@ -418,7 +418,7 @@ private struct WordRow: View {
                     .frame(minWidth: 44, minHeight: 44)
             }
             .fixedSize(horizontal: true, vertical: false)
-            .accessibilityLabel("Папки слова \(word.term)")
+            .accessibilityLabel("Folders of the word \(word.term)")
         }
     }
 }

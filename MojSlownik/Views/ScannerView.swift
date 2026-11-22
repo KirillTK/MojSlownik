@@ -4,8 +4,8 @@ import VisionKit
 import AVFoundation
 import UIKit
 
-/// Экран сканера: живая камера, распознанный текст подсвечивается,
-/// тап по строке → экран результата с переводом и выбором отдельных слов.
+/// Scanner screen: live camera with recognized text highlighted;
+/// tapping a line opens the result screen with the translation and per-word selection.
 struct ScannerScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -76,7 +76,7 @@ struct ScannerScreen: View {
 
             VStack(spacing: 12) {
                 HStack {
-                    Text("Сканирование")
+                    Text("Scanning")
                         .font(.headline)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 44)
@@ -91,7 +91,7 @@ struct ScannerScreen: View {
                             .frame(width: 44, height: 44)
                             .background(.regularMaterial, in: Circle())
                     }
-                    .accessibilityLabel("Закрыть сканер")
+                    .accessibilityLabel("Close scanner")
                 }
                 if cameraAuthorized && scannerSupported {
                     Text(instructionText)
@@ -110,7 +110,7 @@ struct ScannerScreen: View {
             if cameraAuthorized && scannerSupported { scannerControlBar }
         }
         .background((cameraAuthorized && scannerSupported ? Color.black : Color.appBackground).ignoresSafeArea())
-        .errorAlert(title: "Не удалось обработать кадр", error: $captureError)
+        .errorAlert(title: "Couldn’t process the frame", error: $captureError)
         .task {
             if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
                 cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
@@ -119,10 +119,10 @@ struct ScannerScreen: View {
     }
 
     private var instructionText: String {
-        guard capturedPhoto != nil else { return "Коснитесь строки или зафиксируйте кадр" }
-        if isCapturingPhoto { return "Распознаём текст на кадре…" }
-        if frozenLines.isEmpty { return "Текст не распознан. Снимите кадр заново." }
-        return "Нажимайте на блоки, чтобы выбрать текст"
+        guard capturedPhoto != nil else { return String(localized: "Tap a line or freeze the frame") }
+        if isCapturingPhoto { return String(localized: "Recognizing text in the frame…") }
+        if frozenLines.isEmpty { return String(localized: "No text recognized. Retake the frame.") }
+        return String(localized: "Tap blocks to select text")
     }
 
     private var scannerControlBar: some View {
@@ -131,31 +131,31 @@ struct ScannerScreen: View {
                 if isCapturingPhoto {
                     HStack(spacing: 8) {
                         ProgressView()
-                        Text("Распознаём текст на кадре…")
+                        Text("Recognizing text in the frame…")
                             .font(.caption.weight(.medium))
                     }
                     .frame(minHeight: 44)
                 } else {
                     HStack(spacing: 10) {
-                        Text("Выбрано: \(selectedBlockIDs.count)")
+                        Text("Selected: \(selectedBlockIDs.count)")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(Color.appInk)
                         Button {
                             if !selectedBlockText.isEmpty { onPick(selectedBlockText) }
                         } label: {
-                            Label("Перевести выбранное", systemImage: "text.magnifyingglass")
+                            Label("Translate selected", systemImage: "text.magnifyingglass")
                         }
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(selectedBlockIDs.isEmpty)
-                        .accessibilityHint("Перевести выбранные текстовые блоки по порядку чтения")
+                        .accessibilityHint("Translate the selected text blocks in reading order")
                     }
                 }
             }
 
             HStack(spacing: 8) {
                 compactControl(
-                    title: "Всё",
-                    accessibilityTitle: "Перевести весь текст",
+                    title: "All",
+                    accessibilityTitle: "Translate all text",
                     symbol: "text.viewfinder",
                     enabled: !ScannedTextSelection.text(from: activeLines).isEmpty
                 ) {
@@ -163,8 +163,8 @@ struct ScannerScreen: View {
                     if !text.isEmpty { onPick(text) }
                 }
                 compactControl(
-                    title: isCapturingPhoto ? "Снимок…" : (capturedPhoto == nil ? "Стоп-кадр" : "Переснять"),
-                    accessibilityTitle: capturedPhoto == nil ? "Зафиксировать кадр" : "Снять заново",
+                    title: isCapturingPhoto ? "Capturing…" : (capturedPhoto == nil ? "Freeze" : "Retake"),
+                    accessibilityTitle: capturedPhoto == nil ? "Freeze the frame" : "Retake the frame",
                     symbol: capturedPhoto == nil ? "camera" : "camera.rotate",
                     enabled: !isCapturingPhoto && (capturedPhoto != nil || cameraAuthorized && scannerSupported)
                 ) {
@@ -187,10 +187,14 @@ struct ScannerScreen: View {
         .padding(.bottom, 12)
     }
 
-    private func compactControl(title: String, accessibilityTitle: String, symbol: String,
+    private func compactControl(title: LocalizedStringKey, accessibilityTitle: LocalizedStringKey, symbol: String,
                                 enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(dynamicTypeSize.isAccessibilitySize ? "" : title, systemImage: symbol)
+            Label {
+                if dynamicTypeSize.isAccessibilitySize { Text(verbatim: "") } else { Text(title) }
+            } icon: {
+                Image(systemName: symbol)
+            }
                 .font(.subheadline.weight(.medium))
                 .frame(minWidth: 44, minHeight: 44)
                 .frame(maxWidth: dynamicTypeSize.isAccessibilitySize ? 64 : .infinity)
@@ -212,8 +216,8 @@ struct ScannerScreen: View {
                 .foregroundStyle(Color.appAccentText)
                 .accessibilityHidden(true)
             Text(cameraAuthorized
-                 ? "Сканер недоступен на этом устройстве (в симуляторе нет камеры)."
-                 : "Разрешите доступ к камере в Настройках, чтобы сканировать слова.")
+                 ? "The scanner isn’t available on this device (the simulator has no camera)."
+                 : "Allow camera access in Settings to scan words.")
                 .multilineTextAlignment(.center)
                 .font(.body)
                 .foregroundStyle(Color.subtleText)
@@ -271,11 +275,11 @@ struct ScanResultView: View {
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
             .tint(Color.appAccentText)
-            .navigationTitle("Из текста")
+            .navigationTitle("From text")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Готово") { dismiss() }
+                    Button("Done") { dismiss() }
                         .accessibilityIdentifier("scanDoneButton")
                 }
             }
@@ -310,7 +314,7 @@ struct ScanResultView: View {
 
     private var sourceCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Оригинал", systemImage: "text.viewfinder")
+            Label("Original", systemImage: "text.viewfinder")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.subtleText)
             TextEditor(text: Binding(
@@ -324,8 +328,8 @@ struct ScanResultView: View {
                 .padding(8)
                 .background(Color.appSecondarySurface, in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                 .accessibilityIdentifier("scanOriginalText")
-                .accessibilityLabel("Оригинал распознавания")
-                .accessibilityHint("Исправьте распознанный текст перед переводом")
+                .accessibilityLabel("Recognized original")
+                .accessibilityHint("Fix the recognized text before translating")
         }
         .padding(AppSpacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -334,15 +338,15 @@ struct ScanResultView: View {
     private var wordChips: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Слова в словарь")
+                Text("Words for the dictionary")
                     .font(.headline)
                     .foregroundStyle(Color.appInk)
-                Text("Нажмите +, чтобы сохранить. Удерживайте слово, чтобы исправить или выбрать тему.")
+                Text("Tap + to save. Hold a word to fix it or choose a topic.")
                     .font(.caption)
                     .foregroundStyle(Color.subtleText)
             }
             if words.isEmpty {
-                Text("Не удалось выделить слова. Попробуйте отсканировать другую строку.")
+                Text("Couldn’t pick out words. Try scanning another line.")
                     .font(.subheadline)
                     .foregroundStyle(Color.subtleText)
             }
@@ -365,6 +369,7 @@ struct ScanResultView: View {
         let translation = draft.translations[word]
         let existing = existingWord(word)
         let isSaved = savedOverrides[word] ?? isIncluded(existing)
+        let status = translation ?? draft.wordErrors[word] ?? String(localized: "Loading translation")
         return VStack(alignment: .leading, spacing: 0) {
             if let existing {
                 HStack {
@@ -398,18 +403,18 @@ struct ScanResultView: View {
                             .foregroundStyle(Color.subtleText)
                     } else if let error = draft.wordErrors[word] {
                         Text(error).font(.caption).foregroundStyle(Color.subtleText)
-                        Label("Повторить", systemImage: "arrow.clockwise")
+                        Label("Retry", systemImage: "arrow.clockwise")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(Color.appAccentText)
                     } else {
                         HStack(spacing: 6) {
                             ProgressView().controlSize(.mini)
-                            Text("Переводим…").font(.caption)
+                            Text("Translating…").font(.caption)
                         }
                         .foregroundStyle(Color.subtleText)
                     }
                     if isSaved {
-                        Text(selectedFolderID == nil ? "В словаре · нажмите, чтобы удалить" : "В папке · нажмите, чтобы убрать")
+                        Text(selectedFolderID == nil ? "In the dictionary · tap to delete" : "In the folder · tap to remove")
                             .font(.caption)
                             .foregroundStyle(Color.subtleText)
                     }
@@ -423,16 +428,16 @@ struct ScanResultView: View {
             .buttonStyle(.plain)
             .disabled(translation == nil && draft.wordErrors[word] == nil)
             .accessibilityIdentifier("scanWordChip-\(word)-\(index)")
-            .accessibilityLabel("\(word), \(translation ?? draft.wordErrors[word] ?? "Перевод загружается")")
-            .accessibilityHint(isSaved ? (selectedFolderID == nil ? "Удалить из словаря" : "Убрать из папки") : draft.wordErrors[word] != nil
-                ? "Повторить перевод" : translation == nil
-                ? "Дождитесь перевода" : "Добавить в словарь без открытия формы")
+            .accessibilityLabel(Text(verbatim: "\(word), \(status)"))
+            .accessibilityHint(isSaved ? (selectedFolderID == nil ? "Delete from the dictionary" : "Remove from the folder") : draft.wordErrors[word] != nil
+                ? "Retry translation" : translation == nil
+                ? "Wait for the translation" : "Add to the dictionary without opening the form")
             .accessibilityActions {
-                Button("Исправить слово") { selectedWord = SelectedWord(text: word) }
+                Button("Fix word") { selectedWord = SelectedWord(text: word) }
                 if translation != nil {
                     Button(toggleTitle(isSaved: isSaved)) { toggleSaved(word) }
                     ForEach(WordCategory.allCases) { option in
-                        Button("Тема: \(option.rawValue)") { changeCategory(option, for: word, existing: existing) }
+                        Button("Topic: \(option.title)") { changeCategory(option, for: word, existing: existing) }
                     }
                 }
             }
@@ -456,7 +461,7 @@ struct ScanResultView: View {
             Button {
                 selectedWord = SelectedWord(text: word)
             } label: {
-                Label("Исправить слово…", systemImage: "pencil")
+                Label("Fix word…", systemImage: "pencil")
             }
             .accessibilityIdentifier("scanEditWordButton")
             if let translation {
@@ -471,8 +476,8 @@ struct ScanResultView: View {
     }
 
     private func toggleTitle(isSaved: Bool) -> String {
-        guard isSaved else { return "Добавить в словарь" }
-        return selectedFolderID == nil ? "Убрать из словаря" : "Убрать из папки"
+        guard isSaved else { return String(localized: "Add to the dictionary") }
+        return selectedFolderID == nil ? String(localized: "Remove from the dictionary") : String(localized: "Remove from the folder")
     }
 
     private func categoryContextMenu(_ word: String, translation: String, existing: Word?) -> some View {
@@ -481,7 +486,7 @@ struct ScanResultView: View {
             get: { current },
             set: { changeCategory($0, for: word, existing: existing) }
         )) {
-            Label("Тема: \(current.rawValue)", systemImage: "tag")
+            Label("Topic: \(current.title)", systemImage: "tag")
         }
     }
 
@@ -496,14 +501,14 @@ struct ScanResultView: View {
             categoryOverrides[word] = category
             saveErrors[word] = nil
         } catch {
-            saveErrors[word] = "Не удалось изменить категорию. Попробуйте ещё раз."
+            saveErrors[word] = String(localized: "Couldn’t change the category. Try again.")
         }
     }
 
     private var translationCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Перевод")
+                Text("Translation")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
@@ -516,14 +521,14 @@ struct ScanResultView: View {
                     .lineSpacing(4)
                     .accessibilityIdentifier("scanTranslationText")
             } else if draft.isTranslating {
-                Text("Переводим…").foregroundStyle(Color.subtleText)
+                Text("Translating…").foregroundStyle(Color.subtleText)
             }
             if let translationError = draft.translationError {
-                Label("Перевод предложения недоступен", systemImage: "info.circle")
+                Label("Sentence translation is unavailable", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(Color.subtleText)
-                    .accessibilityLabel("Перевод предложения недоступен. \(translationError)")
-                Button("Повторить перевод предложения") {
+                    .accessibilityLabel("Sentence translation is unavailable. \(translationError)")
+                Button("Retry sentence translation") {
                     draft.retryContent()
                 }
                 .frame(minHeight: 44)
@@ -569,7 +574,7 @@ struct ScanResultView: View {
             categoryOverrides[text] = selectedCategory
             saveErrors[text] = nil
         } catch {
-            saveErrors[text] = "Не удалось изменить словарь. Нажмите на карточку ещё раз."
+            saveErrors[text] = String(localized: "Couldn’t update the dictionary. Tap the card again.")
         }
     }
 
@@ -619,8 +624,8 @@ private struct FrozenBlockOverlay: View {
                     .buttonStyle(.plain)
                     .position(x: block.bounds.midX, y: block.bounds.midY)
                     .accessibilityLabel(block.text)
-                    .accessibilityValue(selected ? "Выбрано" : "Не выбрано")
-                    .accessibilityHint("Нажмите, чтобы изменить выбор блока")
+                    .accessibilityValue(selected ? "Selected" : "Not selected")
+                    .accessibilityHint("Tap to change the block selection")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -639,7 +644,7 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
     var onCaptureFailed: (String) -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
-        // Языки словаря; если системе языки неизвестны, список пуст = автоматический выбор.
+        // The dictionary languages; if the system does not know them, the list is empty = automatic selection.
         let supported = DataScannerViewController.supportedTextRecognitionLanguages
         let languages = ScannedImageTextRecognizer.dataScannerLanguages(wanted: self.languages, supported: supported)
 

@@ -335,7 +335,7 @@ enum UITestSyncState: String, CaseIterable, Sendable {
     /// Local data is linked to another account.
     case linkedToOtherAccount
     /// For the `syncedVocabulary` fixture: the server mirrors it, linked, and after the first
-    /// successful cycle two newer server versions appear (`дом` deleted, `кот` -> `котик`).
+    /// successful cycle two newer server versions appear (`dom` deleted, `kot` renamed).
     case syncedThenRemoteChanges
     /// For `freshInstall` + signed in: the server holds de ← ru at sort 0 («das Haus») and pl ← ru at
     /// sort 1 with the cloud words, so the opened workspace proves the pull (a local default would be pl).
@@ -362,11 +362,11 @@ enum UITestSyncState: String, CaseIterable, Sendable {
             remote.seed(
                 workspaces: [Self.workspaceRecord(id: german, term: "de", sortOrder: 0, now: now, updatedAt: stamp),
                              Self.workspaceRecord(sortOrder: 1, now: now, updatedAt: stamp)],
-                words: [Self.wordRecord(id: Self.germanWordID, polish: "das Haus", russian: "дом", category: "other",
+                words: [Self.wordRecord(id: Self.germanWordID, polish: "das Haus", russian: "дом", category: "other", // l10n:data
                                         now: now, updatedAt: stamp, workspaceID: german),
-                        Self.wordRecord(id: Self.cloudWordIDs[0], polish: "most", russian: "мост", category: "other",
+                        Self.wordRecord(id: Self.cloudWordIDs[0], polish: "most", russian: "мост", category: "other", // l10n:data
                                         now: now, updatedAt: stamp),
-                        Self.wordRecord(id: Self.cloudWordIDs[1], polish: "ser", russian: "сыр", category: "food",
+                        Self.wordRecord(id: Self.cloudWordIDs[1], polish: "ser", russian: "сыр", category: "food", // l10n:data
                                         now: now, updatedAt: stamp)])
         case .failsOnce:
             remote.failNextCalls = 1
@@ -374,15 +374,15 @@ enum UITestSyncState: String, CaseIterable, Sendable {
             let stamp = UITestFixture.truncatedToMillis(now.addingTimeInterval(-600))
             remote.seed(
                 workspaces: [Self.workspaceRecord(now: now, updatedAt: stamp)],
-                words: [Self.wordRecord(id: Self.cloudWordIDs[0], polish: "most", russian: "мост", category: "other",
+                words: [Self.wordRecord(id: Self.cloudWordIDs[0], polish: "most", russian: "мост", category: "other", // l10n:data
                                         now: now, updatedAt: stamp),
-                        Self.wordRecord(id: Self.cloudWordIDs[1], polish: "ser", russian: "сыр", category: "food",
+                        Self.wordRecord(id: Self.cloudWordIDs[1], polish: "ser", russian: "сыр", category: "food", // l10n:data
                                         now: now, updatedAt: stamp),
                         // Same pair as the `kot` fixture word under another id: adopted, not duplicated.
-                        Self.wordRecord(id: Self.cloudWordIDs[2], polish: "kot", russian: "кот", category: "nature",
+                        Self.wordRecord(id: Self.cloudWordIDs[2], polish: "kot", russian: "кот", category: "nature", // l10n:data
                                         now: now, updatedAt: stamp)],
                 folders: [RemoteFolderRecord(id: Self.cloudFolderID, userID: Self.owner,
-                                             workspaceID: WorkspaceID.legacy, name: "Из облака",
+                                             workspaceID: WorkspaceID.legacy, name: "Из облака", // l10n:data
                                              sortOrder: 0, createdAt: now.addingTimeInterval(-3_600),
                                              updatedAt: stamp, deletedAt: nil)],
                 memberships: [RemoteMembershipRecord(userID: Self.owner, workspaceID: WorkspaceID.legacy,
@@ -407,7 +407,7 @@ enum UITestSyncState: String, CaseIterable, Sendable {
                     server.put(dom.replacing(deletedAt: .some(clock)), at: clock)
                 }
                 if let kot = server.words[key(ids[0])] {
-                    server.put(kot.replacing(translation: "котик"), at: clock)
+                    server.put(kot.replacing(translation: "котик"), at: clock) // l10n:data
                 }
             }
         }

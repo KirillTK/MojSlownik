@@ -21,7 +21,7 @@ struct FolderPicker: View {
     @State private var deletionError: String?
     @State private var managementError: String?
 
-    private var emptyTitle: String { allowsAll ? "Все папки" : "Без папки" }
+    private var emptyTitle: String { allowsAll ? String(localized: "All folders") : String(localized: "No folder") }
 
     private var selectionTitle: String {
         library.options.first { $0.id == selectedFolderID }?.name ?? emptyTitle
@@ -36,8 +36,8 @@ struct FolderPicker: View {
                 pickerLabel
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Папка: \(selectionTitle)")
-            .accessibilityHint("Выбрать или создать папку")
+            .accessibilityLabel("Folder: \(selectionTitle)")
+            .accessibilityHint("Choose or create a folder")
             .accessibilityIdentifier("folderPickerButton")
             if let creationError, !showFolders {
                 errorLabel(creationError)
@@ -61,7 +61,7 @@ struct FolderPicker: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 if !compact {
-                    Text("Папка")
+                    Text("Folder")
                         .font(.caption)
                         .foregroundStyle(Color.subtleText)
                 }
@@ -109,7 +109,7 @@ struct FolderPicker: View {
                                     Button {
                                         pendingDeletion = option
                                     } label: {
-                                        Label("Удалить", systemImage: "trash")
+                                        Label("Delete", systemImage: "trash")
                                     }
                                     .tint(.red)
                                 }
@@ -124,7 +124,7 @@ struct FolderPicker: View {
                             creationError = nil
                             showCreateFolder = true
                         } label: {
-                            Label("Создать папку", systemImage: "folder.badge.plus")
+                            Label("Create folder", systemImage: "folder.badge.plus")
                                 .frame(minHeight: 44)
                         }
                         .accessibilityIdentifier("createFolderButton")
@@ -136,11 +136,11 @@ struct FolderPicker: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.appBackground)
-            .navigationTitle("Выберите папку")
+            .navigationTitle("Choose a folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(isEditingFolders ? "Готово" : "Закрыть") {
+                    Button(isEditingFolders ? "Done" : "Close") {
                         if isEditingFolders {
                             isEditingFolders = false
                         } else {
@@ -150,13 +150,13 @@ struct FolderPicker: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if !isEditingFolders {
-                        Button("Править") { isEditingFolders = true }
+                        Button("Edit") { isEditingFolders = true }
                             .disabled(library.options.isEmpty)
                     }
                 }
             }
             .confirmationDialog(
-                "Удалить папку «\(pendingDeletion?.name ?? "")»? Слова останутся в словаре.",
+                "Delete folder “\(pendingDeletion?.name ?? "")”? Words stay in the dictionary.",
                 isPresented: Binding(
                     get: { pendingDeletion != nil },
                     set: { if !$0 { pendingDeletion = nil } }
@@ -164,15 +164,15 @@ struct FolderPicker: View {
                 titleVisibility: .visible,
                 presenting: pendingDeletion
             ) { folder in
-                Button("Удалить папку", role: .destructive) { deleteFolder(folder) }
-                Button("Отмена", role: .cancel) { pendingDeletion = nil }
+                Button("Delete folder", role: .destructive) { deleteFolder(folder) }
+                Button("Cancel", role: .cancel) { pendingDeletion = nil }
             }
-            .errorAlert(title: "Не удалось изменить папки", error: $managementError)
-            .errorAlert(title: "Не удалось удалить папку", error: $deletionError)
+            .errorAlert(title: "Couldn’t change folders", error: $managementError)
+            .errorAlert(title: "Couldn’t delete the folder", error: $deletionError)
             .navigationDestination(isPresented: $showCreateFolder) {
                 Form {
-                    Section("Название папки") {
-                        TextField("Например, Урок 1", text: $folderName)
+                    Section("Folder name") {
+                        TextField("For example, Lesson 1", text: $folderName)
                             .accessibilityIdentifier("folderNameField")
                             .textInputAutocapitalization(.sentences)
                             .submitLabel(.done)
@@ -184,11 +184,11 @@ struct FolderPicker: View {
                 }
                 .scrollContentBackground(.hidden)
                 .background(Color.appBackground)
-                .navigationTitle("Новая папка")
+                .navigationTitle("New folder")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Создать") { createFolder() }
+                        Button("Create") { createFolder() }
                             .accessibilityIdentifier("confirmCreateFolderButton")
                             .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
@@ -196,8 +196,8 @@ struct FolderPicker: View {
             }
             .navigationDestination(item: $folderToRename) { folder in
                 Form {
-                    Section("Название папки") {
-                        TextField("Например, Урок 1", text: $renameName)
+                    Section("Folder name") {
+                        TextField("For example, Lesson 1", text: $renameName)
                             .textInputAutocapitalization(.sentences)
                             .submitLabel(.done)
                             .onSubmit {
@@ -212,11 +212,11 @@ struct FolderPicker: View {
                 }
                 .scrollContentBackground(.hidden)
                 .background(Color.appBackground)
-                .navigationTitle("Переименовать папку")
+                .navigationTitle("Rename folder")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Сохранить") { renameFolder(folder) }
+                        Button("Save") { renameFolder(folder) }
                             .disabled(renameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
@@ -263,7 +263,7 @@ struct FolderPicker: View {
                     .fontWeight(.medium)
                     .frame(minWidth: 44, minHeight: 44)
             }
-            .accessibilityLabel("Переименовать папку «\(option.name)»")
+            .accessibilityLabel("Rename folder “\(option.name)”")
             Button(role: .destructive) {
                 pendingDeletion = option
             } label: {
@@ -271,7 +271,7 @@ struct FolderPicker: View {
                     .fontWeight(.medium)
                     .frame(minWidth: 44, minHeight: 44)
             }
-            .accessibilityLabel("Удалить папку «\(option.name)»")
+            .accessibilityLabel("Delete folder “\(option.name)”")
         }
         .frame(minHeight: 44)
     }

@@ -9,7 +9,7 @@ struct AchievementBanner: View {
         HStack(spacing: 12) {
             AchievementBadge(symbol: achievement.symbol, isUnlocked: true, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Достижение получено")
+                Text("Achievement unlocked")
                     .font(.caption)
                     .foregroundStyle(Color.appOnInverse.opacity(0.7))
                 Text(achievement.title)
@@ -18,7 +18,7 @@ struct AchievementBanner: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-            Text("+\(achievement.points)")
+            Text(verbatim: "+\(achievement.points)")
                 .font(.subheadline.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(Color.appOnAccent)
@@ -32,8 +32,8 @@ struct AchievementBanner: View {
         .overlay { shape.strokeBorder(Color.appInverseEdge, lineWidth: 1) }
         .shadow(color: .black.opacity(0.25), radius: 15, y: 6)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Достижение получено: \(achievement.title), плюс \(achievement.points) очков")
-        .accessibilityHint("Дважды коснитесь, чтобы скрыть")
+        .accessibilityLabel(Text(verbatim: "\(String(localized: "Achievement unlocked: \(achievement.title)")), \(String(localized: "plus \(achievement.points) points"))"))
+        .accessibilityHint("Double-tap to dismiss")
         .accessibilityAddTraits(.isButton)
     }
 }

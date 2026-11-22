@@ -1,29 +1,35 @@
 import Foundation
 
-/// Russian names of workspaces for the title menu, the «Языки» sheet and the wizard.
+/// Localized names of workspaces for the title menu, the Languages sheet and the wizard.
 enum WorkspaceLabels {
-    /// Large title: «🇵🇱 Польский»; «🇩🇪 Немецкий ← 🇷🇺» when another active workspace studies the same language.
+    /// Large title: "🇵🇱 Polish"; "🇩🇪 German ← 🇷🇺" when another active workspace studies the same language.
     static func title(of option: WorkspaceStore.Option, among options: [WorkspaceStore.Option]) -> String {
         let pair = option.pair
         let ambiguous = options.contains { $0.id != option.id && $0.termCode == option.termCode }
-        let base = "\(pair.term.flag) \(pair.term.nameRU)"
+        let base = "\(pair.term.flag) \(pair.term.localizedName)"
         return ambiguous ? "\(base) ← \(pair.translation.flag)" : base
     }
 
-    /// Menu option: «🇵🇱 Польский ← 🇷🇺».
+    /// Menu option: "🇵🇱 Polish ← 🇷🇺".
     static func menuLabel(of option: WorkspaceStore.Option) -> String {
         let pair = option.pair
-        return "\(pair.term.flag) \(pair.term.nameRU) ← \(pair.translation.flag)"
+        return "\(pair.term.flag) \(pair.term.localizedName) ← \(pair.translation.flag)"
     }
 
-    /// «Польский ← Русский» (no flags: «Языки» sheet row, delete confirmation).
+    /// "Polish ← Russian" (no flags: Languages sheet row, delete confirmation).
     static func name(of option: WorkspaceStore.Option) -> String {
-        "\(option.pair.term.nameRU) ← \(option.pair.translation.nameRU)"
+        "\(option.pair.term.localizedName) ← \(option.pair.translation.localizedName)"
     }
 
-    /// Wizard row label: «Польский, Polski»; one name when the endonym is the same word.
+    /// Localized count such as "5 words" (plural rules come from the catalog).
+    static func wordCount(_ n: Int) -> String { String(localized: "\(n) words") }
+
+    /// Localized count such as "1 folder" (plural rules come from the catalog).
+    static func folderCount(_ n: Int) -> String { String(localized: "\(n) folders") }
+
+    /// Wizard row label: "Polish, Polski"; one name when the endonym is the same word.
     static func accessibilityName(of language: Language) -> String {
-        language.endonym == language.nameRU ? language.nameRU : "\(language.nameRU), \(language.endonym)"
+        language.endonym == language.localizedName ? language.localizedName : "\(language.localizedName), \(language.endonym)"
     }
 }
 

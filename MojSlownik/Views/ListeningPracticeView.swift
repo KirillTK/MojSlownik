@@ -44,9 +44,9 @@ struct ListeningPracticeView: View {
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
         .tint(Color.appAccentText)
-        .navigationTitle("На слух")
+        .navigationTitle("Listening")
         .navigationBarTitleDisplayMode(.inline)
-        .errorAlert(title: "Не удалось сохранить ответ", error: $answerError)
+        .errorAlert(title: "Couldn’t save the answer", error: $answerError)
         .onAppear {
             startSession()
             if answerIsCorrect == true { scheduleAdvance() }
@@ -118,7 +118,7 @@ struct ListeningPracticeView: View {
                         advanceTask?.cancel()
                         advanceToNextQuestion()
                     } label: {
-                        Text(currentIndex == questions.count - 1 ? "К результатам" : "Дальше")
+                        Text(currentIndex == questions.count - 1 ? "To results" : "Next question")
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .transition(.opacity)
@@ -132,9 +132,9 @@ struct ListeningPracticeView: View {
 
     private func promptTitle(for mode: ListeningAnswerMode) -> String {
         switch mode {
-        case .choices: "Прослушайте и выберите польское слово"
-        case .translation: "Введите перевод на польский"
-        case .dictation: "Прослушайте и напишите слово"
+        case .choices: String(localized: "Listen and choose the Polish word")
+        case .translation: String(localized: "Enter the translation into Polish")
+        case .dictation: String(localized: "Listen and write the word")
         }
     }
 
@@ -149,14 +149,14 @@ struct ListeningPracticeView: View {
                     .foregroundStyle(Color.appInk)
                     .frame(width: replaySize, height: replaySize)
                     .background(Color.appAccentSoft, in: Circle())
-                Text("Повторить")
+                Text("Replay")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.subtleText)
             }
             .frame(minWidth: 44, minHeight: 44)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Повторить произношение")
+        .accessibilityLabel("Replay pronunciation")
     }
 
     private func choiceAnswers(_ question: ListeningQuestion) -> some View {
@@ -177,12 +177,12 @@ struct ListeningPracticeView: View {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(Color.appMastery)
                                     .transition(feedbackTransition)
-                                    .accessibilityLabel("Правильный ответ")
+                                    .accessibilityLabel("Correct answer")
                             } else if option == submittedAnswer {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(Color.appError)
                                     .transition(feedbackTransition)
-                                    .accessibilityLabel("Неверный ответ")
+                                    .accessibilityLabel("Wrong answer")
                             }
                         }
                     }
@@ -211,7 +211,7 @@ struct ListeningPracticeView: View {
 
     private func spellingAnswer(_ question: ListeningQuestion) -> some View {
         VStack(spacing: 12) {
-            TextField("\(workspaces.pair.term.neuterRU) слово", text: $answer)
+            TextField(workspaces.pair.term.names.wordPlaceholder, text: $answer)
                 .font(.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -232,7 +232,7 @@ struct ListeningPracticeView: View {
             Button {
                 submit(answer, for: question)
             } label: {
-                Text("Проверить")
+                Text("Check")
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(submittedAnswer != nil || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -241,13 +241,13 @@ struct ListeningPracticeView: View {
 
     private func feedbackView(for question: ListeningQuestion, submittedAnswer: String) -> some View {
         VStack(spacing: 6) {
-            Label(answerIsCorrect == true ? "Верно!" : "Правильный ответ: \(question.correctAnswer)",
+            Label(answerIsCorrect == true ? "Correct!" : "Correct answer: \(question.correctAnswer)",
                   systemImage: answerIsCorrect == true ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(answerIsCorrect == true ? Color.appMastery : Color.appError)
                 .multilineTextAlignment(.center)
             if answerIsCorrect == false && question.mode != .choices {
-                Text("Ваш ответ: \(submittedAnswer)")
+                Text("Your answer: \(submittedAnswer)")
                     .font(.caption)
                     .foregroundStyle(Color.subtleText)
                     .multilineTextAlignment(.center)
@@ -265,7 +265,7 @@ struct ListeningPracticeView: View {
         guard submittedAnswer == nil else { return }
         answerFocused = false
         guard let word = allWords.first(where: { $0.persistentModelID == question.wordID }) else {
-            answerError = "Слово больше не найдено в словаре."
+            answerError = String(localized: "The word is no longer in the dictionary.")
             return
         }
         let knowledgeAnswer: KnowledgeAnswer = question.mode == .choices
@@ -323,7 +323,7 @@ struct ListeningPracticeView: View {
                     .padding(AppSpacing.m)
                     .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     .accessibilityHidden(true)
-                Text("\(score) из \(questions.count)")
+                Text("\(score) of \(questions.count)")
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Color.appInk)
                     .monospacedDigit()
@@ -346,7 +346,7 @@ struct ListeningPracticeView: View {
                     sessionStarted = false
                     startSession()
                 } label: {
-                    Text("Ещё раз")
+                    Text("Try again")
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .padding(.top, AppSpacing.xxs)
@@ -357,12 +357,12 @@ struct ListeningPracticeView: View {
 
     private var resultBadges: some View {
         Group {
-            Label("Верных: \(score)", systemImage: "checkmark")
+            Label("Correct: \(score)", systemImage: "checkmark")
                 .foregroundStyle(Color.appMastery)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(Color.appMasterySurface, in: Capsule())
-            Label("Ошибок: \(questions.count - score)", systemImage: "xmark")
+            Label("Incorrect: \(questions.count - score)", systemImage: "xmark")
                 .foregroundStyle(Color.appError)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -375,10 +375,10 @@ struct ListeningPracticeView: View {
     private var resultCaption: String {
         let ratio = Double(score) / Double(max(questions.count, 1))
         return switch ratio {
-        case 1: "Отлично! Идеально!"
-        case 0.7...: "Отличный результат"
-        case 0.4...: "Неплохо, продолжайте тренироваться"
-        default: "Карточки помогут запомнить лучше"
+        case 1: String(localized: "Great! Perfect!")
+        case 0.7...: String(localized: "Excellent result")
+        case 0.4...: String(localized: "Not bad, keep practicing")
+        default: String(localized: "Flashcards will help you remember better")
         }
     }
 }

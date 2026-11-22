@@ -14,9 +14,8 @@ final class LanguageTests: XCTestCase {
         XCTAssertEqual(Set(Language.all.map(\.code)).count, Language.all.count)
         XCTAssertEqual(Set(Language.all.map(\.flag)).count, Language.all.count)
         for language in Language.all {
-            XCTAssertFalse(language.nameRU.isEmpty)
-            XCTAssertFalse(language.prepositionalRU.isEmpty)
-            XCTAssertFalse(language.genitiveRU.isEmpty)
+            XCTAssertFalse(language.localizedName.isEmpty)
+            XCTAssertNotEqual(language.localizedName, language.code, "the name is in the catalog")
             XCTAssertFalse(language.endonym.isEmpty)
             XCTAssertFalse(language.speechCode.isEmpty)
             XCTAssertFalse(language.ocrCode.isEmpty)
@@ -40,13 +39,13 @@ final class LanguageTests: XCTestCase {
         XCTAssertEqual(Language.ukrainian.scripts, [.cyrillic])
     }
 
-    func testRussianFormsForPolish() {
-        XCTAssertEqual(Language.polish.adverbRU, "по-польски")
-        XCTAssertEqual(Language.russian.adverbRU, "по-русски")
-        XCTAssertEqual(Language.polish.neuterRU, "Польское")
+    func testEnglishNameForms() {
+        XCTAssertEqual(Language.polish.names.adverb, "in Polish")
+        XCTAssertEqual(Language.russian.names.wordPlaceholder, "Russian word")
+        XCTAssertEqual(Language.polish.localizedName, Language.polish.names.name)
         for language in Language.all {
-            XCTAssertTrue(language.adverbRU.hasPrefix("по-"))
-            XCTAssertTrue(language.adverbRU.hasSuffix("ки"), language.code)
+            XCTAssertEqual(language.names, LanguageNames.of(language.code))
+            XCTAssertTrue(language.names.adverb.hasPrefix("in "), language.code)
         }
     }
 

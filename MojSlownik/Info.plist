@@ -12,6 +12,11 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ru</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -23,11 +28,11 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Камера нужна для сканирования слов и их добавления в словарь.</string>
+	<string>The camera is used to scan words and add them to your dictionary.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Микрофон нужен, чтобы диктовать польские слова для добавления в словарь.</string>
+	<string>The microphone is used to dictate Polish words to add to your dictionary.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Распознавание нужно для ввода польских слов голосом. Речь может обрабатываться на серверах Apple.</string>
+	<string>Speech recognition is used to enter Polish words by voice. Speech may be processed on Apple servers.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

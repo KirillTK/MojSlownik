@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// «Языки» sheet: switch, reorder and delete workspaces, add a pair. Deleting is a soft delete:
+/// “Languages” sheet: switch, reorder and delete workspaces, add a pair. Deleting is a soft delete:
 /// words and folders are hidden with the workspace and return when the pair is added again.
 struct WorkspaceManagerView: View {
     @Environment(WorkspaceStore.self) private var workspaces
@@ -34,7 +34,7 @@ struct WorkspaceManagerView: View {
                 }
                 Section {
                     Button { showWizard = true } label: {
-                        Label("Добавить язык", systemImage: "plus")
+                        Label("Add language", systemImage: "plus")
                             .font(.body.weight(.semibold))
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
@@ -42,21 +42,21 @@ struct WorkspaceManagerView: View {
                     .listRowBackground(Color.cardBackground)
                     .accessibilityIdentifier("addWorkspaceButton")
                 } footer: {
-                    infoLine("Удалённый язык скрывается вместе со словами и папками. Если добавить ту же пару снова, всё вернётся.")
+                    infoLine("A deleted language is hidden together with its words and folders. Add the same pair again and everything comes back.")
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color.appBackground)
             .environment(\.editMode, $editMode)
-            .navigationTitle("Языки")
+            .navigationTitle("Languages")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         editMode = isEditing ? .inactive : .active
                     } label: {
-                        Text(isEditing ? "Готово" : "Править")
+                        Text(isEditing ? "Done" : "Edit")
                             .fontWeight(isEditing ? .bold : .regular)
                     }
                     .tint(Color.appAccentText)
@@ -64,24 +64,24 @@ struct WorkspaceManagerView: View {
                 }
                 if !isEditing {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Готово") { dismiss() }
+                        Button("Done") { dismiss() }
                             .tint(Color.appAccentText)
                             .accessibilityIdentifier("manageWorkspacesDone")
                     }
                 }
             }
             .confirmationDialog(
-                "Удалить «\(pendingDelete.map(WorkspaceLabels.name(of:)) ?? "")»?",
+                "Delete “\(pendingDelete.map(WorkspaceLabels.name(of:)) ?? "")”?",
                 isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                 titleVisibility: .visible, presenting: pendingDelete
             ) { option in
-                Button("Удалить", role: .destructive) { delete(option) }
-                Button("Отмена", role: .cancel) {}
+                Button("Delete", role: .destructive) { delete(option) }
+                Button("Cancel", role: .cancel) {}
             } message: { _ in
-                Text("Слова и папки скроются. Если добавить эту пару снова, всё вернётся.")
+                Text("Words and folders will be hidden. Add this pair again and everything comes back.")
             }
             .sheet(isPresented: $showWizard) { WorkspaceWizardView(presentation: .sheet) }
-            .errorAlert(title: "Не удалось изменить языки", error: $errorMessage)
+            .errorAlert(title: "Couldn’t change languages", error: $errorMessage)
         }
         .tint(.appAccentText)
     }
@@ -100,7 +100,7 @@ struct WorkspaceManagerView: View {
                     Text(WorkspaceLabels.name(of: option))
                         .font(.body.weight(.semibold))
                         .foregroundStyle(Color.appInk)
-                    Text("\(RussianPlural.words(wordCount)) · \(RussianPlural.folders(folders))")
+                    Text(verbatim: "\(WorkspaceLabels.wordCount(wordCount)) · \(WorkspaceLabels.folderCount(folders))")
                         .font(.footnote)
                         .monospacedDigit()
                         .foregroundStyle(Color.subtleText)
@@ -124,7 +124,7 @@ struct WorkspaceManagerView: View {
         .accessibilityIdentifier("workspaceRow-\(option.termCode)-\(option.translationCode)")
     }
 
-    private func infoLine(_ text: String) -> some View {
+    private func infoLine(_ text: LocalizedStringKey) -> some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.xxs))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: AppSpacing.xs))

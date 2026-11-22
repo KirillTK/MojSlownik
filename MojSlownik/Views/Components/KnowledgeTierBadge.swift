@@ -33,16 +33,17 @@ struct KnowledgeTierBadge: View {
 
     static func presentation(for level: Int) -> Presentation {
         switch min(max(level, 0), 3) {
-        case 0: Presentation(filledMarks: 1, levelName: "Не помню", color: .error)
-        case 1: Presentation(filledMarks: 2, levelName: "Трудно", color: .warning)
-        case 2: Presentation(filledMarks: 3, levelName: "Хорошо", color: .accent)
-        default: Presentation(filledMarks: 4, levelName: "Легко", color: .mastery)
+        case 0: Presentation(filledMarks: 1, levelName: String(localized: "Again"), color: .error)
+        case 1: Presentation(filledMarks: 2, levelName: String(localized: "Hard"), color: .warning)
+        case 2: Presentation(filledMarks: 3, levelName: String(localized: "Good"), color: .accent)
+        default: Presentation(filledMarks: 4, levelName: String(localized: "Easy"), color: .mastery)
         }
     }
 
     static func accessibilityDescription(for word: Word, level: Int, hidesWord: Bool = false) -> String {
         let levelName = presentation(for: level).levelName
-        return hidesWord ? "Уровень знания: \(levelName)" : "Уровень знания слова \(word.term): \(levelName)"
+        return hidesWord ? String(localized: "Knowledge level: \(levelName)")
+            : String(localized: "Knowledge level of the word \(word.term): \(levelName)")
     }
 
     struct Presentation: Equatable {

@@ -11,9 +11,9 @@ struct CategoryMenu<Label: View>: View {
 
     var body: some View {
         Menu {
-            Picker("Категория", selection: $selection) {
+            Picker("Category", selection: $selection) {
                 ForEach(WordCategory.allCases) { category in
-                    Text(category.rawValue).tag(category)
+                    Text(category.title).tag(category)
                 }
             }
         } label: {

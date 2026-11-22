@@ -157,7 +157,7 @@ final class AchievementStore {
     private func presentNextIfNeeded() {
         guard let current = currentAnnouncement, isSceneActive, dismissTask == nil else { return }
         if announcedIDs.insert(current.id).inserted {
-            AccessibilityNotification.Announcement("Достижение получено: \(current.title)").post()
+            AccessibilityNotification.Announcement(String(localized: "Achievement unlocked: \(current.title)")).post()
         }
         let duration = displayDuration
         dismissTask = Task { [weak self] in

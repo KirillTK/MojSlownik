@@ -53,6 +53,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions
 
+      - name: Check localization keys
+        run: scripts/check-localization.sh DerivedData
+
       - name: Run unit tests
         run: |
           set -o pipefail

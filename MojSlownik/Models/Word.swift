@@ -9,7 +9,7 @@ final class Word {
     var russian: String
     var polish: String
     var sourceLanguageCode: String
-    var categoryRawValue: String = "Другое"
+    var categoryRawValue: String = "Другое" // l10n:data
     // Frozen legacy storage: memberships live in FolderMembership. Never written after the
     // memberships migration (`legacyFolderIDsMigrated`); read only by WorkspaceBackfill.
     var folderIDs: [UUID] = []
@@ -25,7 +25,7 @@ final class Word {
     // nil = a row from before workspaces; reads treat it as the legacy pl ← ru workspace
     var workspaceID: UUID? = nil
 
-    // Интервальное повторение (упрощённый SM-2)
+    // Spaced repetition (simplified SM-2)
     var easeFactor: Double
     var intervalDays: Double
     var repetitions: Int

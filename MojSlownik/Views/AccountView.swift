@@ -37,11 +37,11 @@ struct AccountView: View {
             .onChange(of: auth.state) { previous, state in
                 if state.completesSignIn(from: previous) { dismiss() }
             }
-            .navigationTitle("Аккаунт")
+            .navigationTitle("Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }
+                    Button("Done") { dismiss() }
                         .tint(Color.appAccentText)
                 }
             }
@@ -59,15 +59,15 @@ struct AccountView: View {
                 .accessibilityHidden(true)
                 .padding(.top, AppSpacing.s)
 
-            Text("Аккаунт")
+            Text("Account")
                 .font(.title3.bold())
                 .foregroundStyle(Color.appInk)
                 .padding(.bottom, AppSpacing.xs)
 
-            signInButton(.apple, title: "Войти через Apple", kind: .ink) {
+            signInButton(.apple, title: "Sign in with Apple", kind: .ink) {
                 Image(systemName: "apple.logo")
             }
-            signInButton(.google, title: "Войти через Google", kind: .card) {
+            signInButton(.google, title: "Sign in with Google", kind: .card) {
                 // Official multicolour "G" (Google sign-in branding), never tinted.
                 Image("GoogleLogo")
                     .resizable()
@@ -90,7 +90,7 @@ struct AccountView: View {
         }
     }
 
-    private func signInButton(_ provider: AuthProvider, title: String, kind: PrimaryButtonStyle.Kind,
+    private func signInButton(_ provider: AuthProvider, title: LocalizedStringKey, kind: PrimaryButtonStyle.Kind,
                               @ViewBuilder icon: () -> some View) -> some View {
         Button {
             Task { await auth.signIn(with: provider) }
@@ -112,7 +112,7 @@ struct AccountView: View {
     private func signedIn(_ account: AuthAccount) -> some View {
         VStack(spacing: AppSpacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.s) {
-                Text(account.email ?? "Без почты")
+                Text(account.email ?? String(localized: "No email"))
                     .font(.body)
                     .foregroundStyle(Color.appInk)
                     .lineLimit(2)
@@ -138,7 +138,7 @@ struct AccountView: View {
                 if auth.isSigningOut {
                     ProgressView()
                 } else {
-                    Text("Выйти").font(.body.weight(.semibold))
+                    Text("Sign out").font(.body.weight(.semibold))
                 }
             }
             .tint(Color.appAccentText)
@@ -157,7 +157,7 @@ extension AccountView {
     @ViewBuilder fileprivate var syncCard: some View {
         if sync.status != .unavailable {
             VStack(alignment: .leading, spacing: AppSpacing.s) {
-                Text("Синхронизация")
+                Text("Sync")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.appInk)
                     // A single long word: shrink a little at the largest sizes instead of
@@ -174,7 +174,7 @@ extension AccountView {
                         announceNextResult = true
                         sync.syncNow()
                     } label: {
-                        Text("Синхронизировать сейчас")
+                        Text("Sync now")
                             .font(.body.weight(.semibold))
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -208,7 +208,7 @@ extension AccountView {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(sync.isSyncing ? "Идёт синхронизация" : sync.statusText)
+            .accessibilityLabel(sync.isSyncing ? String(localized: "Sync in progress") : sync.statusText)
             .accessibilityIdentifier("syncStatus")
         }
     }
@@ -249,19 +249,19 @@ extension AccountView {
             Button {
                 confirmingMerge = true
             } label: {
-                Text("Объединить словари")
+                Text("Merge dictionaries")
                     .font(.body.weight(.semibold))
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             }
             .tint(Color.appAccentText)
             .accessibilityIdentifier("syncMergeButton")
-            .confirmationDialog("Объединить словари?",
+            .confirmationDialog("Merge dictionaries?",
                                 isPresented: $confirmingMerge, titleVisibility: .visible) {
-                Button("Объединить") { sync.confirmLinkToCurrentAccount() }
-                Button("Отмена", role: .cancel) {}
+                Button("Merge") { sync.confirmLinkToCurrentAccount() }
+                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Слова и папки с этого iPhone попадут в аккаунт, а слова аккаунта появятся на iPhone. Ничего не удаляется.")
+                Text("Words and folders from this iPhone will go to the account, and the account’s words will appear on this iPhone. Nothing is deleted.")
             }
         }
     }

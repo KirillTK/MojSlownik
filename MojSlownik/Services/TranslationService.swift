@@ -11,15 +11,15 @@ enum TranslationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .emptyResult: "Перевод не найден"
-        case .badResponse: "Сервис перевода недоступен"
-        case .timeout: "Перевод занял слишком много времени"
+        case .emptyResult: String(localized: "No translation found")
+        case .badResponse: String(localized: "The translation service is unavailable")
+        case .timeout: String(localized: "The translation took too long")
         }
     }
 }
 
-/// Единая точка входа: на iOS 18+ пробует офлайн-перевод Apple,
-/// затем Google (веб, лучшее качество), затем MyMemory (веб, запасной).
+/// Single entry point: on iOS 18+ tries Apple's offline translation first,
+/// then Google (web, best quality), then MyMemory (web, fallback).
 enum Translator {
     static func translate(_ text: String, from source: Language, to target: Language) async throws -> String {
         #if DEBUG
@@ -27,8 +27,8 @@ enum Translator {
             return UITestTranslationStub.translate(text, from: source, to: target)
         }
         #endif
-        // В симуляторе Translation framework не работает и показывает
-        // системный экран ошибки поверх приложения — путь отключён целиком.
+        // The Translation framework does not work in the simulator and shows
+        // a system error screen over the app, so this path is disabled entirely.
         #if canImport(Translation) && !targetEnvironment(simulator)
         if #available(iOS 18.0, *), source.appleIdentifier != nil, target.appleIdentifier != nil {
             do {
@@ -38,7 +38,7 @@ enum Translator {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                // Языковые пакеты не скачаны, симулятор и т.п. — падаем на веб-API.
+                // Language packs not downloaded, simulator, etc.: fall back to the web APIs.
             }
         }
         #endif

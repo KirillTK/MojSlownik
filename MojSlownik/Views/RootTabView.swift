@@ -54,7 +54,7 @@ struct RootTabView: View {
     private var loading: some View {
         VStack(spacing: AppSpacing.s) {
             ProgressView()
-            Text("Загружаем словарь…")
+            Text("Loading dictionary…")
                 .font(.subheadline)
                 .foregroundStyle(Color.subtleText)
         }
@@ -65,10 +65,10 @@ struct RootTabView: View {
     private var tabs: some View {
         TabView {
             WordListView()
-                .tabItem { Label("Словарь", systemImage: "character.book.closed") }
+                .tabItem { Label("Dictionary", systemImage: "character.book.closed") }
 
             TrainingView()
-                .tabItem { Label("Практика", systemImage: "rectangle.stack") }
+                .tabItem { Label("Practice", systemImage: "rectangle.stack") }
         }
         .tint(.appAccentStrong)
         .background { AchievementTracker() }

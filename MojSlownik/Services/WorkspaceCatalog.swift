@@ -12,9 +12,9 @@ enum WorkspaceCatalog {
 
         var errorDescription: String? {
             switch self {
-            case .lastWorkspace: "Нельзя удалить единственный язык"
-            case .missingWorkspace: "Язык больше не существует"
-            case .invalidOrder: "Не удалось изменить порядок языков"
+            case .lastWorkspace: String(localized: "You can’t delete the only language")
+            case .missingWorkspace: String(localized: "The language no longer exists")
+            case .invalidOrder: String(localized: "Couldn’t change the order of languages")
             }
         }
     }

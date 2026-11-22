@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// Two-step language wizard: the studied language, then the translation language. Shown full screen
-/// on the first launch (no cancel) and as a sheet from «Новый язык…» (with «Отмена»).
+/// on the first launch (no cancel) and as a sheet from “New language…” (with “Cancel”).
 struct WorkspaceWizardView: View {
     enum Presentation { case firstLaunch, sheet }
 
@@ -24,19 +24,19 @@ struct WorkspaceWizardView: View {
 
     var body: some View {
         NavigationStack {
-            WizardStepView(step: 1, title: "Какой язык вы учите?",
-                           message: "Для каждого языка будет свой словарь, свои папки и своя практика.",
+            WizardStepView(step: 1, title: "Which language are you learning?",
+                           message: "Each language gets its own dictionary, folders and practice.",
                            languages: Language.studyOrder, selection: studied, identifierPrefix: "wizardLanguage",
-                           subtitle: { $0.endonym == $0.nameRU ? "" : $0.endonym }, isDisabled: { _ in false },
+                           subtitle: { $0.endonym == $0.localizedName ? "" : $0.endonym }, isDisabled: { _ in false },
                            select: selectStudied) {
-                Button("Далее") { showTranslationStep = true }
+                Button("Next") { showTranslationStep = true }
                     .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("wizardNextButton")
             }
             .toolbar {
                 if presentation == .sheet {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Отмена") { dismiss() }
+                        Button("Cancel") { dismiss() }
                             .tint(Color.appAccentText)
                     }
                 }
@@ -48,20 +48,20 @@ struct WorkspaceWizardView: View {
         }
         .tint(.appAccentText)
         .interactiveDismissDisabled(presentation == .firstLaunch)
-        .errorAlert(title: "Не удалось добавить язык", error: $errorMessage)
+        .errorAlert(title: "Couldn’t add the language", error: $errorMessage)
     }
 
     private var translationStep: some View {
-        WizardStepView(step: 2, title: "На какой язык переводить?",
-                       message: "Обычно это ваш родной язык. Интерфейс приложения останется на русском.",
+        WizardStepView(step: 2, title: "Translate into which language?",
+                       message: "Usually your native language. The app interface follows your iPhone’s language.",
                        languages: Language.translationOrder, selection: translation, identifierPrefix: "wizardTranslation",
                        subtitle: translationSubtitle, isDisabled: { $0 == studied },
-                       select: { translation = $0 }, footnote: "Пару можно добавить позже: «Новый язык…» в заголовке словаря.") {
+                       select: { translation = $0 }, footnote: "You can add a pair later: “New language…” in the dictionary title.") {
             Button { start() } label: {
                 if let translation {
-                    Text("Начать — \(studied.flag) ← \(translation.flag)")
+                    Text("Start — \(studied.flag) ← \(translation.flag)")
                 } else {
-                    Text("Начать")
+                    Text("Start")
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
@@ -73,7 +73,7 @@ struct WorkspaceWizardView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { showTranslationStep = false } label: {
-                    Label("Назад", systemImage: "chevron.backward")
+                    Label("Back", systemImage: "chevron.backward")
                 }
                 .tint(Color.appAccentText)
             }
@@ -81,16 +81,16 @@ struct WorkspaceWizardView: View {
     }
 
     private var startAccessibilityLabel: String {
-        guard let translation else { return "Начать" }
-        return "Начать: \(studied.nameRU.lowercased()), перевод на \(translation.nameRU.lowercased())"
+        guard let translation else { return String(localized: "Start") }
+        return String(localized: "Start: \(studied.names.inline), translated into \(translation.names.inline)")
     }
 
     private func translationSubtitle(_ language: Language) -> String {
-        if language == studied { return "уже выбран как изучаемый" }
+        if language == studied { return String(localized: "already chosen as the language you’re learning") }
         switch choices.status(term: studied, translation: language) {
-        case .existing: return "уже есть — откроется"
-        case .restorable: return "вернётся со словами"
-        case .available, .sameAsStudied: return language.endonym == language.nameRU ? "" : language.endonym
+        case .existing: return String(localized: "already exists — will open")
+        case .restorable: return String(localized: "will return with its words")
+        case .available, .sameAsStudied: return language.endonym == language.localizedName ? "" : language.endonym
         }
     }
 
@@ -114,23 +114,23 @@ struct WorkspaceWizardView: View {
 /// One wizard page: progress, kicker, title, language list, optional footnote and a bottom action.
 private struct WizardStepView<Action: View>: View {
     let step: Int
-    let title: String
-    let message: String
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
     let languages: [Language]
     let selection: Language?
     let identifierPrefix: String
     let subtitle: (Language) -> String
     let isDisabled: (Language) -> Bool
     let select: (Language) -> Void
-    var footnote: String?
+    var footnote: LocalizedStringKey?
     @ViewBuilder var action: Action
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    init(step: Int, title: String, message: String, languages: [Language], selection: Language?,
+    init(step: Int, title: LocalizedStringKey, message: LocalizedStringKey, languages: [Language], selection: Language?,
          identifierPrefix: String, subtitle: @escaping (Language) -> String,
          isDisabled: @escaping (Language) -> Bool, select: @escaping (Language) -> Void,
-         footnote: String? = nil, @ViewBuilder action: () -> Action) {
+         footnote: LocalizedStringKey? = nil, @ViewBuilder action: () -> Action) {
         self.step = step
         self.title = title
         self.message = message
@@ -178,7 +178,7 @@ private struct WizardStepView<Action: View>: View {
             }
             .accessibilityHidden(true)
             .padding(.bottom, AppSpacing.xs)
-            Text("Шаг \(step) из 2")
+            Text("Step \(step) of 2")
                 .font(.footnote.weight(.bold))
                 .textCase(.uppercase)
                 .tracking(0.6)
@@ -223,7 +223,7 @@ private struct WizardStepView<Action: View>: View {
                     .opacity(disabled ? 0.45 : 1)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(language.nameRU)
+                    Text(verbatim: language.localizedName)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(Color.appInk)
                         .opacity(disabled ? 0.45 : 1)
@@ -256,7 +256,7 @@ private struct WizardStepView<Action: View>: View {
         .accessibilityIdentifier("\(identifierPrefix)-\(language.code)")
     }
 
-    private func infoLine(_ text: String) -> some View {
+    private func infoLine(_ text: LocalizedStringKey) -> some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppSpacing.xxs))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: AppSpacing.xs))

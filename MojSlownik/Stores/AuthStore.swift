@@ -109,7 +109,7 @@ final class AuthStore {
         } catch where backend.isCancellation(error) {
             logger.log(.authSignInCancelled, [.provider: .name(provider)])
         } catch {
-            errorMessage = "Не удалось войти. Попробуйте ещё раз."
+            errorMessage = String(localized: "Couldn’t sign in. Try again.")
             logger.log(.authFailed, error: error, [.provider: .name(provider), .operation: .name("sign_in")])
         }
     }

@@ -25,7 +25,7 @@ private struct AchievementBannerModifier: ViewModifier {
                         .gesture(DragGesture().onEnded { value in
                             if value.translation.height < -24 { store.dismissAnnouncement() }
                         })
-                        .accessibilityAction(named: "Скрыть") { store.dismissAnnouncement() }
+                        .accessibilityAction(named: "Dismiss") { store.dismissAnnouncement() }
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: store.currentAnnouncement?.id)

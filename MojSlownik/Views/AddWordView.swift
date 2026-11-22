@@ -54,7 +54,7 @@ struct AddWordView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Размещение")
+                        Text("Placement")
                             .font(.footnote.weight(.bold))
                             .foregroundStyle(Color.subtleText)
                         FolderPicker(selectedFolderID: $selectedFolderID)
@@ -67,7 +67,7 @@ struct AddWordView: View {
             .foregroundStyle(Color.appInk)
             .tint(Color.appAccentText)
             .safeAreaInset(edge: .bottom) {
-                Button("Сохранить") { save() }
+                Button("Save") { save() }
                     .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("saveWordButton")
                     .disabled(speech.isBusy || draft.sourceText.trimmingCharacters(in: .whitespaces).isEmpty
@@ -77,14 +77,14 @@ struct AddWordView: View {
                     .background(Color.appBackground)
             }
             .sensoryFeedback(.selection, trigger: selectionTick)
-            .navigationTitle("Новое слово")
+            .navigationTitle("New word")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button("Cancel") { dismiss() }
                 }
             }
-            .errorAlert(title: "Не удалось сохранить слово", error: $saveError)
+            .errorAlert(title: "Couldn’t save the word", error: $saveError)
             .onDisappear {
                 isVisible = false
                 speech.cancel()
@@ -116,7 +116,7 @@ struct AddWordView: View {
     /// Same-script pairs cannot tell the sides apart by letters: the user picks the typing side, remembered per workspace.
     private var inputSideControl: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text("Ввожу на")
+            Text("I’m typing in")
                 .font(.footnote.weight(.bold))
                 .textCase(.uppercase)
                 .tracking(0.6)
@@ -131,7 +131,7 @@ struct AddWordView: View {
     }
 
     private var inputSidePicker: some View {
-        Picker("Ввожу на", selection: Binding(
+        Picker("I’m typing in", selection: Binding(
             get: { draft.inputSide ?? .term },
             set: { side in
                 draft.setInputSide(side)
@@ -140,8 +140,8 @@ struct AddWordView: View {
         )) {
             ForEach([WordSide.term, .translation], id: \.self) { side in
                 let language = pair.language(of: side)
-                Text("\(language.flag) \(language.prepositionalRU.prefix(1).uppercased() + language.prepositionalRU.dropFirst())")
-                    .accessibilityLabel(language.nameRU)
+                Text(verbatim: "\(language.flag) \(language.names.inputOption)")
+                    .accessibilityLabel(Text(verbatim: language.localizedName))
                     .tag(side)
             }
         }
@@ -149,7 +149,7 @@ struct AddWordView: View {
     }
 
     private var sameScriptInfo: some View {
-        Label("У \(pair.term.genitiveRU) и \(pair.translation.genitiveRU) один алфавит, поэтому язык ввода выбирается вручную. Выбор запоминается.",
+        Label("\(pair.term.names.genitive) and \(pair.translation.names.genitive) use the same alphabet, so choose the input language manually. Your choice is remembered.",
               systemImage: "info.circle")
             .font(.footnote)
             .foregroundStyle(Color.subtleText)
@@ -165,10 +165,10 @@ struct AddWordView: View {
     }
 
     private var categoryPicker: some View {
-        Picker("Категория", selection: $selectedCategory) {
-            Text("Автоматически: \(automaticCategory.rawValue)").tag(WordCategory?.none)
+        Picker("Category", selection: $selectedCategory) {
+            Text("Automatically: \(automaticCategory.title)").tag(WordCategory?.none)
             ForEach(WordCategory.allCases) { category in
-                Text(category.rawValue).tag(Optional(category))
+                Text(category.title).tag(Optional(category))
             }
         }
         .font(.subheadline)
@@ -182,11 +182,11 @@ struct AddWordView: View {
     private var inputCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Слово")
+                Text("Word")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
-                Text("\((speech.isBusy ? dictationLanguage : sourceLanguage).flag) \((speech.isBusy ? dictationLanguage : sourceLanguage).endonym)")
+                Text(verbatim: "\((speech.isBusy ? dictationLanguage : sourceLanguage).flag) \((speech.isBusy ? dictationLanguage : sourceLanguage).endonym)")
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -196,7 +196,7 @@ struct AddWordView: View {
                     .opacity(draft.sourceText.isEmpty && speech.draft.isEmpty ? 0 : 1)
             }
             HStack(alignment: .top) {
-                TextField("Введите слово…", text: Binding(
+                TextField("Type a word…", text: Binding(
                     get: { speech.isBusy && !speech.draft.isEmpty ? speech.draft : draft.sourceText },
                     set: { draft.setSource($0) }
                 ), axis: .vertical)
@@ -225,7 +225,7 @@ struct AddWordView: View {
                         .frame(width: 44, height: 44)
                 }
                 .disabled(speech.isBusy && speech.state != .listening)
-                .accessibilityLabel(speech.state == .listening ? "Остановить запись" : "Продиктовать \(dictationLanguage.adverbRU)")
+                .accessibilityLabel(speech.state == .listening ? "Stop recording" : "Dictate \(dictationLanguage.names.adverb)")
             }
             voiceStatus
         }
@@ -236,7 +236,7 @@ struct AddWordView: View {
     private var translationCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Перевод — \(translationLanguage.flag) \(translationLanguage.endonym)")
+                Text("Translation — \(translationLanguage.flag) \(translationLanguage.endonym)")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
@@ -246,7 +246,7 @@ struct AddWordView: View {
                 }
             }
 
-            TextField("Перевод появится автоматически…", text: $draft.translatedText, axis: .vertical)
+            TextField("The translation will appear automatically…", text: $draft.translatedText, axis: .vertical)
                 .font(.title3.weight(.medium))
                 .foregroundStyle(Color.appInk)
                 .frame(minHeight: 44)
@@ -255,10 +255,10 @@ struct AddWordView: View {
                 .disabled(speech.isBusy)
 
             if let translationError = draft.translationError {
-                Label("Автоперевод недоступен — впишите перевод вручную", systemImage: "info.circle")
+                Label("Auto-translation unavailable — enter the translation manually", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(Color.subtleText)
-                    .accessibilityLabel("Автоперевод недоступен. \(translationError)")
+                    .accessibilityLabel("Auto-translation unavailable. \(translationError)")
             }
 
             if !draft.translationOptions.isEmpty {
@@ -282,7 +282,7 @@ struct AddWordView: View {
 
     private var alternativesRow: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Варианты")
+            Text("Alternatives")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.subtleText)
                 .accessibilityAddTraits(.isHeader)
@@ -334,10 +334,10 @@ struct AddWordView: View {
         VStack(alignment: .leading, spacing: 8) {
             if speech.isBusy {
                 HStack {
-                    Text(speech.state == .requestingPermission ? "Запрашиваем доступ…" :
-                         speech.state == .finishing ? "Завершаем распознавание…" : "Говорите \(dictationLanguage.adverbRU)…")
+                    Text(speech.state == .requestingPermission ? "Requesting access…" :
+                         speech.state == .finishing ? "Finishing recognition…" : "Speak \(dictationLanguage.names.adverb)…")
                     Spacer()
-                    Button("Отменить запись") { speech.cancel() }
+                    Button("Cancel recording") { speech.cancel() }
                         .frame(minHeight: 44)
                 }
             }
@@ -345,7 +345,7 @@ struct AddWordView: View {
                 Label(error, systemImage: "mic.slash")
                     .foregroundStyle(Color.appError)
             }
-            Text("Речь может обрабатываться на серверах Apple. Введённый и распознанный текст отправляется сервисам перевода (Google, MyMemory).")
+            Text("Speech may be processed on Apple servers. Entered and recognized text is sent to translation services (Google, MyMemory).")
                 .foregroundStyle(Color.subtleText)
         }
         .font(.caption)

@@ -38,7 +38,7 @@ final class SwiftDataVocabularyRepositoryTests: XCTestCase {
         let row = try XCTUnwrap(rows(container).first)
         XCTAssertEqual(row.deletedAt, deletedAt)
         XCTAssertEqual(row.updatedAt, deletedAt)
-        XCTAssertThrowsError(try repo.deleteWord(id: id)) { XCTAssertEqual($0.localizedDescription, "Слово больше не существует") }
+        XCTAssertThrowsError(try repo.deleteWord(id: id)) { XCTAssertEqual($0.localizedDescription, "The word no longer exists") }
         XCTAssertThrowsError(try repo.deleteWord(id: UUID()))
     }
 

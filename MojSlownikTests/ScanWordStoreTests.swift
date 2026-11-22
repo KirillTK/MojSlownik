@@ -173,7 +173,7 @@ final class ScanWordStoreTests: XCTestCase {
 
         try ScanWordStore.delete(wordID: targetID, container: container)
         XCTAssertThrowsError(try ScanWordStore.delete(wordID: targetID, container: container)) { error in
-            XCTAssertEqual(error.localizedDescription, "Слово больше не существует")
+            XCTAssertEqual(error.localizedDescription, "The word no longer exists")
         }
 
         XCTAssertTrue(editingContext.hasChanges)

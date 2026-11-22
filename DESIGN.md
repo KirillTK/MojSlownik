@@ -135,6 +135,7 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 
 ### Patterns
 
+- **Copy:** copy quoted in this file is the Russian localization; the English source strings live in `Localizable.xcstrings`. English uses “…” quotes and Russian «…». Every new string gets both languages in the same change.
 - **Recoverable service errors (e.g. auto-translation failed):** a calm `subtleText` `.footnote` line with `info.circle` under the field ("Автоперевод недоступен — впишите перевод вручную"). No red: the user can continue manually. The raw service message goes only into the accessibility label. Red `appError` is reserved for failed saves/destructive problems (system alert via `errorAlert`).
 - **Secondary actions on chips/cards (e.g. scan word chips):** tap does the primary action; long press opens a native `.contextMenu` (edit, add/remove, topic submenu). Every context-menu action is also exposed as a named `accessibilityAction`, and the screen hint mentions the long press ("Удерживайте слово, чтобы исправить или выбрать тему").
 - **Empty states:** 64 pt `appAccentSoft` tile with an ink outline symbol, `.title3.bold` title, `subtleText` body, optional `appAccentText` text action. Root-screen empty states fill the available height and stay clear of floating buttons.
@@ -204,7 +205,7 @@ No haptics on scroll, flip, navigation or generic taps.
 ## 8. Accessibility checklist
 
 - Dynamic Type up to AX5 without clipping; long words wrap.
-- VoiceOver: Russian labels, decorative images hidden, grouped rows combined, custom controls with `.isButton`/`.isSelected` traits and named actions.
+- VoiceOver: localized labels (en/ru), decorative images hidden, grouped rows combined, custom controls with `.isButton`/`.isSelected` traits and named actions.
 - Light and dark both designed; Increase Contrast keeps pairs readable.
 - No colour-only state; touch targets at least 44 pt; reveal and answer actions are buttons, not tap gestures.
 - Reduce Motion branch for every animation.
