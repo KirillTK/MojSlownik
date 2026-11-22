@@ -22,7 +22,7 @@ English. Code, comments, file names and project instructions are English.
   run Supabase security advisors. Avoid SECURITY DEFINER functions in `public`.
 - Server rows are untrusted: validate with Backend/RemoteRecords.swift before touching
   SwiftData; Backend/RemoteMergePolicy.swift never hard-deletes local words.
-- Logging (Services/AppLog.swift): events/keys are enums, values Int/Bool/ASCII ids; never
+- Logging (Services/Logging/AppLog.swift): events/keys are enums, values Int/Bool/ASCII ids; never
   log user text, emails, tokens or error messages (domain/code only). No SDK logger.
 - Before any UI/visual work read [DESIGN.md](DESIGN.md) (tokens, components, icons, a11y).
 - No hardcoded UI copy: every user-facing string goes through the String Catalog
@@ -39,7 +39,7 @@ English. Code, comments, file names and project instructions are English.
   memory, and a changed row gets `updatedAt`.
 - SwiftData: never lose stored words. New properties must be optional or have defaults;
   do not rename or remove persisted properties without a migration.
-- Achievements: catalog/evaluator in Services/Achievements.swift, state in
+- Achievements: catalog/evaluator in Services/Achievements/Achievements.swift, state in
   Stores/AchievementStore.swift (see docs/architecture.md).
 - Filter due words in memory with words.filter(\.isDue), not SwiftData #Predicate.
 - Apple translation sessions exist only through a view's translationTask.
@@ -78,7 +78,7 @@ xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E -parallel-testing
 - New or changed nontrivial logic and every bug fix need committed unit tests;
   build-only checks or temporary assertions do not count.
 - When a user-facing flow changes, add or update XCUITest E2E scenarios in
-  MojSlownikUITests built on named fixtures (`UITEST_FIXTURE`, Services/UITestFixtures.swift):
+  MojSlownikUITests built on named fixtures (`UITEST_FIXTURE`, Services/UITestSupport/UITestFixtures.swift):
   reuse existing fixtures, add new ones (with unit tests) when needed, and never seed data
   through UI steps inside a test. Run them with the MojSlownikE2E scheme. Never run tests
   through the MojSlownik app scheme. Camera, OCR and physical-iPhone checks stay manual.
