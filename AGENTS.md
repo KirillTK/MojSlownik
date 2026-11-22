@@ -55,10 +55,11 @@ UI copy is Russian; code, file names and project instructions are English.
 xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownik \
   -destination 'platform=iOS Simulator,name=<device>' build
 # Unit tests (MojSlownikTests target)
-xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikUnitTests \
+xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikUnitTests -parallel-testing-enabled NO \
   -destination 'platform=iOS Simulator,name=<device>' test
-# E2E (MojSlownikUITests; classes run in parallel on simulator clones)
-xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
+# E2E (MojSlownikUITests). Locally one simulator, only the classes the change affects
+# (-only-testing:MojSlownikUITests/<Class>); the full suite runs in CI on the PR
+xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E -parallel-testing-enabled NO \
   -destination 'platform=iOS Simulator,name=<device>' test
 # Single test: append to a test command
 #   -only-testing:MojSlownikTests/<Class>/<testMethod>

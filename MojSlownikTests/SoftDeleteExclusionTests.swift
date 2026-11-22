@@ -7,12 +7,12 @@ final class SoftDeleteExclusionTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_794_225_600)
 
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     private func tombstone(_ polish: String = "woda", russian: String = "вода") -> Word {
-        let word = Word(russian: russian, polish: polish, sourceLanguage: .polish, createdAt: now,
+        let word = Word(russian: russian, polish: polish, side: .term, createdAt: now,
                         category: .food)
         word.repetitions = 5
         word.markDeleted(now: now.addingTimeInterval(10))
@@ -21,12 +21,11 @@ final class SoftDeleteExclusionTests: XCTestCase {
 
     func testFolderStoreWordsExcludesTombstones() {
         let folderID = UUID()
-        let active = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
-        active.folderIDs = [folderID]
+        let active = Word(russian: "кофе", polish: "kawa", side: .term)
         let deleted = tombstone()
-        deleted.folderIDs = [folderID]
-        XCTAssertEqual(FolderStore.words([active, deleted], in: nil).map(\.polish), ["kawa"])
-        XCTAssertEqual(FolderStore.words([active, deleted], in: folderID).map(\.polish), ["kawa"])
+        let index = MembershipIndex.linking([active, deleted], to: folderID)
+        XCTAssertEqual(FolderStore.words([active, deleted], in: nil, memberships: index).map(\.polish), ["kawa"])
+        XCTAssertEqual(FolderStore.words([active, deleted], in: folderID, memberships: index).map(\.polish), ["kawa"])
     }
 
     func testAchievementMetricsIgnoreTombstones() {
@@ -44,7 +43,7 @@ final class SoftDeleteExclusionTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let container = try makeContainer()
         let context = container.mainContext
-        let active = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, createdAt: now)
+        let active = Word(russian: "кофе", polish: "kawa", side: .term, createdAt: now)
         let deleted = tombstone()
         context.insert(active)
         context.insert(deleted)
@@ -100,10 +99,10 @@ final class SoftDeleteExclusionTests: XCTestCase {
         XCTAssertEqual(rows.count, 2)
         let old = try XCTUnwrap(rows.first { !$0.isActive })
         let fresh = try XCTUnwrap(rows.first { $0.isActive })
-        XCTAssertEqual(fresh.folderIDs, [folder.id])
+        XCTAssertEqual(try memberFolders(fresh, container), [folder.id])
         XCTAssertNotEqual(fresh.uuid, deletedUUID)
         XCTAssertEqual(old.uuid, deletedUUID)
-        XCTAssertTrue(old.folderIDs.isEmpty)
+        XCTAssertTrue(try memberFolders(old, container).isEmpty)
         XCTAssertEqual(old.repetitions, 5)
         XCTAssertEqual(old.deletedAt, now.addingTimeInterval(10))
     }

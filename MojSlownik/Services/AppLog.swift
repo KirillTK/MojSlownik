@@ -33,6 +33,10 @@ enum LogEvent: String, CaseIterable, Codable, Sendable {
     case syncRowsSkipped = "sync.rows_skipped"
     case syncLinked = "sync.linked"
     case syncAccountMismatch = "sync.account_mismatch"
+    case workspaceCreated = "workspace.created"
+    case workspaceSwitched = "workspace.switched"
+    case workspaceDeleted = "workspace.deleted"
+    case workspaceRestored = "workspace.restored"
 
     /// Same pattern as the CHECK constraint on public.app_logs.event.
     static let serverPattern = #"^[a-z][a-z0-9_]{0,31}(\.[a-z][a-z0-9_]{0,31}){1,2}$"#
@@ -44,6 +48,7 @@ enum LogKey: String, CaseIterable, Sendable {
     case inFolder = "in_folder"
     case included
     case targetLanguage = "target_language"
+    case termLanguage = "term_language"
     case errorDomain = "error_domain"
     case errorCode = "error_code"
 }

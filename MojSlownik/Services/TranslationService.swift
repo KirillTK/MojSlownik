@@ -1,7 +1,7 @@
 import Foundation
 
 protocol TranslationService {
-    func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String
+    func translate(_ text: String, from source: Language, to target: Language) async throws -> String
 }
 
 enum TranslationError: LocalizedError {
@@ -21,7 +21,7 @@ enum TranslationError: LocalizedError {
 /// Единая точка входа: на iOS 18+ пробует офлайн-перевод Apple,
 /// затем Google (веб, лучшее качество), затем MyMemory (веб, запасной).
 enum Translator {
-    static func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
+    static func translate(_ text: String, from source: Language, to target: Language) async throws -> String {
         #if DEBUG
         if UITestLaunchConfiguration.current != nil {
             return UITestTranslationStub.translate(text, from: source, to: target)
@@ -30,7 +30,7 @@ enum Translator {
         // В симуляторе Translation framework не работает и показывает
         // системный экран ошибки поверх приложения — путь отключён целиком.
         #if canImport(Translation) && !targetEnvironment(simulator)
-        if #available(iOS 18.0, *) {
+        if #available(iOS 18.0, *), source.appleIdentifier != nil, target.appleIdentifier != nil {
             do {
                 return try await withTimeout(seconds: 4) {
                     try await AppleTranslationModel.shared.translate(text, from: source, to: target)
@@ -49,7 +49,7 @@ enum Translator {
 
     /// Google, then MyMemory. Logs `translation.failed` only when both fail and the request was
     /// not cancelled; the text itself is never logged (languages and error code only).
-    static func webFallback(from source: AppLanguage, to target: AppLanguage,
+    static func webFallback(from source: Language, to target: Language,
                             primary: () async throws -> String,
                             fallback: () async throws -> String) async throws -> String {
         do {
@@ -62,7 +62,7 @@ enum Translator {
             } catch {
                 if !Task.isCancelled {
                     await AppLog.record(.translationFailed, error: error,
-                                        [.language: .name(source), .targetLanguage: .name(target)])
+                                        [.language: .name(source.code), .targetLanguage: .name(target.code)])
                 }
                 throw error
             }

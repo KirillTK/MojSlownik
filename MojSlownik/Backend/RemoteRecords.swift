@@ -9,6 +9,14 @@ import Supabase
 /// Decodes with PostgREST's own decoder (the one `execute().value` uses), so the DTOs are
 /// tested against the server's real timestamp format.
 enum RemoteRecordDecoder {
+    static func workspaces(from data: Data) throws -> [RemoteWorkspaceRecord] {
+        try PostgrestClient.Configuration.jsonDecoder.decode([RemoteWorkspaceRecord].self, from: data)
+    }
+
+    static func memberships(from data: Data) throws -> [RemoteMembershipRecord] {
+        try PostgrestClient.Configuration.jsonDecoder.decode([RemoteMembershipRecord].self, from: data)
+    }
+
     static func words(from data: Data) throws -> [RemoteWordRecord] {
         try PostgrestClient.Configuration.jsonDecoder.decode([RemoteWordRecord].self, from: data)
     }
@@ -18,19 +26,40 @@ enum RemoteRecordDecoder {
     }
 }
 
-/// A word is a language-neutral pair: `term` in the studied language and its `translation`,
-/// each with a BCP 47 code. `enteredLanguage` is the side the user typed (one of the pair).
+/// A workspace (language pair). Its id is the uuid v5 of `term_language>translation_language`.
+struct RemoteWorkspaceRecord: Decodable, Equatable, Sendable {
+    let id: UUID
+    let userID: UUID
+    let termLanguage: String
+    let translationLanguage: String
+    let sortOrder: Int
+    let createdAt: Date
+    let updatedAt: Date
+    let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case termLanguage = "term_language"
+        case translationLanguage = "translation_language"
+        case sortOrder = "sort_order"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
+/// A word: `term` in the studied language of its workspace and its `translation`. `enteredSide` is
+/// the side the user typed (`term` or `translation`); the languages live in the workspace.
 struct RemoteWordRecord: Decodable, Equatable, Sendable {
     let id: UUID
     let userID: UUID
+    let workspaceID: UUID
     let term: String
-    let termLanguage: String
     let translation: String
-    let translationLanguage: String
-    let enteredLanguage: String
+    let enteredSide: String
     /// Stable category id (`WordCategory.stableID`), not the localized title.
     let category: String
-    let folderIDs: [UUID]
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
@@ -45,10 +74,8 @@ struct RemoteWordRecord: Decodable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, term, translation, category, repetitions
         case userID = "user_id"
-        case termLanguage = "term_language"
-        case translationLanguage = "translation_language"
-        case enteredLanguage = "entered_language"
-        case folderIDs = "folder_ids"
+        case workspaceID = "workspace_id"
+        case enteredSide = "entered_side"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
@@ -61,9 +88,31 @@ struct RemoteWordRecord: Decodable, Equatable, Sendable {
     }
 }
 
+/// A word <-> folder membership (`word_folders`); keyed by `(word_id, folder_id)`.
+struct RemoteMembershipRecord: Decodable, Equatable, Sendable {
+    let userID: UUID
+    let workspaceID: UUID
+    let wordID: UUID
+    let folderID: UUID
+    let createdAt: Date
+    let updatedAt: Date
+    let deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case workspaceID = "workspace_id"
+        case wordID = "word_id"
+        case folderID = "folder_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case deletedAt = "deleted_at"
+    }
+}
+
 struct RemoteFolderRecord: Decodable, Equatable, Sendable {
     let id: UUID
     let userID: UUID
+    let workspaceID: UUID
     let name: String
     let sortOrder: Int
     let createdAt: Date
@@ -73,6 +122,7 @@ struct RemoteFolderRecord: Decodable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, name
         case userID = "user_id"
+        case workspaceID = "workspace_id"
         case sortOrder = "sort_order"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -80,20 +130,25 @@ struct RemoteFolderRecord: Decodable, Equatable, Sendable {
     }
 }
 
+/// A workspace that passed validation.
+struct ValidatedRemoteWorkspace: Equatable, Sendable {
+    let id: UUID
+    let termLanguage: String
+    let translationLanguage: String
+    let sortOrder: Int
+    let createdAt: Date
+    let updatedAt: Date
+    let deletedAt: Date?
+}
+
 /// A word that passed validation; only this type may feed a merge into SwiftData.
 struct ValidatedRemoteWord: Equatable, Sendable {
     let id: UUID
+    let workspaceID: UUID
     let term: String
-    let termLanguage: AppLanguage
     let translation: String
-    let translationLanguage: AppLanguage
-    let enteredLanguage: AppLanguage
+    let enteredSide: WordSide
     let category: WordCategory
-    /// Deduplicated; may include folders that have not reached this device yet.
-    let folderIDs: [UUID]
-    /// Members of `folderIDs` the device does not know yet (folders may arrive later). The merge
-    /// keeps them; dropping them would erase membership on the next push.
-    let unknownFolderIDs: Set<UUID>
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
@@ -108,11 +163,34 @@ struct ValidatedRemoteWord: Equatable, Sendable {
 
 struct ValidatedRemoteFolder: Equatable, Sendable {
     let id: UUID
+    let workspaceID: UUID
     let name: String
     let sortOrder: Int
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
+}
+
+struct ValidatedRemoteMembership: Equatable, Sendable {
+    let workspaceID: UUID
+    let wordID: UUID
+    let folderID: UUID
+    let createdAt: Date
+    let updatedAt: Date
+    let deletedAt: Date?
+
+    /// The client-only identity (`MembershipID`): held ids, acks, de-duplication.
+    var id: UUID { MembershipID.make(wordID: wordID, folderID: folderID) }
+}
+
+/// What the device knows when a pulled row is validated: ids of the local rows in any state with
+/// the workspace each belongs to. Rows skipped (held) this cycle are not in the sets.
+struct KnownRemoteIDs: Equatable, Sendable {
+    var workspaceIDs: Set<UUID> = []
+    /// word uuid -> workspace id
+    var words: [UUID: UUID] = [:]
+    /// folder id -> workspace id
+    var folders: [UUID: UUID] = [:]
 }
 
 enum RemoteRecordError: Error, Equatable {
@@ -127,7 +205,12 @@ enum RemoteRecordError: Error, Equatable {
     /// Well-formed category id added by a newer app version: skip, keep locally. Mapping it to
     /// `.other` would let this client write `other` back over the newer client's category.
     case unsupportedCategory
-    case tooManyFolders
+    /// The workspace is not known on this device (yet): held until it arrives.
+    case unknownWorkspace
+    /// `entered_side` is neither `term` nor `translation`.
+    case invalidSide
+    /// A membership whose word or folder is not known in that workspace.
+    case unknownReference
     case invalidDate
     case invalidSchedule
 }
@@ -137,7 +220,6 @@ enum RemoteRecordError: Error, Equatable {
 enum RemoteRecordValidator {
     static let maxTextLength = 500
     static let maxFolderNameLength = 200
-    static let maxFolderIDs = 500
     /// Tolerated device/server clock difference for "not in the future" checks. `updated_at` is
     /// often server time, so a slow device clock must not reject fresh rows; a day still stops
     /// far-future timestamps that would win last-write-wins forever (server time: Gap B).
@@ -148,22 +230,33 @@ enum RemoteRecordValidator {
     static let maxIntervalDays = SRSEngine.maxIntervalDays
     static let maxEaseFactor = SRSEngine.maxEaseFactor
 
-    static func validate(_ record: RemoteWordRecord, ownerID: UUID, knownFolderIDs: Set<UUID>,
+    static func validate(_ record: RemoteWorkspaceRecord, ownerID: UUID, now: Date) throws -> ValidatedRemoteWorkspace {
+        try validateIdentity(id: record.id, userID: record.userID, ownerID: ownerID)
+        guard isLanguageCode(record.termLanguage), isLanguageCode(record.translationLanguage),
+              record.termLanguage != record.translationLanguage else {
+            throw RemoteRecordError.invalidLanguage
+        }
+        guard record.id == WorkspaceID.make(term: record.termLanguage, translation: record.translationLanguage) else {
+            throw RemoteRecordError.invalidID
+        }
+        guard LanguageCodes.isSupported(record.termLanguage), LanguageCodes.isSupported(record.translationLanguage) else {
+            throw RemoteRecordError.unsupportedLanguage
+        }
+        try validateTimestamps(createdAt: record.createdAt, updatedAt: record.updatedAt,
+                               deletedAt: record.deletedAt, now: now)
+        return ValidatedRemoteWorkspace(id: record.id, termLanguage: record.termLanguage,
+                                        translationLanguage: record.translationLanguage,
+                                        sortOrder: record.sortOrder, createdAt: record.createdAt,
+                                        updatedAt: record.updatedAt, deletedAt: record.deletedAt)
+    }
+
+    static func validate(_ record: RemoteWordRecord, ownerID: UUID, known: KnownRemoteIDs,
                          now: Date) throws -> ValidatedRemoteWord {
         try validateIdentity(id: record.id, userID: record.userID, ownerID: ownerID)
         let term = try validText(record.term, maxLength: maxTextLength)
         let translation = try validText(record.translation, maxLength: maxTextLength)
-        guard isLanguageCode(record.termLanguage), isLanguageCode(record.translationLanguage),
-              record.termLanguage != record.translationLanguage,
-              [record.termLanguage, record.translationLanguage].contains(record.enteredLanguage) else {
-            throw RemoteRecordError.invalidLanguage
-        }
-        guard let termLanguage = AppLanguage(rawValue: record.termLanguage),
-              let translationLanguage = AppLanguage(rawValue: record.translationLanguage),
-              let enteredLanguage = AppLanguage(rawValue: record.enteredLanguage) else {
-            throw RemoteRecordError.unsupportedLanguage
-        }
-        guard record.folderIDs.count <= maxFolderIDs else { throw RemoteRecordError.tooManyFolders }
+        guard known.workspaceIDs.contains(record.workspaceID) else { throw RemoteRecordError.unknownWorkspace }
+        guard let enteredSide = WordSide(rawValue: record.enteredSide) else { throw RemoteRecordError.invalidSide }
         try validateTimestamps(createdAt: record.createdAt, updatedAt: record.updatedAt,
                                deletedAt: record.deletedAt, now: now)
 
@@ -193,28 +286,43 @@ enum RemoteRecordValidator {
             throw RemoteRecordError.unsupportedCategory
         }
 
-        var seen = Set<UUID>()
-        let folderIDs = record.folderIDs.filter { seen.insert($0).inserted }
-
         return ValidatedRemoteWord(
-            id: record.id, term: term, termLanguage: termLanguage, translation: translation,
-            translationLanguage: translationLanguage, enteredLanguage: enteredLanguage,
-            category: category, folderIDs: folderIDs,
-            unknownFolderIDs: seen.subtracting(knownFolderIDs),
+            id: record.id, workspaceID: record.workspaceID, term: term, translation: translation,
+            enteredSide: enteredSide, category: category,
             createdAt: record.createdAt, updatedAt: record.updatedAt, deletedAt: record.deletedAt,
             easeFactor: record.easeFactor, intervalDays: record.intervalDays,
             repetitions: record.repetitions, dueDate: record.dueDate, lastReviewGrade: grade,
             knowledgeTier: record.knowledgeTier, consecutiveSoftMisses: record.consecutiveSoftMisses)
     }
 
-    static func validate(_ record: RemoteFolderRecord, ownerID: UUID, now: Date) throws -> ValidatedRemoteFolder {
+    static func validate(_ record: RemoteFolderRecord, ownerID: UUID, known: KnownRemoteIDs,
+                         now: Date) throws -> ValidatedRemoteFolder {
         try validateIdentity(id: record.id, userID: record.userID, ownerID: ownerID)
         let name = try validText(record.name, maxLength: maxFolderNameLength)
+        guard known.workspaceIDs.contains(record.workspaceID) else { throw RemoteRecordError.unknownWorkspace }
         try validateTimestamps(createdAt: record.createdAt, updatedAt: record.updatedAt,
                                deletedAt: record.deletedAt, now: now)
-        return ValidatedRemoteFolder(id: record.id, name: name, sortOrder: record.sortOrder,
-                                     createdAt: record.createdAt, updatedAt: record.updatedAt,
-                                     deletedAt: record.deletedAt)
+        return ValidatedRemoteFolder(id: record.id, workspaceID: record.workspaceID, name: name,
+                                     sortOrder: record.sortOrder, createdAt: record.createdAt,
+                                     updatedAt: record.updatedAt, deletedAt: record.deletedAt)
+    }
+
+    /// The word and the folder must be known on this device, both in the membership's workspace.
+    static func validate(_ record: RemoteMembershipRecord, ownerID: UUID, known: KnownRemoteIDs,
+                         now: Date) throws -> ValidatedRemoteMembership {
+        guard record.userID == ownerID else { throw RemoteRecordError.foreignOwner }
+        guard record.wordID != nilUUID, record.folderID != nilUUID, record.workspaceID != nilUUID else {
+            throw RemoteRecordError.invalidID
+        }
+        try validateTimestamps(createdAt: record.createdAt, updatedAt: record.updatedAt,
+                               deletedAt: record.deletedAt, now: now)
+        guard known.words[record.wordID] == record.workspaceID,
+              known.folders[record.folderID] == record.workspaceID else {
+            throw RemoteRecordError.unknownReference
+        }
+        return ValidatedRemoteMembership(workspaceID: record.workspaceID, wordID: record.wordID,
+                                         folderID: record.folderID, createdAt: record.createdAt,
+                                         updatedAt: record.updatedAt, deletedAt: record.deletedAt)
     }
 
     /// Same shape as the server CHECK: BCP 47 language with up to three subtags.
@@ -274,19 +382,52 @@ enum RemoteRecordValidator {
     }
 }
 
-/// Outgoing `public.words` row. Never contains `updated_at` (the server assigns it). Every key
+/// Outgoing `public.workspaces` row. Never contains `updated_at` (the server assigns it). Every key
 /// is encoded, with an explicit `null` where empty: supabase-swift sends `columns=` as the union
 /// of the rows' keys, and an omitted `deleted_at` would never clear a server tombstone.
+struct RemoteWorkspaceUpsert: Encodable, Equatable, Sendable {
+    let id: UUID
+    let userID: UUID
+    let termLanguage: String
+    let translationLanguage: String
+    let sortOrder: Int
+    let createdAt: Date
+    let deletedAt: Date?
+
+    static let selectColumns = "id,user_id,term_language,translation_language,sort_order,created_at,"
+        + "updated_at,deleted_at"
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case termLanguage = "term_language"
+        case translationLanguage = "translation_language"
+        case sortOrder = "sort_order"
+        case createdAt = "created_at"
+        case deletedAt = "deleted_at"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(termLanguage, forKey: .termLanguage)
+        try container.encode(translationLanguage, forKey: .translationLanguage)
+        try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+    }
+}
+
+/// Outgoing `public.words` row; same every-key rule as `RemoteWorkspaceUpsert`. No legacy columns.
 struct RemoteWordUpsert: Encodable, Equatable, Sendable {
     let id: UUID
     let userID: UUID
+    let workspaceID: UUID
     let term: String
-    let termLanguage: String
     let translation: String
-    let translationLanguage: String
-    let enteredLanguage: String
+    let enteredSide: String
     let category: String
-    let folderIDs: [UUID]
     let createdAt: Date
     let deletedAt: Date?
     let easeFactor: Double
@@ -297,17 +438,15 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
     let knowledgeTier: Int?
     let consecutiveSoftMisses: Int
 
-    static let selectColumns = "id,user_id,term,term_language,translation,translation_language,"
-        + "entered_language,category,folder_ids,created_at,updated_at,deleted_at,ease_factor,"
-        + "interval_days,repetitions,due_date,last_review_grade,knowledge_tier,consecutive_soft_misses"
+    static let selectColumns = "id,user_id,workspace_id,term,translation,entered_side,category,created_at,"
+        + "updated_at,deleted_at,ease_factor,interval_days,repetitions,due_date,last_review_grade,"
+        + "knowledge_tier,consecutive_soft_misses"
 
     enum CodingKeys: String, CodingKey {
         case id, term, translation, category, repetitions
         case userID = "user_id"
-        case termLanguage = "term_language"
-        case translationLanguage = "translation_language"
-        case enteredLanguage = "entered_language"
-        case folderIDs = "folder_ids"
+        case workspaceID = "workspace_id"
+        case enteredSide = "entered_side"
         case createdAt = "created_at"
         case deletedAt = "deleted_at"
         case easeFactor = "ease_factor"
@@ -322,13 +461,11 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(userID, forKey: .userID)
+        try container.encode(workspaceID, forKey: .workspaceID)
         try container.encode(term, forKey: .term)
-        try container.encode(termLanguage, forKey: .termLanguage)
         try container.encode(translation, forKey: .translation)
-        try container.encode(translationLanguage, forKey: .translationLanguage)
-        try container.encode(enteredLanguage, forKey: .enteredLanguage)
+        try container.encode(enteredSide, forKey: .enteredSide)
         try container.encode(category, forKey: .category)
-        try container.encode(folderIDs, forKey: .folderIDs)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(deletedAt, forKey: .deletedAt)
         try container.encode(easeFactor, forKey: .easeFactor)
@@ -341,20 +478,22 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
     }
 }
 
-/// Outgoing `public.folders` row; same every-key rule as `RemoteWordUpsert`.
+/// Outgoing `public.folders` row; same every-key rule as `RemoteWorkspaceUpsert`.
 struct RemoteFolderUpsert: Encodable, Equatable, Sendable {
     let id: UUID
     let userID: UUID
+    let workspaceID: UUID
     let name: String
     let sortOrder: Int
     let createdAt: Date
     let deletedAt: Date?
 
-    static let selectColumns = "id,user_id,name,sort_order,created_at,updated_at,deleted_at"
+    static let selectColumns = "id,user_id,workspace_id,name,sort_order,created_at,updated_at,deleted_at"
 
     enum CodingKeys: String, CodingKey {
         case id, name
         case userID = "user_id"
+        case workspaceID = "workspace_id"
         case sortOrder = "sort_order"
         case createdAt = "created_at"
         case deletedAt = "deleted_at"
@@ -364,8 +503,40 @@ struct RemoteFolderUpsert: Encodable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(userID, forKey: .userID)
+        try container.encode(workspaceID, forKey: .workspaceID)
         try container.encode(name, forKey: .name)
         try container.encode(sortOrder, forKey: .sortOrder)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(deletedAt, forKey: .deletedAt)
+    }
+}
+
+/// Outgoing `public.word_folders` row; same every-key rule as `RemoteWorkspaceUpsert`.
+struct RemoteMembershipUpsert: Encodable, Equatable, Sendable {
+    let userID: UUID
+    let workspaceID: UUID
+    let wordID: UUID
+    let folderID: UUID
+    let createdAt: Date
+    let deletedAt: Date?
+
+    static let selectColumns = "user_id,workspace_id,word_id,folder_id,created_at,updated_at,deleted_at"
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case workspaceID = "workspace_id"
+        case wordID = "word_id"
+        case folderID = "folder_id"
+        case createdAt = "created_at"
+        case deletedAt = "deleted_at"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(workspaceID, forKey: .workspaceID)
+        try container.encode(wordID, forKey: .wordID)
+        try container.encode(folderID, forKey: .folderID)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(deletedAt, forKey: .deletedAt)
     }

@@ -9,7 +9,7 @@ final class ReAddAfterDeleteTests: XCTestCase {
     private var t3: Date { t1.addingTimeInterval(7_200) }
 
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
@@ -39,14 +39,14 @@ final class ReAddAfterDeleteTests: XCTestCase {
         XCTAssertEqual(old.updatedAt, oldUpdated)
         XCTAssertEqual(old.deletedAt, oldDeleted)
         XCTAssertEqual(old.category, oldCategory)
-        XCTAssertTrue(old.folderIDs.isEmpty)
+        XCTAssertTrue(try memberFolders(old, container).isEmpty)
         XCTAssertNotEqual(fresh.uuid, oldUUID)
         XCTAssertEqual(fresh.createdAt, t3)
         XCTAssertEqual(fresh.updatedAt, t3)
         XCTAssertEqual(fresh.repetitions, 0)
         XCTAssertEqual(fresh.intervalDays, 0)
         XCTAssertEqual(fresh.category, .travel)
-        XCTAssertEqual(fresh.folderIDs, [folder.id])
+        XCTAssertEqual(try memberFolders(fresh, container), [folder.id])
         XCTAssertEqual(fresh.sourceLanguageCode, "ru")
     }
 

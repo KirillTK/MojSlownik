@@ -32,6 +32,7 @@ final class AddWordFlowTests: E2ETestCase {
 
         let source = element("sourceField")
         XCTAssertTrue(source.waitForExistence(timeout: 10))
+        XCTAssertFalse(element("inputSideControl").exists, "pl ← ru detects the side by script")
         source.tap()
         source.typeText("dom")
         waitForValue(element("translationField"), equals: "дом")

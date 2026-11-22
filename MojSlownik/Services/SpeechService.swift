@@ -11,7 +11,7 @@ final class SpeechService {
         synthesizer.stopSpeaking(at: .immediate)
     }
 
-    func speak(_ text: String, language: AppLanguage) {
+    func speak(_ text: String, language: Language) {
         stop()
         // Capture changes the shared category; restore silent-mode playback each time.
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)

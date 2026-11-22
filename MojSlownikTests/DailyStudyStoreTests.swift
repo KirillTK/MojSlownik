@@ -118,17 +118,16 @@ final class DailyStudyStoreTests: XCTestCase {
         try withDefaults { defaults in
             let (container, words) = try makeWords(3)
             let folderID = UUID()
-            words[0].folderIDs = [folderID]
-            words[1].folderIDs = [folderID]
+            let index = MembershipIndex.linking([words[0], words[1]], to: folderID)
             let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
             try store.review(.good, to: words[0], context: container.mainContext, now: now)
             try store.review(.good, to: words[2], context: container.mainContext, now: now)
-            let scoped = FolderStore.words(words, in: folderID)
+            let scoped = FolderStore.words(words, in: folderID, memberships: index)
             XCTAssertEqual(store.progress(for: scoped, now: now), .init(completed: 1, remaining: 1))
             // Deleted words and moved memberships disappear from the supplied live scope.
             XCTAssertEqual(store.progress(for: [words[1]], now: now), .init(completed: 0, remaining: 1))
-            XCTAssertEqual(store.progress(for: FolderStore.words(words, in: UUID()), now: now).total, 0)
-            let added = Word(russian: "новое", polish: "nowe", sourceLanguage: .polish, createdAt: now)
+            XCTAssertEqual(store.progress(for: FolderStore.words(words, in: UUID(), memberships: index), now: now).total, 0)
+            let added = Word(russian: "новое", polish: "nowe", side: .term, createdAt: now)
             container.mainContext.insert(added)
             try container.mainContext.save()
             XCTAssertEqual(store.progress(for: words + [added], now: now), .init(completed: 2, remaining: 2))
@@ -274,13 +273,12 @@ final class DailyStudyStoreTests: XCTestCase {
             let (container, words) = try makeWords(3)
             _ = container
             let folderID = UUID()
-            words[0].folderIDs = [folderID]
-            words[1].folderIDs = [folderID]
+            let index = MembershipIndex.linking([words[0], words[1]], to: folderID)
             let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
             try store.recordQuizAnswer(wordID: words[0].persistentModelID, isCorrect: true, now: now)
             try store.recordQuizAnswer(wordID: words[1].persistentModelID, isCorrect: false, now: now)
             try store.recordQuizAnswer(wordID: words[2].persistentModelID, isCorrect: true, now: now)
-            let scoped = FolderStore.words(words, in: folderID)
+            let scoped = FolderStore.words(words, in: folderID, memberships: index)
             XCTAssertEqual(store.answerTotals(for: scoped, now: now), .init(correct: 1, incorrect: 1))
             XCTAssertEqual(store.answerTotals(for: [words[1]], now: now), .init(correct: 0, incorrect: 1))
             XCTAssertEqual(store.answerTotals(for: [], now: now).total, 0)
@@ -310,7 +308,7 @@ final class DailyStudyStoreTests: XCTestCase {
                 // Exercise the same bootstrap as the app, not a preconstructed test container.
                 let resources = try AppResources(configuration: configuration, defaults: defaults,
                                                  calendar: calendar, now: now)
-                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder"])
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace", "FolderMembership"])
                 let context = resources.container.mainContext
                 let words = try context.fetch(FetchDescriptor<Word>())
                 let folders = try context.fetch(FetchDescriptor<WordFolder>())
@@ -319,7 +317,7 @@ final class DailyStudyStoreTests: XCTestCase {
                 XCTAssertEqual(folders.first?.name, "Урок 1")
                 let completed = try XCTUnwrap(words.first { $0.polish == "woda" })
                 XCTAssertEqual(completed.russian, "вода")
-                XCTAssertEqual(completed.folderIDs, [folderID])
+                XCTAssertEqual(try context.fetch(FetchDescriptor<FolderMembership>()).map(\.folderID), [folderID])
                 XCTAssertEqual(completed.repetitions, 1)
                 XCTAssertEqual(completed.intervalDays, 1)
                 XCTAssertEqual(completed.easeFactor, 2.5)
@@ -340,7 +338,7 @@ final class DailyStudyStoreTests: XCTestCase {
                 defaults.set(activity, forKey: "dailyStudyActivity.v1")
                 let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
                                                  defaults: defaults, calendar: calendar, now: now)
-                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder"])
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace", "FolderMembership"])
                 XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<Word>()).isEmpty)
                 XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<WordFolder>()).isEmpty)
                 XCTAssertEqual(resources.dailyStudy.progress(for: [], now: now).total, 0)
@@ -354,11 +352,12 @@ final class DailyStudyStoreTests: XCTestCase {
         let context = resources.container.mainContext
         let folder = WordFolder(name: "Урок 1")
         context.insert(folder)
-        let completed = Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .polish, createdAt: now)
-        completed.folderIDs = [folder.id]
-        let pending = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, createdAt: now)
+        let completed = Word(russian: "ВОДА", polish: "WODA", side: .term, createdAt: now)
+        let pending = Word(russian: "кофе", polish: "kawa", side: .term, createdAt: now)
         context.insert(completed)
         context.insert(pending)
+        context.insert(FolderMembership(wordID: try XCTUnwrap(completed.uuid), folderID: folder.id,
+                                        workspaceID: WorkspaceID.legacy))
         try context.save()
         try resources.dailyStudy.review(.good, to: completed, context: context, now: now)
         try resources.dailyStudy.review(.again, to: pending, context: context, now: now)
@@ -394,9 +393,9 @@ final class DailyStudyStoreTests: XCTestCase {
 
     private func makeWords(_ count: Int) throws -> (ModelContainer, [Word]) {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Word.self, WordFolder.self, configurations: configuration)
+        let container = try ModelContainer(for: AppSchema.schema, configurations: configuration)
         let words = (0..<count).map { index in
-            Word(russian: "слово \(index)", polish: "słowo \(index)", sourceLanguage: .polish, createdAt: now)
+            Word(russian: "слово \(index)", polish: "słowo \(index)", side: .term, createdAt: now)
         }
         words.forEach { container.mainContext.insert($0) }
         try container.mainContext.save()

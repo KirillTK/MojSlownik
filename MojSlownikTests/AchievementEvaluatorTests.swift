@@ -87,16 +87,16 @@ final class AchievementEvaluatorTests: XCTestCase {
 
     @MainActor
     func testVocabularyMetrics() throws {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         _ = container
         let empty = AchievementMetrics.vocabulary(words: [], folderCount: 0)
         for metric in AchievementMetric.allCases { XCTAssertEqual(empty[metric], 0) }
 
-        let a = Word(russian: "a", polish: "a", sourceLanguage: .russian, category: .food)
-        let b = Word(russian: "b", polish: "b", sourceLanguage: .russian, category: .food)
-        let c = Word(russian: "c", polish: "c", sourceLanguage: .russian, category: .home)
-        let d = Word(russian: "d", polish: "d", sourceLanguage: .russian, category: .other)
+        let a = Word(russian: "a", polish: "a", side: .translation, category: .food)
+        let b = Word(russian: "b", polish: "b", side: .translation, category: .food)
+        let c = Word(russian: "c", polish: "c", side: .translation, category: .home)
+        let d = Word(russian: "d", polish: "d", side: .translation, category: .other)
         a.repetitions = 2
         b.repetitions = 3
         c.knowledgeTier = KnowledgeProgressService.maximumTier

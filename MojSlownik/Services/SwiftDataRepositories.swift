@@ -5,6 +5,37 @@ import os
 private let repositoryLogger = Logger(subsystem: "com.kirill.personal.mojslownik", category: "persistence")
 
 @MainActor
+final class SwiftDataWorkspaceRepository: WorkspaceRepository {
+    private let container: ModelContainer
+    private let now: () -> Date
+
+    init(container: ModelContainer, now: @escaping () -> Date = { .now }) {
+        self.container = container
+        self.now = now
+    }
+
+    func workspaces() throws -> [WorkspaceRecord] {
+        try WorkspaceCatalog.workspaces(in: container.mainContext).map {
+            WorkspaceRecord(id: $0.id, termCode: $0.termLanguageCode,
+                            translationCode: $0.translationLanguageCode, sortOrder: $0.sortOrder)
+        }
+    }
+
+    func ensure(term: String, translation: String) throws -> WorkspaceEnsureResult {
+        try WorkspaceCatalog.ensureReportingOutcome(term: term, translation: translation, container: container,
+                                                    now: now())
+    }
+
+    func delete(id: UUID) throws {
+        try WorkspaceCatalog.delete(id: id, container: container, now: now())
+    }
+
+    func reorder(ids: [UUID]) throws {
+        try WorkspaceCatalog.reorder(ids: ids, container: container, now: now())
+    }
+}
+
+@MainActor
 final class SwiftDataFolderRepository: FolderRepository {
     private let container: ModelContainer
     private let now: () -> Date
@@ -14,20 +45,21 @@ final class SwiftDataFolderRepository: FolderRepository {
         self.now = now
     }
 
-    func folders() throws -> [FolderRecord] {
-        try FolderStore.folders(in: container.mainContext).map { FolderRecord(id: $0.id, name: $0.name) }
+    func folders(in workspaceID: UUID) throws -> [FolderRecord] {
+        try FolderStore.folders(in: container.mainContext, workspaceID: workspaceID)
+            .map { FolderRecord(id: $0.id, name: $0.name) }
     }
 
-    func createFolder(name: String) throws -> UUID {
-        try FolderStore.create(name: name, context: container.mainContext, now: now()).id
+    func createFolder(name: String, workspaceID: UUID) throws -> UUID {
+        try FolderStore.create(name: name, workspaceID: workspaceID, context: container.mainContext, now: now()).id
     }
 
     func renameFolder(id: UUID, name: String) throws {
         try FolderStore.rename(id: id, name: name, context: container.mainContext, now: now())
     }
 
-    func reorderFolders(ids: [UUID]) throws {
-        try FolderStore.reorder(ids: ids, container: container, now: now())
+    func reorderFolders(ids: [UUID], workspaceID: UUID) throws {
+        try FolderStore.reorder(ids: ids, workspaceID: workspaceID, container: container, now: now())
     }
 
     func deleteFolder(id: UUID) throws {
@@ -45,19 +77,20 @@ final class SwiftDataVocabularyRepository: VocabularyRepository {
         self.now = now
     }
 
-    func addWord(source: String, translation: String, category: WordCategory?, folderID: UUID?) throws {
-        try ScanWordStore.add(source: source, translation: translation, category: category,
-                              folderID: folderID, container: container, now: now())
+    func addWord(_ entry: WordEntry, category: WordCategory?, folderID: UUID?,
+                 workspace: WorkspaceContext) throws {
+        try ScanWordStore.add(entry, category: category, folderID: folderID, workspace: workspace,
+                              container: container, now: now())
     }
 
-    func toggleScannedWord(source: String, translation: String, category: WordCategory,
-                           folderID: UUID?) throws -> Bool {
-        try ScanWordStore.toggle(source: source, translation: translation, category: category,
-                                 folderID: folderID, container: container, now: now())
+    func toggleScannedWord(_ entry: WordEntry, category: WordCategory, folderID: UUID?,
+                           workspace: WorkspaceContext) throws -> Bool {
+        try ScanWordStore.toggle(entry, category: category, folderID: folderID, workspace: workspace,
+                                 container: container, now: now())
     }
 
-    func changeCategory(_ category: WordCategory, source: String, translation: String) throws {
-        try ScanWordStore.changeCategory(category, source: source, translation: translation,
+    func changeCategory(_ category: WordCategory, entry: WordEntry, workspace: WorkspaceContext) throws {
+        try ScanWordStore.changeCategory(category, entry: entry, workspace: workspace,
                                          container: container, now: now())
     }
 

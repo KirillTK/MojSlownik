@@ -17,6 +17,10 @@ end $$;
 create schema auth;
 grant usage on schema auth to anon, authenticated;
 
+-- Supabase pre-installs the `extensions` schema (uuid-ossp lives there).
+create schema if not exists extensions;
+grant usage on schema extensions to anon, authenticated;
+
 create table auth.users (
     id uuid primary key,
     aud varchar(255),

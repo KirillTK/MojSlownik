@@ -3,11 +3,17 @@ import SwiftData
 
 @Model
 final class Word {
+    // Storage names predate workspaces and stay (no migration): `polish` is the studied side
+    // (term), `russian` the translation side, `sourceLanguageCode` the language of the entered
+    // side. Read and write them through `term`/`translation`.
     var russian: String
     var polish: String
     var sourceLanguageCode: String
     var categoryRawValue: String = "Другое"
+    // Frozen legacy storage: memberships live in FolderMembership. Never written after the
+    // memberships migration (`legacyFolderIDsMigrated`); read only by WorkspaceBackfill.
     var folderIDs: [UUID] = []
+    var legacyFolderIDsMigrated: Bool = false
     var createdAt: Date
     // stable cross-store identity; optional for additive migration; backfilled at launch
     var uuid: UUID? = nil
@@ -16,6 +22,8 @@ final class Word {
     // server updated_at of the last synced version; nil = never synced to the linked account;
     // .distantPast = re-link sentinel
     var serverUpdatedAt: Date? = nil
+    // nil = a row from before workspaces; reads treat it as the legacy pl ← ru workspace
+    var workspaceID: UUID? = nil
 
     // Интервальное повторение (упрощённый SM-2)
     var easeFactor: Double
@@ -26,11 +34,14 @@ final class Word {
     var knowledgeTier: Int? = nil
     var consecutiveSoftMisses: Int = 0
 
-    init(russian: String, polish: String, sourceLanguage: AppLanguage, createdAt: Date = .now, category: WordCategory? = nil) {
-        self.russian = russian.lowercased()
-        self.polish = polish.lowercased()
-        self.sourceLanguageCode = sourceLanguage.rawValue
-        self.categoryRawValue = (category ?? WordCategory.detect(russian: russian, polish: polish)).rawValue
+    /// A word entered on `entry.enteredSide` of `pair`; texts are stored in each side's stored form.
+    init(entry: WordEntry, pair: LanguagePair, workspaceID: UUID?, createdAt: Date = .now,
+         category: WordCategory? = nil) {
+        self.russian = pair.translation.storedForm(entry.translation)
+        self.polish = pair.term.storedForm(entry.term)
+        self.sourceLanguageCode = pair.language(of: entry.enteredSide).code
+        self.workspaceID = workspaceID
+        self.categoryRawValue = (category ?? WordCategory.detect(term: entry.term, translation: entry.translation)).rawValue
         self.createdAt = createdAt
         self.uuid = UUID()
         self.updatedAt = createdAt
@@ -53,9 +64,33 @@ extension Word {
             .precomposedStringWithCanonicalMapping.lowercased()
     }
 
-    func matches(source: String, translation: String, language: AppLanguage) -> Bool {
-        Word.normalizedText(text(in: language)) == Word.normalizedText(source)
-            && Word.normalizedText(text(in: language.other)) == Word.normalizedText(translation)
+    func matches(_ entry: WordEntry) -> Bool {
+        Word.normalizedText(term) == Word.normalizedText(entry.term)
+            && Word.normalizedText(translation) == Word.normalizedText(entry.translation)
+    }
+
+    /// Studied side (stored in `polish`).
+    var term: String {
+        get { polish }
+        set { polish = newValue }
+    }
+
+    /// Translation side (stored in `russian`).
+    var translation: String {
+        get { russian }
+        set { russian = newValue }
+    }
+
+    func text(on side: WordSide) -> String {
+        side == .term ? term : translation
+    }
+
+    var effectiveWorkspaceID: UUID { workspaceID ?? WorkspaceID.legacy }
+
+    /// The side the word was entered on, from the stored language code.
+    func enteredSide(in workspace: WorkspaceContext) -> WordSide {
+        sourceLanguageCode == workspace.translationCode && sourceLanguageCode != workspace.termCode
+            ? .translation : .term
     }
 
     /// Normalized (polish, russian) pair, used to adopt a server duplicate during sync.
@@ -72,8 +107,4 @@ extension Word {
     }
 
     var isDue: Bool { dueDate <= .now }
-
-    func text(in language: AppLanguage) -> String {
-        language == .russian ? russian : polish
-    }
 }

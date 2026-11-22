@@ -3,19 +3,24 @@ import XCTest
 
 final class WordCategoryTests: XCTestCase {
     func testClassificationUsesEitherLanguageWithCaseAndWhitespaceNormalization() {
-        XCTAssertEqual(WordCategory.detect(russian: " ХЛЕБ\n", polish: ""), .food)
-        XCTAssertEqual(WordCategory.detect(russian: "", polish: " KSIĄŻKA "), .work)
-        XCTAssertEqual(WordCategory.detect(russian: "", polish: "GŁOWA"), .health)
+        XCTAssertEqual(WordCategory.detect(term: "", translation: " ХЛЕБ\n"), .food)
+        XCTAssertEqual(WordCategory.detect(term: " KSIĄŻKA ", translation: ""), .work)
+        XCTAssertEqual(WordCategory.detect(term: "GŁOWA", translation: ""), .health)
     }
 
     func testClassificationSupportsCanonicallyEquivalentPolishText() {
-        XCTAssertEqual(WordCategory.detect(russian: "", polish: "GÓRA".decomposedStringWithCanonicalMapping), .nature)
+        XCTAssertEqual(WordCategory.detect(term: "GÓRA".decomposedStringWithCanonicalMapping, translation: ""), .nature)
     }
 
     func testUnknownAndEmptyWordsFallBackToOtherWithoutSubstringMatches() {
-        XCTAssertEqual(WordCategory.detect(russian: "", polish: ""), .other)
-        XCTAssertEqual(WordCategory.detect(russian: "неизвестное", polish: "unknown"), .other)
-        XCTAssertEqual(WordCategory.detect(russian: "", polish: "domek"), .other)
-        XCTAssertEqual(WordCategory.detect(russian: "водопад", polish: ""), .other)
+        XCTAssertEqual(WordCategory.detect(term: "", translation: ""), .other)
+        XCTAssertEqual(WordCategory.detect(term: "unknown", translation: "неизвестное"), .other)
+        XCTAssertEqual(WordCategory.detect(term: "domek", translation: ""), .other)
+        XCTAssertEqual(WordCategory.detect(term: "", translation: "водопад"), .other)
+    }
+
+    func testRussianTranslationSideStillDetectsForOtherStudiedLanguages() {
+        XCTAssertEqual(WordCategory.detect(term: "das Haus", translation: "дом"), .home)
+        XCTAssertEqual(WordCategory.detect(term: "das Fahrrad", translation: "велосипед"), .other)
     }
 }

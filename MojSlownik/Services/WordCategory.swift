@@ -13,8 +13,8 @@ enum WordCategory: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     // Exact dictionary matches keep unrelated words out; unknown forms fall back to Other.
-    static func detect(russian: String, polish: String) -> WordCategory {
-        let candidates = [russian, polish].map(normalize)
+    static func detect(term: String, translation: String) -> WordCategory {
+        let candidates = [term, translation].map(normalize)
         return vocabulary.first { entry in
             candidates.contains { entry.words.contains($0) }
         }?.category ?? .other

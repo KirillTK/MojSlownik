@@ -16,19 +16,36 @@ final class AddWordDraft {
     private var suspended = false
     private var needsResume = false
     private let debounce: Duration
-    private let translate: (String, AppLanguage) async throws -> String
+    private let translate: (String, TranslationPair) async throws -> String
     private let alternativesFetch: (String, TranslationPair) async -> [[TranslationAlternative]]
+    let pair: LanguagePair
+    /// The side the user types on; nil = detect it from the text (different-script pairs).
+    private(set) var inputSide: WordSide?
 
-    init(debounce: Duration = .milliseconds(600),
-         translate: @escaping (String, AppLanguage) async throws -> String = { text, source in
-             try await Translator.translate(text, from: source, to: source.other)
+    init(pair: LanguagePair, inputSide: WordSide? = nil, debounce: Duration = .milliseconds(600),
+         translate: @escaping (String, TranslationPair) async throws -> String = { text, pair in
+             try await Translator.translate(text, from: pair.source, to: pair.target)
          },
          alternatives: @escaping (String, TranslationPair) async -> [[TranslationAlternative]] = {
              await TranslationAlternativesService.fetch($0, pair: $1)
          }) {
+        self.pair = pair
+        self.inputSide = inputSide
         self.debounce = debounce
         self.translate = translate
         self.alternativesFetch = alternatives
+    }
+
+    /// The side the source text is on: the explicit input side, else the detected one, else `.term`.
+    var resolvedSide: WordSide {
+        inputSide ?? pair.detectSide(sourceText) ?? .term
+    }
+
+    /// Switches the typed side (same-script pairs) and translates again.
+    func setInputSide(_ side: WordSide?) {
+        guard side != inputSide else { return }
+        inputSide = side
+        scheduleTranslation()
     }
 
     /// Primary translation (if any) followed by merged alternatives; empty without alternatives.
@@ -100,7 +117,7 @@ final class AddWordDraft {
         let text = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         let requestRevision = revision
-        let source = LanguageDetector.detect(text)
+        let translationPair = pair.translationPair(from: resolvedSide)
         task = Task {
             do {
                 try await Task.sleep(for: debounce)
@@ -109,12 +126,11 @@ final class AddWordDraft {
             }
             guard !Task.isCancelled, revision == requestRevision else { return }
             isTranslating = true
-            let pair = source.translationPair
             let fetch = alternativesFetch
             async let groups: [[TranslationAlternative]] = TranslationAlternatives.shouldFetch(text)
-                ? await fetch(text, pair) : []
+                ? await fetch(text, translationPair) : []
             do {
-                let result = try await translate(text, source)
+                let result = try await translate(text, translationPair)
                 guard !Task.isCancelled, revision == requestRevision else { return }
                 translatedText = result
                 primaryTranslation = result
@@ -127,7 +143,7 @@ final class AddWordDraft {
             let fetched = await groups
             guard !Task.isCancelled, revision == requestRevision else { return }
             alternatives = TranslationAlternatives.merge(
-                primary: primaryTranslation, groups: fetched, sourceText: text, pair: pair)
+                primary: primaryTranslation, groups: fetched, sourceText: text, pair: translationPair)
             awaitingAlternatives = false
             task = nil
         }

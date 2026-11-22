@@ -84,6 +84,25 @@ final class ListeningQuestionTests: XCTestCase {
     }
 
     private func makeWord(_ russian: String, _ polish: String) -> Word {
-        Word(russian: russian, polish: polish, sourceLanguage: .polish)
+        Word(russian: russian, polish: polish, side: .term)
+    }
+
+    func testQuestionsUseTheStudiedSideForAnyPair() {
+        let german = LanguagePair(term: .german, translation: .russian)
+        let words = ["Haus": "дом", "Auto": "машина", "Brot": "хлеб", "Buch": "книга"].map { term, translation in
+            Word(entry: WordEntry(term: term, translation: translation, enteredSide: .translation),
+                 pair: german, workspaceID: nil)
+        }
+        let word = words[0]
+        word.knowledgeTier = 2
+        let translationQuestion = ListeningQuestion.question(for: word, among: words)
+        XCTAssertEqual(translationQuestion.mode, .translation)
+        XCTAssertEqual(translationQuestion.prompt, word.translation)
+        XCTAssertEqual(translationQuestion.correctAnswer, word.term)
+
+        word.knowledgeTier = 0
+        let choices = ListeningQuestion.question(for: word, among: words)
+        XCTAssertEqual(choices.mode, .choices)
+        XCTAssertEqual(Set(choices.options), Set(words.map(\.term)))
     }
 }

@@ -5,10 +5,13 @@ struct QuizView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
-    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
+    private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var questions: [QuizQuestion] = []
     @State private var currentIndex = 0
@@ -56,7 +59,7 @@ struct QuizView: View {
     }
 
     private func startQuiz() {
-        let words = FolderStore.words(allWords, in: folderID)
+        let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard questions.isEmpty, words.count >= 4 else { return }
         questions = QuizQuestion.generate(from: words, count: 10)
         quizStarted = true
@@ -73,7 +76,7 @@ struct QuizView: View {
                             Spacer(minLength: 0)
                             KnowledgeTierBadge(word: word,
                                               level: KnowledgeProgressService.tier(for: word),
-                                              hidesWordInAccessibilityLabel: question.promptLanguage == .russian)
+                                              hidesWordInAccessibilityLabel: question.promptSide == .translation)
                         }
                     }
                     Text("Как переводится")
@@ -85,8 +88,8 @@ struct QuizView: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("quizPrompt")
-                    if question.promptLanguage == .polish {
-                        PronounceButton(text: question.prompt, language: .polish)
+                    if question.promptSide == .term {
+                        PronounceButton(text: question.prompt, language: workspaces.pair.term)
                     }
                 }
                 .padding(AppSpacing.xl)
@@ -258,23 +261,23 @@ struct QuizView: View {
 struct QuizQuestion {
     let wordID: PersistentIdentifier
     let prompt: String
-    let promptLanguage: AppLanguage
+    let promptSide: WordSide
     let correctAnswer: String
     let options: [String]
 
     static func generate(from words: [Word], count: Int) -> [QuizQuestion] {
         guard words.count >= 4 else { return [] }
         return words.shuffled().prefix(count).compactMap { word in
-            let promptLanguage: AppLanguage = Bool.random() ? .russian : .polish
-            let answerLanguage = promptLanguage.other
-            let correct = word.text(in: answerLanguage)
+            let promptSide: WordSide = Bool.random() ? .translation : .term
+            let answerSide = promptSide.other
+            let correct = word.text(on: answerSide)
             // Дедупликация по тексту: слова с одинаковым переводом не должны
             // давать два одинаковых варианта ответа.
             var seen: Set<String> = [correct]
             var distractors: [String] = []
             for candidate in words.shuffled() where distractors.count < 3 {
                 guard candidate.persistentModelID != word.persistentModelID else { continue }
-                let text = candidate.text(in: answerLanguage)
+                let text = candidate.text(on: answerSide)
                 if seen.insert(text).inserted {
                     distractors.append(text)
                 }
@@ -282,8 +285,8 @@ struct QuizQuestion {
             guard !distractors.isEmpty else { return nil }
             return QuizQuestion(
                 wordID: word.persistentModelID,
-                prompt: word.text(in: promptLanguage),
-                promptLanguage: promptLanguage,
+                prompt: word.text(on: promptSide),
+                promptSide: promptSide,
                 correctAnswer: correct,
                 options: ([correct] + distractors).shuffled()
             )
@@ -297,6 +300,7 @@ struct QuizQuestion {
         QuizView()
     }
     .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

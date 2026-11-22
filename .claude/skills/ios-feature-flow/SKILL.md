@@ -96,13 +96,17 @@ SIM=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9A-Za-z ]+ \
 xcodegen generate
 xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownik \
   -destination "platform=iOS Simulator,name=$SIM" build 2>&1 | grep -E 'error:|warning:|BUILD (SUCCEEDED|FAILED)'
-xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikUnitTests \
+xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikUnitTests -parallel-testing-enabled NO \
   -destination "platform=iOS Simulator,name=$SIM" test 2>&1 | grep -E 'error:|failed|Executed|TEST (SUCCEEDED|FAILED)'
-xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E \
+xcodebuild -project MojSlownik.xcodeproj -scheme MojSlownikE2E -parallel-testing-enabled NO \
   -destination "platform=iOS Simulator,name=$SIM" test 2>&1 | grep -E 'error:|failed|Executed|TEST (SUCCEEDED|FAILED)'
 ```
 
-Build must have zero warnings in touched files. Never run tests through the
+Locally run one simulator: `-parallel-testing-enabled NO`, never two xcodebuild runs at once,
+only the affected test classes (`-only-testing:`); the full E2E suite runs in CI on the PR — watch
+it with `gh pr checks --watch` and fix failures there. Judge unit results by
+the xcresult summary (`xcrun xcresulttool get test-results summary --path <latest .xcresult>`):
+`grep Executed` shows partial per-bundle totals. Build must have zero warnings in touched files. Never run tests through the
 `MojSlownik` app scheme; use `MojSlownikUnitTests` and `MojSlownikE2E` (the hook enforces this). If `xcodegen` is missing,
 report it instead of editing the generated project by hand.
 

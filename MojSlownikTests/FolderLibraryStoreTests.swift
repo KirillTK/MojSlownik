@@ -52,14 +52,14 @@ final class FolderLibraryStoreTests: XCTestCase {
         let anotherConsumer = library
         let id = try library.create(name: "Урок 1")
         let context = ModelContext(container)
-        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        word.folderIDs = [id]
+        let word = Word(russian: "вода", polish: "woda", side: .term)
         word.repetitions = 7
         word.intervalDays = 14
         word.easeFactor = 2.8
         let dueDate = Date(timeIntervalSince1970: 1_700_000_000)
         word.dueDate = dueDate
         context.insert(word)
+        context.insert(FolderMembership(wordID: try XCTUnwrap(word.uuid), folderID: id, workspaceID: WorkspaceID.legacy))
         try context.save()
 
         try library.delete(id: id)
@@ -67,7 +67,7 @@ final class FolderLibraryStoreTests: XCTestCase {
         XCTAssertTrue(anotherConsumer.options.isEmpty)
         let readingContext = ModelContext(container)
         let saved = try XCTUnwrap(readingContext.fetch(FetchDescriptor<Word>()).first)
-        XCTAssertTrue(saved.folderIDs.isEmpty)
+        XCTAssertTrue(try memberFolders(saved, container).isEmpty)
         XCTAssertEqual(saved.polish, "woda")
         XCTAssertEqual(saved.repetitions, 7)
         XCTAssertEqual(saved.intervalDays, 14)
@@ -114,7 +114,7 @@ final class FolderLibraryStoreTests: XCTestCase {
     @MainActor
     func testStoreWorksOverInMemoryFakeRepository() throws {
         let fake = InMemoryFolderRepository()
-        let library = FolderLibraryStore(repository: fake)
+        let library = FolderLibraryStore.inLegacyWorkspace(repository: fake)
         let id = try library.create(name: " Урок 1 ")
         XCTAssertEqual(library.options, [.init(id: id, name: "Урок 1")])
         fake.nextError = RepositoryFakeError.forced
@@ -126,13 +126,13 @@ final class FolderLibraryStoreTests: XCTestCase {
 
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self,
+        try ModelContainer(for: AppSchema.schema,
                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor
     private func makeLibrary(_ container: ModelContainer) -> FolderLibraryStore {
-        FolderLibraryStore(repository: SwiftDataFolderRepository(container: container))
+        FolderLibraryStore.inLegacyWorkspace(repository: SwiftDataFolderRepository(container: container))
     }
 
     @MainActor
@@ -141,7 +141,7 @@ final class FolderLibraryStoreTests: XCTestCase {
         let signal = LocalChangeSignal()
         var fired = 0
         signal.handler = { fired += 1 }
-        let library = FolderLibraryStore(repository: fake, changeSignal: signal)
+        let library = FolderLibraryStore.inLegacyWorkspace(repository: fake, changeSignal: signal)
 
         let first = try library.create(name: "Урок 1")
         let second = try library.create(name: "Урок 2")

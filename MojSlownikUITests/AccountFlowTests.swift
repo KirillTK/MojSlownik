@@ -22,7 +22,7 @@ final class AccountFlowTests: E2ETestCase {
     /// After a successful sign-in the sheet closes by itself, back to the dictionary.
     @MainActor
     private func waitForSheetToClose() {
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
         let sheetGone = NSPredicate(format: "exists == false")
         let closed = expectation(for: sheetGone, evaluatedWith: app.navigationBars["Аккаунт"])
         wait(for: [closed], timeout: 10)
@@ -86,7 +86,7 @@ final class AccountFlowTests: E2ETestCase {
         XCTAssertTrue(element("accountCard").waitForExistence(timeout: 10))
         XCTAssertFalse(element("signIn.apple").exists)
         app.navigationBars["Аккаунт"].buttons["Готово"].tap()
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
     }
 
     /// Signing out must not touch the local dictionary.
@@ -99,7 +99,7 @@ final class AccountFlowTests: E2ETestCase {
         openAccount()
         signOut()
         app.navigationBars["Аккаунт"].buttons["Готово"].tap()
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
         XCTAssertTrue(app.staticTexts["кот"].waitForExistence(timeout: 10), "Words survive sign-out")
         XCTAssertEqual(app.cells.count, wordCountBefore)
         XCTAssertGreaterThan(wordCountBefore, 0)

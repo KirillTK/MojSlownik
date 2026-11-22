@@ -17,11 +17,14 @@ select set_config('request.jwt.claims',
 set local role authenticated;
 
 -- A client-sent updated_at is ignored: the server assigns it (ms precision, not in the future).
-insert into public.words (id, term, term_language, translation, translation_language, entered_language,
-                          created_at, updated_at, due_date)
-values ('00000000-0000-4000-8000-0000000000d1', 'kot', 'pl', 'кот', 'ru', 'ru', now(), '2100-01-01', now());
-insert into public.folders (id, name, created_at, updated_at)
-values ('00000000-0000-4000-8000-0000000000f1', 'A folder', now(), '2100-01-01');
+insert into public.workspaces (id, term_language, translation_language, created_at)
+values ('0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'pl', 'ru', now());
+insert into public.words (id, workspace_id, term, translation, entered_side, created_at, updated_at, due_date)
+values ('00000000-0000-4000-8000-0000000000d1', '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'kot', 'кот',
+        'translation', now(), '2100-01-01', now());
+insert into public.folders (id, workspace_id, name, created_at, updated_at)
+values ('00000000-0000-4000-8000-0000000000f1', '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'A folder', now(),
+        '2100-01-01');
 
 do $$
 declare
@@ -46,10 +49,10 @@ begin
     -- Upsert as the client sends it: conflict on (user_id, id), deleted_at null clears a tombstone.
     update public.words set deleted_at = now() where id = '00000000-0000-4000-8000-0000000000d1';
     assert (select deleted_at from public.words where id = '00000000-0000-4000-8000-0000000000d1') is not null;
-    insert into public.words (id, user_id, term, term_language, translation, translation_language,
-                              entered_language, created_at, due_date, deleted_at)
-    values ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-00000000000a', 'kot4',
-            'pl', 'кот', 'ru', 'ru', now(), now(), null)
+    insert into public.words (id, user_id, workspace_id, term, translation, entered_side, created_at,
+                              due_date, deleted_at)
+    values ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-00000000000a',
+            '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'kot4', 'кот', 'translation', now(), now(), null)
     on conflict (user_id, id) do update set term = excluded.term, deleted_at = excluded.deleted_at;
     assert (select term from public.words where id = '00000000-0000-4000-8000-0000000000d1') = 'kot4',
            'upsert must update the row';
@@ -60,10 +63,10 @@ begin
 
     -- WITH CHECK: an upsert into B's account is refused.
     begin
-        insert into public.words (id, user_id, term, term_language, translation, translation_language,
-                                  entered_language, created_at, due_date)
-        values ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-00000000000b', 'pies',
-                'pl', 'пёс', 'ru', 'ru', now(), now())
+        insert into public.words (id, user_id, workspace_id, term, translation, entered_side, created_at,
+                                  due_date)
+        values ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-00000000000b',
+                '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'pies', 'пёс', 'translation', now(), now())
         on conflict (user_id, id) do update set term = excluded.term;
         raise exception 'FAIL: A upserted a word into B''s account';
     exception when insufficient_privilege then null;
@@ -103,16 +106,17 @@ reset role;
 
 -- Triggers off, so the rows can share an identical updated_at (an upsert batch can tie).
 set local session_replication_role = replica;
-insert into public.words (id, user_id, term, term_language, translation, translation_language,
-                          entered_language, created_at, updated_at, due_date)
+insert into public.words (id, user_id, workspace_id, term, translation, entered_side, created_at, updated_at,
+                          due_date)
 select ('00000000-0000-4000-8000-0000000001' || lpad(i::text, 2, '0'))::uuid,
-       '00000000-0000-4000-8000-00000000000a', 'tie' || i, 'pl', 'x', 'ru', 'ru', now(),
-       timestamptz '2030-01-01 00:00:00.123+00', now()
+       '00000000-0000-4000-8000-00000000000a', '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'tie' || i, 'x',
+       'translation', now(), timestamptz '2030-01-01 00:00:00.123+00', now()
 from generate_series(1, 3) as i;
-insert into public.words (id, user_id, term, term_language, translation, translation_language,
-                          entered_language, created_at, updated_at, due_date)
-values ('00000000-0000-4000-8000-000000000199', '00000000-0000-4000-8000-00000000000a', 'later', 'pl', 'x',
-        'ru', 'ru', now(), timestamptz '2030-01-01 00:00:00.124+00', now());
+insert into public.words (id, user_id, workspace_id, term, translation, entered_side, created_at, updated_at,
+                          due_date)
+values ('00000000-0000-4000-8000-000000000199', '00000000-0000-4000-8000-00000000000a',
+        '0db61f29-e285-5e06-84f5-d85acfa1b5cc', 'later', 'x', 'translation', now(),
+        timestamptz '2030-01-01 00:00:00.124+00', now());
 set local session_replication_role = origin;
 
 select set_config('request.jwt.claims',

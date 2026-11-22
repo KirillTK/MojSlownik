@@ -116,21 +116,40 @@ enum ScannedImageTextRecognizer {
         var errorDescription: String? { "Не удалось прочитать изображение кадра." }
     }
 
-    static func recognize(image: UIImage, viewportSize: CGSize) async throws -> [ScannedTextLine] {
+    static func recognize(image: UIImage, viewportSize: CGSize,
+                          languages: [String] = ["pl-PL", "ru-RU"]) async throws -> [ScannedTextLine] {
         guard let cgImage = image.cgImage else { throw RecognitionError.imageUnavailable }
         let orientation = image.imageOrientation.cgImageOrientation
         return try await Task.detached(priority: .userInitiated) {
-            try recognize(cgImage: cgImage, orientation: orientation, viewportSize: viewportSize)
+            try recognize(cgImage: cgImage, orientation: orientation, viewportSize: viewportSize,
+                           languages: languages)
         }.value
     }
 
+    /// OCR codes of a workspace's languages (studied first), without repeats.
+    static func ocrLanguages(for pair: LanguagePair) -> [String] {
+        var codes = [pair.term.ocrCode]
+        if pair.translation.ocrCode != pair.term.ocrCode { codes.append(pair.translation.ocrCode) }
+        return codes
+    }
+
+    /// DataScanner accepts a language when the device supports any locale of the same language.
+    static func dataScannerLanguages(wanted: [String], supported: [String]) -> [String] {
+        wanted.filter { code in supported.contains { $0.hasPrefix(String(code.prefix(2))) } }
+    }
+
+    /// Wanted OCR codes the device supports, in order; empty means automatic detection.
+    static func recognitionLanguages(wanted: [String], supported: [String]) -> [String] {
+        wanted.filter(supported.contains)
+    }
+
     static func recognize(cgImage: CGImage, orientation: CGImagePropertyOrientation,
-                          viewportSize: CGSize) throws -> [ScannedTextLine] {
+                          viewportSize: CGSize, languages: [String] = ["pl-PL", "ru-RU"]) throws -> [ScannedTextLine] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
         let supported = (try? request.supportedRecognitionLanguages()) ?? []
-        let preferred = ["pl-PL", "ru-RU"].filter(supported.contains)
+        let preferred = recognitionLanguages(wanted: languages, supported: supported)
         if preferred.isEmpty {
             request.automaticallyDetectsLanguage = true
         } else {

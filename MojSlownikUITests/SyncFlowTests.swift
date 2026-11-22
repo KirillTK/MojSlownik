@@ -14,7 +14,7 @@ final class SyncFlowTests: E2ETestCase {
     @MainActor
     private func closeAccount() {
         app.navigationBars["Аккаунт"].buttons["Готово"].tap()
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
     }
 
     /// Polls the status line (label) until it contains `text`.
@@ -33,7 +33,7 @@ final class SyncFlowTests: E2ETestCase {
         let google = element("signIn.google")
         waitForHittable(google)
         google.tap()
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
 
         XCTAssertTrue(app.staticTexts["мост"].waitForExistence(timeout: 20), "Account word missing")
         XCTAssertTrue(app.staticTexts["сыр"].waitForExistence(timeout: 20), "Account word missing")
@@ -43,6 +43,26 @@ final class SyncFlowTests: E2ETestCase {
         waitForHittable(picker)
         picker.tap()
         XCTAssertTrue(element("folderOption-Из облака").waitForExistence(timeout: 10), "Account folder missing")
+    }
+
+    /// A membership row on the account (`word_folders`) puts a cloud word into the cloud folder:
+    /// the folder filter shows it and hides the other cloud words.
+    @MainActor
+    func testFolderMembershipFromAccountAppears() {
+        launch(.empty, auth: .signedIn, sync: .remoteVocabulary)
+        XCTAssertTrue(app.staticTexts["мост"].waitForExistence(timeout: 20), "Account word missing")
+        XCTAssertTrue(app.staticTexts["сыр"].waitForExistence(timeout: 20), "Account word missing")
+        let picker = element("folderPickerButton")
+        waitForHittable(picker)
+        picker.tap()
+        let option = element("folderOption-Из облака")
+        XCTAssertTrue(option.waitForExistence(timeout: 10), "Account folder missing")
+        option.tap()
+        XCTAssertTrue(app.staticTexts["мост"].waitForExistence(timeout: 10), "The member word must stay")
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"),
+                                             object: app.staticTexts["сыр"])
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: Self.defaultTimeout), .completed,
+                       "A word outside the folder is still shown")
     }
 
     @MainActor

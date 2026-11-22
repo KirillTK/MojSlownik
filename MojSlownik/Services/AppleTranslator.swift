@@ -17,14 +17,20 @@ final class AppleTranslationModel: ObservableObject {
     @Published var configuration: TranslationSession.Configuration?
     private var pending: (text: String, continuation: CheckedContinuation<String, Error>)?
 
-    func translate(_ text: String, from source: AppLanguage, to target: AppLanguage) async throws -> String {
+    func translate(_ text: String, from source: Language, to target: Language) async throws -> String {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 pending?.continuation.resume(throwing: CancellationError())
                 pending = (text, continuation)
 
-                let sourceLanguage = Locale.Language(identifier: source.translationLanguage.appleIdentifier)
-                let targetLanguage = Locale.Language(identifier: target.translationLanguage.appleIdentifier)
+                guard let sourceIdentifier = source.appleIdentifier,
+                      let targetIdentifier = target.appleIdentifier else {
+                    pending = nil
+                    continuation.resume(throwing: TranslationError.badResponse)
+                    return
+                }
+                let sourceLanguage = Locale.Language(identifier: sourceIdentifier)
+                let targetLanguage = Locale.Language(identifier: targetIdentifier)
                 if configuration?.source == sourceLanguage, configuration?.target == targetLanguage {
                     configuration?.invalidate()
                 } else {

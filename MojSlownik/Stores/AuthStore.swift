@@ -30,6 +30,8 @@ final class AuthStore {
     @ObservationIgnored private let logger: any AppLogging
     @ObservationIgnored private var observation: Task<Void, Never>?
     @ObservationIgnored private let signOutFlushTimeout: Duration
+    @ObservationIgnored private let restoreTimeout: Duration
+    @ObservationIgnored private var restoreTimer: Task<Void, Never>?
     /// Called when the account changes (sign-in, sign-out, restored session), never for a token
     /// refresh of the same account.
     @ObservationIgnored var onAccountChange: ((AuthAccount?) -> Void)?
@@ -37,10 +39,11 @@ final class AuthStore {
     @ObservationIgnored var beforeSignOut: (@MainActor () async -> Void)?
 
     init(backend: any AuthBackend, logger: (any AppLogging)? = nil,
-         signOutFlushTimeout: Duration = .seconds(3)) {
+         signOutFlushTimeout: Duration = .seconds(3), restoreTimeout: Duration = .seconds(10)) {
         self.backend = backend
         self.logger = logger ?? NoopAppLogger()
         self.signOutFlushTimeout = signOutFlushTimeout
+        self.restoreTimeout = restoreTimeout
     }
 
     var account: AuthAccount? {
@@ -56,8 +59,19 @@ final class AuthStore {
         guard observation == nil else { return }
         let updates = backend.accountUpdates()
         observation = Task { [weak self] in
-            for await account in updates {
+            for await update in updates {
                 guard let self else { return }
+                let account: AuthAccount?
+                switch update {
+                case .restoring:
+                    // An expired stored session is being refreshed: stay unknown, but never forever.
+                    if self.state == .unknown { self.startRestoreTimer() }
+                    continue
+                case .account(let value):
+                    account = value
+                    self.restoreTimer?.cancel()
+                    self.restoreTimer = nil
+                }
                 let wasSignedIn = self.isSignedIn
                 let newState = account.map(State.signedIn) ?? .signedOut
                 // Token refreshes repeat the same account: no write, so no view invalidation.
@@ -70,6 +84,17 @@ final class AuthStore {
                     Task { await self.logger.flush() }
                 }
             }
+        }
+    }
+
+    private func startRestoreTimer() {
+        guard restoreTimer == nil else { return }
+        restoreTimer = Task { [weak self, restoreTimeout] in
+            try? await Task.sleep(for: restoreTimeout)
+            guard !Task.isCancelled, let self, self.state == .unknown else { return }
+            self.restoreTimer = nil
+            self.state = .signedOut
+            self.onAccountChange?(nil)
         }
     }
 

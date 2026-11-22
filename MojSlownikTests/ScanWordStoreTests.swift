@@ -41,8 +41,8 @@ final class ScanWordStoreTests: XCTestCase {
     func testDeletingExistingPairLeavesUnrelatedVocabularyAndProgressUntouched() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
-        let target = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        let other = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, category: .food)
+        let target = Word(russian: "вода", polish: "woda", side: .term)
+        let other = Word(russian: "кофе", polish: "kawa", side: .term, category: .food)
         let dueDate = Date(timeIntervalSince1970: 1_700_000_000)
         other.repetitions = 7
         other.intervalDays = 14
@@ -69,9 +69,9 @@ final class ScanWordStoreTests: XCTestCase {
     func testRemovalDeletesAllMatchingLegacyDuplicatesButKeepsOtherPairs() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
-        context.insert(Word(russian: "вода", polish: "woda", sourceLanguage: .polish))
-        context.insert(Word(russian: "ВОДА", polish: "WODA", sourceLanguage: .russian))
-        context.insert(Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish))
+        context.insert(Word(russian: "вода", polish: "woda", side: .term))
+        context.insert(Word(russian: "ВОДА", polish: "WODA", side: .translation))
+        context.insert(Word(russian: "кофе", polish: "kawa", side: .term))
         try context.save()
 
         XCTAssertFalse(try ScanWordStore.toggle(source: "WODA", translation: "ВОДА", category: .food, container: container))
@@ -100,7 +100,7 @@ final class ScanWordStoreTests: XCTestCase {
         let container = try makeContainer()
         let editingContext = ModelContext(container)
         editingContext.autosaveEnabled = false
-        let unsaved = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
+        let unsaved = Word(russian: "кофе", polish: "kawa", side: .term)
         editingContext.insert(unsaved)
         _ = try ScanWordStore.toggle(source: "woda", translation: "вода", category: .food, container: container)
         XCTAssertTrue(editingContext.hasChanges)
@@ -118,9 +118,9 @@ final class ScanWordStoreTests: XCTestCase {
         let secondFolder = WordFolder(name: "Урок 2")
         context.insert(firstFolder)
         context.insert(secondFolder)
-        let target = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        let duplicate = Word(russian: "вода", polish: "woda", sourceLanguage: .russian, category: .food)
-        let other = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish)
+        let target = Word(russian: "вода", polish: "woda", side: .term)
+        let duplicate = Word(russian: "вода", polish: "woda", side: .translation, category: .food)
+        let other = Word(russian: "кофе", polish: "kawa", side: .term)
         let dueDate = Date(timeIntervalSince1970: 1_700_000_000)
         for word in [target, duplicate, other] {
             word.folderIDs = [firstFolder.id, secondFolder.id]
@@ -161,14 +161,14 @@ final class ScanWordStoreTests: XCTestCase {
         let container = try makeContainer()
         let editingContext = ModelContext(container)
         editingContext.autosaveEnabled = false
-        let target = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
-        let other = Word(russian: "кофе", polish: "kawa", sourceLanguage: .polish, category: .food)
+        let target = Word(russian: "вода", polish: "woda", side: .term)
+        let other = Word(russian: "кофе", polish: "kawa", side: .term, category: .food)
         editingContext.insert(target)
         editingContext.insert(other)
         try editingContext.save()
         let targetID = target.persistentModelID
         other.category = .travel
-        let unsaved = Word(russian: "дом", polish: "dom", sourceLanguage: .polish)
+        let unsaved = Word(russian: "дом", polish: "dom", side: .term)
         editingContext.insert(unsaved)
 
         try ScanWordStore.delete(wordID: targetID, container: container)
@@ -187,7 +187,7 @@ final class ScanWordStoreTests: XCTestCase {
 
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(for: Word.self, WordFolder.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        try ModelContainer(for: AppSchema.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
     }
 
     @MainActor

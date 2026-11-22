@@ -2,20 +2,23 @@ import SwiftUI
 import SwiftData
 
 struct TrainingView: View {
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var storedAllWords: [Word]
-    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
+    private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
     @State private var selectedFolderID: UUID?
     @State private var refreshDate = Date.now
     @ScaledMetric(relativeTo: .largeTitle) private var heroNumber: CGFloat = 40
     @ScaledMetric(relativeTo: .body) private var modeTile: CGFloat = 36
     @ScaledMetric(relativeTo: .body) private var achievementTile: CGFloat = 40
 
-    private var words: [Word] { FolderStore.words(allWords, in: selectedFolderID) }
+    private var words: [Word] { FolderStore.words(allWords, in: selectedFolderID, memberships: memberships) }
 
     var body: some View {
         NavigationStack {
@@ -40,7 +43,8 @@ struct TrainingView: View {
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
-            .navigationTitle("Практика")
+            .workspaceTitleMenu(words: storedAllWords)
+            .onChange(of: workspaces.activeID) { selectedFolderID = nil }
             .onAppear { refreshClock() }
             .onChange(of: scenePhase) {
                 if scenePhase == .active { refreshClock() }
@@ -182,7 +186,7 @@ struct TrainingView: View {
             NavigationLink {
                 ListeningPracticeView(folderID: selectedFolderID)
             } label: {
-                ModeTile(title: "На слух", subtitle: "Слушать и писать по-польски", icon: "ear",
+                ModeTile(title: "На слух", subtitle: "Слушать и писать \(workspaces.pair.term.adverbRU)", icon: "ear",
                          iconSize: modeTile, isWide: true)
             }
             .buttonStyle(TileButtonStyle())
@@ -314,6 +318,7 @@ private struct ModeTile: View {
     let resources = AppResources.preview
     TrainingView()
         .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

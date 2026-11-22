@@ -22,7 +22,7 @@ final class KnowledgeTierBadgeTests: XCTestCase {
     }
 
     func testAccessibleDescriptionNamesWordAndTierUnlessItWouldRevealListeningAnswer() {
-        let word = Word(russian: "город", polish: "miasto", sourceLanguage: .polish)
+        let word = Word(russian: "город", polish: "miasto", side: .term)
 
         XCTAssertEqual(KnowledgeTierBadge.accessibilityDescription(for: word, level: 2),
                        "Уровень знания слова miasto: Хорошо")
@@ -31,7 +31,7 @@ final class KnowledgeTierBadgeTests: XCTestCase {
     }
 
     func testLegacyWordTierUsesSharedKnowledgeResolver() {
-        let word = Word(russian: "вода", polish: "woda", sourceLanguage: .polish)
+        let word = Word(russian: "вода", polish: "woda", side: .term)
         word.lastReviewGradeRawValue = ReviewGrade.easy.rawValue
 
         XCTAssertEqual(KnowledgeProgressService.tier(for: word), 3)

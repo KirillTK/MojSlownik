@@ -7,10 +7,13 @@ struct FlashcardsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
-    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
+    private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var sessionWords: [Word] = []
     @State private var currentIndex = 0
@@ -18,7 +21,7 @@ struct FlashcardsView: View {
     @State private var reviewedCount = 0
     @State private var sessionStarted = false
     @State private var reviewError: String?
-    @State private var frontIsRussian = Bool.random()
+    @State private var frontSide: WordSide = Bool.random() ? .translation : .term
     @ScaledMetric(relativeTo: .largeTitle) private var cardWordSize: CGFloat = 38
     @ScaledMetric(relativeTo: .largeTitle) private var completedIconSize: CGFloat = 40
 
@@ -47,7 +50,7 @@ struct FlashcardsView: View {
     }
 
     private func startSession() {
-        let words = FolderStore.words(allWords, in: folderID)
+        let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard sessionWords.isEmpty, !words.isEmpty else { return }
         dailyStudy.refresh()
         let due = dailyStudy.reviewWords(for: words).shuffled()
@@ -84,11 +87,10 @@ struct FlashcardsView: View {
     }
 
     private func card(word: Word) -> some View {
-        let frontLanguage: AppLanguage = frontIsRussian ? .russian : .polish
-        let shownLanguage = isFlipped ? frontLanguage.other : frontLanguage
-        let shownText = word.text(in: shownLanguage)
-        let frontText = word.text(in: frontLanguage)
-        let backText = word.text(in: frontLanguage.other)
+        let shownSide = isFlipped ? frontSide.other : frontSide
+        let shownText = word.text(on: shownSide)
+        let frontText = word.text(on: frontSide)
+        let backText = word.text(on: frontSide.other)
         let tier = KnowledgeProgressService.tier(for: word)
         let cardShape = RoundedRectangle(cornerRadius: AppRadius.flashcard, style: .continuous)
 
@@ -98,10 +100,10 @@ struct FlashcardsView: View {
             }
         } label: {
             ZStack {
-                frontFace(word: word, language: frontLanguage, text: frontText, tier: tier)
+                frontFace(word: word, side: frontSide, text: frontText, tier: tier)
                     .modifier(FlipFace(angle: isFlipped ? 180 : 0, isVisible: !isFlipped))
                     .accessibilityHidden(isFlipped)
-                backFace(word: word, language: frontLanguage.other, text: backText,
+                backFace(word: word, side: frontSide.other, text: backText,
                          original: frontText, tier: tier)
                     .modifier(FlipFace(angle: isFlipped ? 0 : -180, isVisible: isFlipped))
                     .accessibilityHidden(!isFlipped)
@@ -115,35 +117,35 @@ struct FlashcardsView: View {
         .accessibilityIdentifier("flashcard")
         .accessibilityLabel(isFlipped ? "\(frontText) — \(backText)" : frontText)
         .accessibilityValue(KnowledgeTierBadge.accessibilityDescription(
-            for: word, level: tier, hidesWord: shownLanguage == .russian))
+            for: word, level: tier, hidesWord: shownSide == .translation))
         .accessibilityHint(isFlipped ? "Скрыть перевод" : "Показать перевод")
         .accessibilityAddTraits(.isButton)
         .overlay(alignment: .topTrailing) {
-            if shownLanguage == .polish {
+            if shownSide == .term {
                 // Sibling of the reveal button, so speaking never flips the card.
-                PronounceButton(text: shownText, language: .polish)
+                PronounceButton(text: shownText, language: workspaces.pair.term)
                     .padding(AppSpacing.s)
             }
         }
     }
 
-    private func faceHeader(language: AppLanguage, word: Word, tier: Int) -> some View {
+    private func faceHeader(side: WordSide, word: Word, tier: Int) -> some View {
         HStack(spacing: AppSpacing.xs) {
-            Text(language.displayName)
+            Text(workspaces.pair.language(of: side).endonym)
                 .font(.caption.weight(.bold))
                 .textCase(.uppercase)
                 .tracking(0.6)
                 .foregroundStyle(Color.subtleText)
             KnowledgeTierBadge(word: word, level: tier,
-                               hidesWordInAccessibilityLabel: language == .russian)
+                               hidesWordInAccessibilityLabel: side == .translation)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(.trailing, 56)
     }
 
-    private func frontFace(word: Word, language: AppLanguage, text: String, tier: Int) -> some View {
+    private func frontFace(word: Word, side: WordSide, text: String, tier: Int) -> some View {
         VStack(spacing: AppSpacing.m) {
-            faceHeader(language: language, word: word, tier: tier)
+            faceHeader(side: side, word: word, tier: tier)
             Spacer(minLength: 0)
             Text(text)
                 .font(.system(size: cardWordSize, weight: .heavy))
@@ -157,10 +159,10 @@ struct FlashcardsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func backFace(word: Word, language: AppLanguage, text: String,
+    private func backFace(word: Word, side: WordSide, text: String,
                           original: String, tier: Int) -> some View {
         VStack(spacing: AppSpacing.m) {
-            faceHeader(language: language, word: word, tier: tier)
+            faceHeader(side: side, word: word, tier: tier)
             Spacer(minLength: 0)
             Text(original)
                 .font(.headline)
@@ -246,7 +248,7 @@ struct FlashcardsView: View {
         } else {
             withAnimation(.snappy(duration: 0.3)) { currentIndex += 1 }
         }
-        frontIsRussian = Bool.random()
+        frontSide = Bool.random() ? .translation : .term
     }
 
     private var completedView: some View {
@@ -327,6 +329,7 @@ private struct FaceVisibility: ViewModifier, Animatable {
         FlashcardsView()
     }
     .modelContainer(resources.container)
+    .environment(resources.workspaces)
     .environment(resources.folders)
     .environment(resources.vocabulary)
     .environment(resources.dailyStudy)

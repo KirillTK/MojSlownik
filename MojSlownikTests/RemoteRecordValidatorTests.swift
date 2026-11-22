@@ -7,16 +7,18 @@ final class RemoteRecordValidatorTests: XCTestCase {
     private let folderA = UUID()
     private let folderB = UUID()
 
-    private func word(id: UUID = UUID(), userID: UUID? = nil, term: String = "kot", termLanguage: String = "pl",
-                      translation: String = "кот", translationLanguage: String = "ru", entered: String = "ru",
-                      category: String = "other", folderIDs: [UUID] = [],
+    private let workspace = WorkspaceID.legacy
+    private var known: KnownRemoteIDs { KnownRemoteIDs(workspaceIDs: [workspace, WorkspaceID.make(term: "de", translation: "ru")]) }
+
+    private func word(id: UUID = UUID(), userID: UUID? = nil, workspaceID: UUID? = nil, term: String = "kot",
+                      translation: String = "кот", entered: String = "translation",
+                      category: String = "other",
                       createdAt: Date? = nil, updatedAt: Date? = nil, deletedAt: Date? = nil,
                       easeFactor: Double = 2.5, intervalDays: Double = 1, repetitions: Int = 1,
                       dueDate: Date? = nil, grade: String? = "good", tier: Int? = 2,
                       softMisses: Int = 0) -> RemoteWordRecord {
-        RemoteWordRecord(id: id, userID: userID ?? owner, term: term, termLanguage: termLanguage,
-                         translation: translation, translationLanguage: translationLanguage,
-                         enteredLanguage: entered, category: category, folderIDs: folderIDs,
+        RemoteWordRecord(id: id, userID: userID ?? owner, workspaceID: workspaceID ?? workspace, term: term,
+                         translation: translation, enteredSide: entered, category: category,
                          createdAt: createdAt ?? now.addingTimeInterval(-3_600),
                          updatedAt: updatedAt ?? now.addingTimeInterval(-60), deletedAt: deletedAt,
                          easeFactor: easeFactor, intervalDays: intervalDays, repetitions: repetitions,
@@ -25,7 +27,7 @@ final class RemoteRecordValidatorTests: XCTestCase {
     }
 
     private func validate(_ record: RemoteWordRecord) throws -> ValidatedRemoteWord {
-        try RemoteRecordValidator.validate(record, ownerID: owner, knownFolderIDs: [folderA, folderB], now: now)
+        try RemoteRecordValidator.validate(record, ownerID: owner, known: known, now: now)
     }
 
     private func assertRejects(_ record: RemoteWordRecord, _ expected: RemoteRecordError,
@@ -40,10 +42,9 @@ final class RemoteRecordValidatorTests: XCTestCase {
     func testAcceptsValidWordAndTrimsText() throws {
         let result = try validate(word(term: " kot", translation: "  кот \n"))
         XCTAssertEqual(result.term, "kot")
-        XCTAssertEqual(result.termLanguage, .polish)
         XCTAssertEqual(result.translation, "кот")
-        XCTAssertEqual(result.translationLanguage, .russian)
-        XCTAssertEqual(result.enteredLanguage, .russian)
+        XCTAssertEqual(result.workspaceID, workspace)
+        XCTAssertEqual(result.enteredSide, .translation)
         XCTAssertEqual(result.lastReviewGrade, .good)
         XCTAssertEqual(result.knowledgeTier, 2)
     }
@@ -71,24 +72,14 @@ final class RemoteRecordValidatorTests: XCTestCase {
         assertRejects(word(term: "ko\u{7}t"), .invalidText)
     }
 
-    func testRejectsMalformedLanguagePair() {
-        assertRejects(word(termLanguage: "Polish"), .invalidLanguage)
-        assertRejects(word(translationLanguage: ""), .invalidLanguage)
-        assertRejects(word(termLanguage: "ru", translationLanguage: "ru"), .invalidLanguage)
-        assertRejects(word(entered: "en"), .invalidLanguage)
-        // `$` would also match before a trailing newline; the pattern is anchored with `\z`.
-        assertRejects(word(termLanguage: "pl\n"), .invalidLanguage)
+    func testUnknownWorkspaceIsHeld() {
+        assertRejects(word(workspaceID: UUID()), .unknownWorkspace)
     }
 
-    /// A pair from a newer app version (e.g. German–English) is skipped, not treated as corrupt.
-    func testWellFormedButUnsupportedPairIsSkipped() {
-        assertRejects(word(term: "Haus", termLanguage: "de", translation: "house", translationLanguage: "en",
-                           entered: "de"), .unsupportedLanguage)
-        assertRejects(word(termLanguage: "pt-BR", entered: "ru"), .unsupportedLanguage)
-    }
-
-    func testEnteredLanguageMayBeEitherSide() throws {
-        XCTAssertEqual(try validate(word(entered: "pl")).enteredLanguage, .polish)
+    func testEnteredSideMustBeTermOrTranslation() throws {
+        XCTAssertEqual(try validate(word(entered: "term")).enteredSide, .term)
+        assertRejects(word(entered: "pl"), .invalidSide)
+        assertRejects(word(entered: ""), .invalidSide)
     }
 
     func testCategoryUsesStableID() throws {
@@ -101,7 +92,7 @@ final class RemoteRecordValidatorTests: XCTestCase {
 
     /// Review finding: the validator rejected schedules SRSEngine itself produces.
     func testEveryLocalScheduleIsAccepted() throws {
-        let local = Word(russian: "кот", polish: "kot", sourceLanguage: .russian)
+        let local = Word(russian: "кот", polish: "kot", side: .translation)
         for _ in 0..<80 { SRSEngine.apply(.easy, to: local, now: now) }
         let validated = try validate(word(easeFactor: local.easeFactor, intervalDays: local.intervalDays,
                                           repetitions: local.repetitions, dueDate: local.dueDate, grade: "easy"))
@@ -126,14 +117,6 @@ final class RemoteRecordValidatorTests: XCTestCase {
             XCTAssertNotNil(category.stableID.range(of: "^[a-z][a-z0-9_]{0,31}$", options: .regularExpression),
                             "matches the server CHECK on words.category")
         }
-    }
-
-    /// Review finding: folders may arrive after their words; membership must not be dropped.
-    func testFolderIDsAreDedupedAndUnknownOnesKept() throws {
-        let unknown = UUID()
-        let result = try validate(word(folderIDs: [folderB, unknown, folderA, folderB]))
-        XCTAssertEqual(result.folderIDs, [folderB, unknown, folderA])
-        XCTAssertEqual(result.unknownFolderIDs, [unknown])
     }
 
     /// Review finding: server `updated_at` ahead of a slow device clock is still valid.
@@ -184,11 +167,6 @@ final class RemoteRecordValidatorTests: XCTestCase {
                            updatedAt: RemoteRecordValidator.earliestDate.addingTimeInterval(-1)), .invalidDate)
     }
 
-    func testRejectsTooManyFolderIDs() {
-        let ids = (0...RemoteRecordValidator.maxFolderIDs).map { _ in UUID() }
-        assertRejects(word(folderIDs: ids), .tooManyFolders)
-    }
-
     func testRejectsImplausibleDates() {
         let future = now.addingTimeInterval(RemoteRecordValidator.allowedClockSkew + 1)
         // created_at/deleted_at are bounded by max(now, updatedAt) + skew; updated_at has no upper bound.
@@ -234,16 +212,16 @@ final class RemoteRecordValidatorTests: XCTestCase {
 
     // MARK: Folders
 
-    private func folder(id: UUID = UUID(), userID: UUID? = nil, name: String = "Еда",
+    private func folder(id: UUID = UUID(), userID: UUID? = nil, workspaceID: UUID? = nil, name: String = "Еда",
                         createdAt: Date? = nil, updatedAt: Date? = nil,
                         deletedAt: Date? = nil) -> RemoteFolderRecord {
-        RemoteFolderRecord(id: id, userID: userID ?? owner, name: name, sortOrder: 3,
+        RemoteFolderRecord(id: id, userID: userID ?? owner, workspaceID: workspaceID ?? workspace, name: name, sortOrder: 3,
                            createdAt: createdAt ?? now.addingTimeInterval(-3_600),
                            updatedAt: updatedAt ?? now.addingTimeInterval(-60), deletedAt: deletedAt)
     }
 
     func testAcceptsValidFolder() throws {
-        let result = try RemoteRecordValidator.validate(folder(name: " Еда "), ownerID: owner, now: now)
+        let result = try RemoteRecordValidator.validate(folder(name: " Еда "), ownerID: owner, known: known, now: now)
         XCTAssertEqual(result.name, "Еда")
         XCTAssertEqual(result.sortOrder, 3)
     }
@@ -256,9 +234,10 @@ final class RemoteRecordValidatorTests: XCTestCase {
             (folder(name: String(repeating: "x", count: RemoteRecordValidator.maxFolderNameLength + 1)), .invalidText),
             (folder(createdAt: now.addingTimeInterval(2 * 24 * 3_600)), .invalidDate),
             (folder(updatedAt: Date(timeIntervalSince1970: 1)), .invalidDate),
+            (folder(workspaceID: UUID()), .unknownWorkspace),
         ]
         for (record, expected) in cases {
-            XCTAssertThrowsError(try RemoteRecordValidator.validate(record, ownerID: owner, now: now)) { error in
+            XCTAssertThrowsError(try RemoteRecordValidator.validate(record, ownerID: owner, known: known, now: now)) { error in
                 XCTAssertEqual(error as? RemoteRecordError, expected)
             }
         }
@@ -269,9 +248,8 @@ final class RemoteRecordValidatorTests: XCTestCase {
     func testDecodesPostgRESTWordRow() throws {
         let json = """
         [{"id":"8C1D3A57-2E1B-4F0B-9B7A-1E2D3C4B5A69","user_id":"\(owner.uuidString.lowercased())",
-          "term":"kot","term_language":"pl","translation":"кот","translation_language":"ru",
-          "entered_language":"ru","category":"other",
-          "folder_ids":["\(folderA.uuidString.lowercased())"],
+          "workspace_id":"\(workspace.uuidString.lowercased())",
+          "term":"kot","translation":"кот","entered_side":"translation","category":"other",
           "created_at":"2026-11-17T22:49:18.123456+00:00","updated_at":"2026-11-17T22:50:00+00:00",
           "deleted_at":null,"ease_factor":2.5,"interval_days":1,"repetitions":1,
           "due_date":"2026-11-18T22:49:18.123456+00:00","last_review_grade":"good",
@@ -280,14 +258,15 @@ final class RemoteRecordValidatorTests: XCTestCase {
         let rows = try RemoteRecordDecoder.words(from: Data(json.utf8))
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].userID, owner)
-        XCTAssertEqual(rows[0].folderIDs, [folderA])
+        XCTAssertEqual(rows[0].workspaceID, workspace)
+        XCTAssertEqual(rows[0].enteredSide, "translation")
         XCTAssertNil(rows[0].deletedAt)
         XCTAssertEqual(rows[0].createdAt.timeIntervalSince1970, 1_794_955_758.123, accuracy: 0.001)
     }
 
     func testDecodesPostgRESTFolderRow() throws {
         let json = """
-        [{"id":"8C1D3A57-2E1B-4F0B-9B7A-1E2D3C4B5A69","user_id":"\(owner.uuidString)","name":"Еда",
+        [{"id":"8C1D3A57-2E1B-4F0B-9B7A-1E2D3C4B5A69","user_id":"\(owner.uuidString)","workspace_id":"\(workspace.uuidString)","name":"Еда",
           "sort_order":2,"created_at":"2026-11-17T22:49:18+00:00","updated_at":"2026-11-17T22:49:18+00:00",
           "deleted_at":"2026-11-17T23:00:00+00:00"}]
         """
@@ -298,5 +277,89 @@ final class RemoteRecordValidatorTests: XCTestCase {
 
     func testRejectsRowWithMissingColumns() {
         XCTAssertThrowsError(try RemoteRecordDecoder.words(from: Data(#"[{"id":"x"}]"#.utf8)))
+    }
+
+    // MARK: Workspaces
+
+    private func workspaceRecord(term: String = "pl", translation: String = "ru", id: UUID? = nil,
+                                 userID: UUID? = nil, deletedAt: Date? = nil) -> RemoteWorkspaceRecord {
+        RemoteWorkspaceRecord(id: id ?? WorkspaceID.make(term: term, translation: translation),
+                              userID: userID ?? owner, termLanguage: term, translationLanguage: translation,
+                              sortOrder: 1, createdAt: now.addingTimeInterval(-3_600),
+                              updatedAt: now.addingTimeInterval(-60), deletedAt: deletedAt)
+    }
+
+    private func assertRejects(_ record: RemoteWorkspaceRecord, _ expected: RemoteRecordError,
+                               file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertThrowsError(try RemoteRecordValidator.validate(record, ownerID: owner, now: now),
+                             file: file, line: line) { error in
+            XCTAssertEqual(error as? RemoteRecordError, expected, file: file, line: line)
+        }
+    }
+
+    func testAcceptsWorkspaceWithDeterministicID() throws {
+        let result = try RemoteRecordValidator.validate(workspaceRecord(term: "de", translation: "ru"),
+                                                        ownerID: owner, now: now)
+        XCTAssertEqual(result.id, UUID(uuidString: "f03536f4-02a8-515b-924f-f39a95de6a18"))
+        XCTAssertEqual(result.termLanguage, "de")
+        XCTAssertEqual(result.sortOrder, 1)
+    }
+
+    func testRejectsWorkspaceWithWrongIDOrOwnerOrLanguages() {
+        assertRejects(workspaceRecord(id: UUID()), .invalidID)
+        assertRejects(workspaceRecord(id: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!), .invalidID)
+        assertRejects(workspaceRecord(userID: UUID()), .foreignOwner)
+        assertRejects(workspaceRecord(term: "Polish"), .invalidLanguage)
+        assertRejects(workspaceRecord(term: "ru", translation: "ru"), .invalidLanguage)
+        assertRejects(workspaceRecord(term: "pl\n"), .invalidLanguage)
+    }
+
+    /// Well-formed codes outside the supported list are skipped (held), not treated as corrupt.
+    func testWellFormedUnsupportedWorkspaceLanguageIsUnsupported() {
+        assertRejects(workspaceRecord(term: "ja", translation: "ru"), .unsupportedLanguage)
+        assertRejects(workspaceRecord(term: "pl", translation: "pt-BR"), .unsupportedLanguage)
+    }
+
+    func testAllSupportedLanguagesAreAcceptedInWorkspaces() throws {
+        XCTAssertEqual(LanguageCodes.supported, ["pl", "ru", "uk", "en", "de", "fr", "es", "it", "cs", "pt"])
+        for code in LanguageCodes.supported where code != "ru" {
+            XCTAssertNoThrow(try RemoteRecordValidator.validate(workspaceRecord(term: code, translation: "ru"),
+                                                                ownerID: owner, now: now))
+        }
+    }
+
+    // MARK: Memberships
+
+    private func membership(wordID: UUID, folderID: UUID, workspaceID: UUID? = nil, userID: UUID? = nil,
+                            deletedAt: Date? = nil) -> RemoteMembershipRecord {
+        RemoteMembershipRecord(userID: userID ?? owner, workspaceID: workspaceID ?? workspace, wordID: wordID,
+                               folderID: folderID, createdAt: now.addingTimeInterval(-3_600),
+                               updatedAt: now.addingTimeInterval(-60), deletedAt: deletedAt)
+    }
+
+    func testMembershipReferencesMustBeKnownInTheSameWorkspace() throws {
+        let wordID = UUID()
+        var ids = known
+        ids.words[wordID] = workspace
+        ids.folders[folderA] = workspace
+        let valid = try RemoteRecordValidator.validate(membership(wordID: wordID, folderID: folderA),
+                                                       ownerID: owner, known: ids, now: now)
+        XCTAssertEqual(valid.id, MembershipID.make(wordID: wordID, folderID: folderA))
+
+        func assertReference(_ record: RemoteMembershipRecord, _ expected: RemoteRecordError,
+                             file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertThrowsError(try RemoteRecordValidator.validate(record, ownerID: owner, known: ids, now: now),
+                                 file: file, line: line) {
+                XCTAssertEqual($0 as? RemoteRecordError, expected, file: file, line: line)
+            }
+        }
+        assertReference(membership(wordID: UUID(), folderID: folderA), .unknownReference)
+        assertReference(membership(wordID: wordID, folderID: folderB), .unknownReference)
+        // Both known, but in another workspace than the membership claims.
+        let deRu = WorkspaceID.make(term: "de", translation: "ru")
+        assertReference(membership(wordID: wordID, folderID: folderA, workspaceID: deRu), .unknownReference)
+        assertReference(membership(wordID: wordID, folderID: folderA, userID: UUID()), .foreignOwner)
+        assertReference(membership(wordID: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+                                   folderID: folderA), .invalidID)
     }
 }

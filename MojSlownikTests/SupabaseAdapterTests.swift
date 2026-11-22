@@ -31,13 +31,22 @@ final class SupabaseAdapterTests: XCTestCase {
         XCTAssertNil(SupabaseAuthBackend.account(from: user(email: nil)).email)
     }
 
-    /// Review finding: an expired stored session emitted at launch is not "signed in".
-    func testExpiredInitialSessionCountsAsSignedOut() {
-        XCTAssertNil(SupabaseAuthBackend.account(for: .initialSession, session: session(expiresIn: -60)))
-        XCTAssertNotNil(SupabaseAuthBackend.account(for: .initialSession, session: session(expiresIn: 3_600)))
-        XCTAssertNotNil(SupabaseAuthBackend.account(for: .tokenRefreshed, session: session(expiresIn: 3_600)))
-        XCTAssertNotNil(SupabaseAuthBackend.account(for: .signedIn, session: session(expiresIn: 3_600)))
-        XCTAssertNil(SupabaseAuthBackend.account(for: .signedOut, session: nil))
+    /// An expired stored session emitted at launch is `.restoring`: neither signed in nor signed out.
+    func testExpiredInitialSessionIsRestoring() {
+        XCTAssertEqual(SupabaseAuthBackend.update(for: .initialSession, session: session(expiresIn: -60)), .restoring)
+        guard case .account(let valid) = SupabaseAuthBackend.update(for: .initialSession,
+                                                                    session: session(expiresIn: 3_600)) else {
+            return XCTFail("a valid initial session is an account")
+        }
+        XCTAssertNotNil(valid)
+        for event in [AuthChangeEvent.tokenRefreshed, .signedIn] {
+            guard case .account(let account) = SupabaseAuthBackend.update(for: event, session: session(expiresIn: 3_600)) else {
+                return XCTFail("a valid session is an account")
+            }
+            XCTAssertNotNil(account)
+        }
+        XCTAssertEqual(SupabaseAuthBackend.update(for: .initialSession, session: nil), .account(nil))
+        XCTAssertEqual(SupabaseAuthBackend.update(for: .signedOut, session: nil), .account(nil))
     }
 
     func testOnlyUserCancellationCountsAsCancellation() {
@@ -95,32 +104,33 @@ final class SupabaseAdapterTests: XCTestCase {
 
     func testWordUpsertEncodesEveryKeyWithExplicitNulls() throws {
         let word = RemoteWordUpsert(
-            id: UUID(), userID: UUID(), term: "kot", termLanguage: "pl", translation: "кот",
-            translationLanguage: "ru", enteredLanguage: "ru", category: "other", folderIDs: [],
+            id: UUID(), userID: UUID(), workspaceID: WorkspaceID.legacy, term: "kot", translation: "кот",
+            enteredSide: "translation", category: "other",
             createdAt: Date(timeIntervalSince1970: 1_800_000_000), deletedAt: nil, easeFactor: 2.5,
             intervalDays: 0, repetitions: 0, dueDate: Date(timeIntervalSince1970: 1_800_000_000),
             lastReviewGrade: nil, knowledgeTier: nil, consecutiveSoftMisses: 0)
         let object = try jsonObject(word)
         XCTAssertEqual(Set(object.keys),
-                       ["id", "user_id", "term", "term_language", "translation", "translation_language",
-                        "entered_language", "category", "folder_ids", "created_at", "deleted_at", "ease_factor",
-                        "interval_days", "repetitions", "due_date", "last_review_grade", "knowledge_tier",
-                        "consecutive_soft_misses"])
+                       ["id", "user_id", "workspace_id", "term", "translation", "entered_side", "category",
+                        "created_at", "deleted_at", "ease_factor", "interval_days", "repetitions", "due_date",
+                        "last_review_grade", "knowledge_tier", "consecutive_soft_misses"])
+        for legacy in ["term_language", "translation_language", "entered_language", "folder_ids"] {
+            XCTAssertFalse(object.keys.contains(legacy), "\(legacy) no longer exists on the server")
+        }
         XCTAssertFalse(object.keys.contains("updated_at"), "the server assigns updated_at")
         for key in ["deleted_at", "last_review_grade", "knowledge_tier"] {
             XCTAssertTrue(object[key] is NSNull, "\(key) must be an explicit null")
         }
-        XCTAssertEqual(object["folder_ids"] as? [String], [])
         // The select list names exactly the decoded columns.
         XCTAssertEqual(Set(RemoteWordUpsert.selectColumns.split(separator: ",").map(String.init)),
                        Set(object.keys).union(["updated_at"]))
     }
 
     func testFolderUpsertEncodesEveryKeyWithExplicitNulls() throws {
-        let folder = RemoteFolderUpsert(id: UUID(), userID: UUID(), name: "Еда", sortOrder: 2,
+        let folder = RemoteFolderUpsert(id: UUID(), userID: UUID(), workspaceID: WorkspaceID.legacy, name: "Еда", sortOrder: 2,
                                         createdAt: Date(timeIntervalSince1970: 1_800_000_000), deletedAt: nil)
         let object = try jsonObject(folder)
-        XCTAssertEqual(Set(object.keys), ["id", "user_id", "name", "sort_order", "created_at", "deleted_at"])
+        XCTAssertEqual(Set(object.keys), ["id", "user_id", "workspace_id", "name", "sort_order", "created_at", "deleted_at"])
         XCTAssertTrue(object["deleted_at"] is NSNull)
         XCTAssertEqual(Set(RemoteFolderUpsert.selectColumns.split(separator: ",").map(String.init)),
                        Set(object.keys).union(["updated_at"]))
@@ -128,7 +138,7 @@ final class SupabaseAdapterTests: XCTestCase {
 
     func testBatchWithTombstoneAndLiveRowKeepsTheSameKeys() throws {
         func row(deleted: Date?) -> RemoteFolderUpsert {
-            RemoteFolderUpsert(id: UUID(), userID: UUID(), name: "x", sortOrder: 0,
+            RemoteFolderUpsert(id: UUID(), userID: UUID(), workspaceID: WorkspaceID.legacy, name: "x", sortOrder: 0,
                                createdAt: Date(timeIntervalSince1970: 1_800_000_000), deletedAt: deleted)
         }
         let data = try PostgrestClient.Configuration.jsonEncoder.encode([row(deleted: nil), row(deleted: .now)])
@@ -141,6 +151,58 @@ final class SupabaseAdapterTests: XCTestCase {
         let cursor = SyncCursor(updatedAtMillis: 1_794_955_800_123, id: id)
         XCTAssertEqual(SupabaseSyncRemote.keysetFilter(after: cursor),
                        "updated_at.gt.\"2026-11-17T22:50:00.123Z\",and(updated_at.eq.\"2026-11-17T22:50:00.123Z\",id.gt.8c1d3a57-2e1b-4f0b-9b7a-1e2d3c4b5a69)")
+    }
+
+    func testMembershipKeysetFilterIsExact() {
+        let word = UUID(uuidString: "8C1D3A57-2E1B-4F0B-9B7A-1E2D3C4B5A69")!
+        let folder = UUID(uuidString: "11111111-2222-4333-8444-555555555555")!
+        let cursor = SyncCursor(updatedAtMillis: 1_794_955_800_123, id: word, secondaryID: folder)
+        XCTAssertEqual(
+            SupabaseSyncRemote.membershipKeysetFilter(after: cursor),
+            "updated_at.gt.\"2026-11-17T22:50:00.123Z\","
+                + "and(updated_at.eq.\"2026-11-17T22:50:00.123Z\",word_id.gt.8c1d3a57-2e1b-4f0b-9b7a-1e2d3c4b5a69),"
+                + "and(updated_at.eq.\"2026-11-17T22:50:00.123Z\",word_id.eq.8c1d3a57-2e1b-4f0b-9b7a-1e2d3c4b5a69,"
+                + "folder_id.gt.11111111-2222-4333-8444-555555555555)")
+    }
+
+    func testV2TablesAndSelectColumns() throws {
+        XCTAssertEqual(SupabaseSyncRemote.workspacesTable, "workspaces")
+        XCTAssertEqual(SupabaseSyncRemote.membershipsTable, "word_folders")
+        let membership = RemoteMembershipUpsert(userID: UUID(), workspaceID: WorkspaceID.legacy, wordID: UUID(),
+                                                folderID: UUID(),
+                                                createdAt: Date(timeIntervalSince1970: 1_800_000_000), deletedAt: nil)
+        let object = try jsonObject(membership)
+        XCTAssertEqual(Set(object.keys), ["user_id", "workspace_id", "word_id", "folder_id", "created_at", "deleted_at"])
+        XCTAssertTrue(object["deleted_at"] is NSNull)
+        XCTAssertEqual(Set(RemoteMembershipUpsert.selectColumns.split(separator: ",").map(String.init)),
+                       Set(object.keys).union(["updated_at"]))
+        let workspace = RemoteWorkspaceUpsert(id: WorkspaceID.legacy, userID: UUID(), termLanguage: "pl",
+                                              translationLanguage: "ru", sortOrder: 0,
+                                              createdAt: Date(timeIntervalSince1970: 1_800_000_000), deletedAt: nil)
+        let workspaceObject = try jsonObject(workspace)
+        XCTAssertEqual(Set(workspaceObject.keys), ["id", "user_id", "term_language", "translation_language",
+                                                   "sort_order", "created_at", "deleted_at"])
+        XCTAssertEqual(Set(RemoteWorkspaceUpsert.selectColumns.split(separator: ",").map(String.init)),
+                       Set(workspaceObject.keys).union(["updated_at"]))
+    }
+
+    func testDecodesV2RowsWithPostgRESTsDecoder() throws {
+        let owner = UUID().uuidString.lowercased()
+        let workspaces = try RemoteRecordDecoder.workspaces(from: Data("""
+            [{"id":"0db61f29-e285-5e06-84f5-d85acfa1b5cc","user_id":"\(owner)","term_language":"pl",
+              "translation_language":"ru","sort_order":0,"created_at":"2026-11-17T22:49:18.123456+00:00",
+              "updated_at":"2026-11-17T22:50:00+00:00","deleted_at":null}]
+            """.utf8))
+        XCTAssertEqual(workspaces.first?.termLanguage, "pl")
+        XCTAssertNil(workspaces.first?.deletedAt)
+        let memberships = try RemoteRecordDecoder.memberships(from: Data("""
+            [{"user_id":"\(owner)","workspace_id":"0db61f29-e285-5e06-84f5-d85acfa1b5cc",
+              "word_id":"8c1d3a57-2e1b-4f0b-9b7a-1e2d3c4b5a69","folder_id":"11111111-2222-4333-8444-555555555555",
+              "created_at":"2026-11-17T22:49:18+00:00","updated_at":"2026-11-17T22:50:00.5+00:00",
+              "deleted_at":"2026-11-17T23:00:00+00:00"}]
+            """.utf8))
+        XCTAssertEqual(memberships.first?.workspaceID, WorkspaceID.legacy)
+        XCTAssertNotNil(memberships.first?.deletedAt)
     }
 
     func testCursorTimestampStringIsExact() throws {

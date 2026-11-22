@@ -22,15 +22,15 @@ struct ListeningQuestion {
         var mode = mode(for: word)
         var options: [String] = []
         if mode == .choices {
-            options = ([word.polish] + distractors(for: word, among: words)).shuffled()
+            options = ([word.term] + distractors(for: word, among: words)).shuffled()
             if options.count < 4 { mode = .translation }
         }
 
         return ListeningQuestion(
             wordID: word.persistentModelID,
             mode: mode,
-            prompt: mode == .translation ? word.russian : word.polish,
-            correctAnswer: word.polish,
+            prompt: mode == .translation ? word.translation : word.term,
+            correctAnswer: word.term,
             options: mode == .choices ? options : []
         )
     }
@@ -48,10 +48,10 @@ struct ListeningQuestion {
     }
 
     private static func distractors(for word: Word, among words: [Word]) -> [String] {
-        let correct = normalize(word.polish)
+        let correct = normalize(word.term)
         var seen: Set<String> = [correct]
         return words.shuffled().compactMap { candidate in
-            let answer = candidate.polish
+            let answer = candidate.term
             guard candidate.persistentModelID != word.persistentModelID,
                   seen.insert(normalize(answer)).inserted else { return nil }
             return answer

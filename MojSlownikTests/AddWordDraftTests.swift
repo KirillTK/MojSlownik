@@ -5,9 +5,11 @@ import XCTest
 final class AddWordDraftTests: XCTestCase {
     private final class TranslatorStub {
         var texts: [String] = []
+        var pairs: [TranslationPair] = []
         var requests: [CheckedContinuation<String, Error>] = []
-        func translate(_ text: String, source: AppLanguage) async throws -> String {
+        func translate(_ text: String, pair: TranslationPair) async throws -> String {
             texts.append(text)
+            pairs.append(pair)
             return try await withCheckedThrowingContinuation { requests.append($0) }
         }
     }
@@ -22,10 +24,12 @@ final class AddWordDraftTests: XCTestCase {
     }
 
     private func makeDraft(
-        translate: @escaping (String, AppLanguage) async throws -> String,
+        pair: LanguagePair = .polishRussian, inputSide: WordSide? = nil,
+        translate: @escaping (String, TranslationPair) async throws -> String,
         alternatives: @escaping (String, TranslationPair) async -> [[TranslationAlternative]] = { _, _ in [] }
     ) -> AddWordDraft {
-        AddWordDraft(debounce: .zero, translate: translate, alternatives: alternatives)
+        AddWordDraft(pair: pair, inputSide: inputSide, debounce: .zero, translate: translate,
+                     alternatives: alternatives)
     }
 
     private func settle() async {
@@ -171,7 +175,7 @@ final class AddWordDraftTests: XCTestCase {
         draft.setSource("zamek")
         await waitForRequests(1, in: stub)
         await waitForAlternatives(1, in: alts)
-        XCTAssertEqual(alts.calls[0].pair, AppLanguage.polish.translationPair)
+        XCTAssertEqual(alts.calls[0].pair, TranslationPair(source: .polish, target: .russian))
         stub.requests[0].resume(returning: "замок")
         await settle()
         XCTAssertEqual(draft.translatedText, "замок")
@@ -353,5 +357,64 @@ final class AddWordDraftTests: XCTestCase {
         alts.requests[0].resume(returning: [[alt("кот")]])
         await settle()
         XCTAssertEqual(draft.translationOptions, [alt("кот")])
+    }
+
+    func testDifferentScriptPairDetectsTheSideAndTranslatesToTheOther() async {
+        let stub = TranslatorStub()
+        let draft = makeDraft(translate: stub.translate)
+        draft.setSource("kot")
+        XCTAssertEqual(draft.resolvedSide, .term)
+        await waitForRequests(1, in: stub)
+        XCTAssertEqual(stub.pairs.last, TranslationPair(source: .polish, target: .russian))
+        stub.requests[0].resume(returning: "кот")
+        await settle()
+
+        draft.setSource("кот")
+        XCTAssertEqual(draft.resolvedSide, .translation)
+        await waitForRequests(2, in: stub)
+        XCTAssertEqual(stub.pairs.last, TranslationPair(source: .russian, target: .polish))
+        stub.requests[1].resume(returning: "kot")
+        await settle()
+    }
+
+    func testExplicitInputSideWinsOverDetection() async {
+        let stub = TranslatorStub()
+        let draft = makeDraft(pair: LanguagePair(term: .english, translation: .polish), inputSide: .translation,
+                              translate: stub.translate)
+        draft.setSource("dom")
+        XCTAssertEqual(draft.resolvedSide, .translation)
+        await waitForRequests(1, in: stub)
+        XCTAssertEqual(stub.pairs[0], TranslationPair(source: .polish, target: .english))
+        stub.requests[0].resume(returning: "house")
+        await settle()
+        XCTAssertEqual(draft.translatedText, "house")
+    }
+
+    func testSameScriptPairWithoutInputSideDefaultsToTerm() {
+        let draft = makeDraft(pair: LanguagePair(term: .english, translation: .polish),
+                              translate: { _, _ in "" })
+        draft.setSource("dom")
+        XCTAssertEqual(draft.resolvedSide, .term)
+    }
+
+    func testSetInputSideReTranslatesTheSameText() async {
+        let stub = TranslatorStub()
+        let draft = makeDraft(pair: LanguagePair(term: .english, translation: .polish), inputSide: .term,
+                              translate: stub.translate)
+        draft.setSource("dom")
+        await waitForRequests(1, in: stub)
+        XCTAssertEqual(stub.pairs[0], TranslationPair(source: .english, target: .polish))
+        stub.requests[0].resume(returning: "x")
+        await settle()
+
+        draft.setInputSide(.translation)
+        XCTAssertEqual(draft.resolvedSide, .translation)
+        XCTAssertEqual(draft.translatedText, "")
+        await waitForRequests(2, in: stub)
+        XCTAssertEqual(stub.texts, ["dom", "dom"])
+        XCTAssertEqual(stub.pairs[1], TranslationPair(source: .polish, target: .english))
+        stub.requests[1].resume(returning: "house")
+        await settle()
+        XCTAssertEqual(draft.translatedText, "house")
     }
 }

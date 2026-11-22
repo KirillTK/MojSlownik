@@ -4,6 +4,7 @@ import SwiftData
 @main
 @MainActor
 struct MojSlownikApp: App {
+    @State private var workspaces: WorkspaceStore
     @State private var folders: FolderLibraryStore
     @State private var vocabulary: VocabularyStore
     @State private var dailyStudy: DailyStudyStore
@@ -29,6 +30,7 @@ struct MojSlownikApp: App {
             let resources = try AppResources.production()
             #endif
             container = resources.container
+            _workspaces = State(initialValue: resources.workspaces)
             _folders = State(initialValue: resources.folders)
             _vocabulary = State(initialValue: resources.vocabulary)
             _dailyStudy = State(initialValue: resources.dailyStudy)
@@ -47,6 +49,7 @@ struct MojSlownikApp: App {
     var body: some Scene {
         WindowGroup {
             RootTabView()
+                .environment(workspaces)
                 .environment(folders)
                 .environment(vocabulary)
                 .environment(dailyStudy)
@@ -74,6 +77,7 @@ struct MojSlownikApp: App {
 @MainActor
 struct AppResources {
     let container: ModelContainer
+    let workspaces: WorkspaceStore
     let folders: FolderLibraryStore
     let vocabulary: VocabularyStore
     let dailyStudy: DailyStudyStore
@@ -91,11 +95,12 @@ struct AppResources {
         let supabase = supabase ?? SupabaseClientProvider()
         let logger = logger ?? NoopAppLogger()
         if let configuration {
-            container = try ModelContainer(for: Word.self, WordFolder.self, configurations: configuration)
+            container = try ModelContainer(for: AppSchema.schema, configurations: configuration)
         } else {
-            container = try ModelContainer(for: Word.self, WordFolder.self)
+            container = try ModelContainer(for: AppSchema.schema)
         }
         WordIdentityBackfill.run(container: container)
+        WorkspaceBackfill.run(container: container, defaults: defaults, now: now)
         // PersistentIdentifier decoding requires Word's schema to be registered first.
         let changeSignal = LocalChangeSignal()
         dailyStudy = DailyStudyStore(repository: UserDefaultsDailyActivityRepository(defaults: defaults),
@@ -106,11 +111,22 @@ struct AppResources {
                                      changeSignal: changeSignal)
         vocabulary = VocabularyStore(repository: SwiftDataVocabularyRepository(container: container), logger: logger,
                                      changeSignal: changeSignal)
+        let workspaces = WorkspaceStore(repository: SwiftDataWorkspaceRepository(container: container),
+                                        activeRepository: UserDefaultsActiveWorkspaceRepository(defaults: defaults),
+                                        inputSides: UserDefaultsInputSideRepository(defaults: defaults),
+                                        logger: logger, changeSignal: changeSignal)
+        self.workspaces = workspaces
+        workspaces.onActiveChange = { [folders, vocabulary] context in
+            folders.workspaceID = context?.id
+            vocabulary.workspace = context
+            try? folders.load()
+        }
+        try? workspaces.load()
         auth = AuthStore(backend: authBackend ?? SupabaseAuthBackend(provider: supabase), logger: logger)
         let stateRepository = UserDefaultsSyncStateRepository(defaults: defaults)
         let syncStore = SwiftDataSyncStore(container: container)
         let engine = syncRemote.map { SyncEngine(remote: $0, local: syncStore, state: stateRepository) }
-        let sync = SyncStore(engine: engine, state: stateRepository, folders: folders,
+        let sync = SyncStore(engine: engine, state: stateRepository, workspaces: workspaces, folders: folders,
                              achievements: achievements, logger: logger)
         self.sync = sync
         changeSignal.handler = { [weak sync] in sync?.localDataChanged() }
@@ -155,6 +171,7 @@ struct AppResources {
                                          authBackend: configuration.auth.makeBackend(), syncRemote: remote)
         resources.sync.onCycleSucceeded = { remote.armScriptedChanges() }
         try configuration.fixture.seed(into: resources.container.mainContext, now: now)
+        try resources.workspaces.load()
         return resources
     }
     #endif
@@ -164,6 +181,8 @@ struct AppResources {
             let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
                                              defaults: UserDefaults(suiteName: "MojSlownik.Previews")!,
                                              authBackend: StaticAuthBackend())
+            try WorkspaceCatalog.ensure(term: "pl", translation: "ru", context: resources.container.mainContext)
+            try resources.workspaces.load()
             resources.auth.start()  // previews have no App .task; leave the `.unknown` spinner
             return resources
         } catch {

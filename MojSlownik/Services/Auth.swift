@@ -10,12 +10,21 @@ struct AuthAccount: Equatable, Sendable {
     let provider: AuthProvider?
 }
 
+/// One step of the session stream.
+enum AuthUpdate: Equatable, Sendable {
+    /// The account (nil = signed out).
+    case account(AuthAccount?)
+    /// A stored session exists but is expired and being refreshed: the state stays unknown until
+    /// the SDK emits the refreshed session (or the store's restore timeout fires).
+    case restoring
+}
+
 /// Sign-in backend. The real one (Backend/SupabaseAuthBackend.swift) is a thin adapter over
 /// supabase-swift's native auth API; the static one serves previews and UI tests.
 @MainActor
 protocol AuthBackend: AnyObject {
     /// The current account first, then every change (sign-in, sign-out, token refresh).
-    func accountUpdates() -> AsyncStream<AuthAccount?>
+    func accountUpdates() -> AsyncStream<AuthUpdate>
     func signIn(with provider: AuthProvider) async throws
     func signOut() async throws
     /// True when the user closed the sign-in sheet; not an error worth showing.
@@ -32,18 +41,18 @@ final class StaticAuthBackend: AuthBackend {
 
     private var account: AuthAccount?
     private let failsSignIn: Bool
-    private var continuations: [UUID: AsyncStream<AuthAccount?>.Continuation] = [:]
+    private var continuations: [UUID: AsyncStream<AuthUpdate>.Continuation] = [:]
 
     init(account: AuthAccount? = nil, failsSignIn: Bool = false) {
         self.account = account
         self.failsSignIn = failsSignIn
     }
 
-    func accountUpdates() -> AsyncStream<AuthAccount?> {
+    func accountUpdates() -> AsyncStream<AuthUpdate> {
         AsyncStream { continuation in
             let id = UUID()
             continuations[id] = continuation
-            continuation.yield(account)
+            continuation.yield(.account(account))
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor in self?.continuations[id] = nil }
             }
@@ -63,6 +72,6 @@ final class StaticAuthBackend: AuthBackend {
 
     private func publish(_ account: AuthAccount?) {
         self.account = account
-        for continuation in continuations.values { continuation.yield(account) }
+        for continuation in continuations.values { continuation.yield(.account(account)) }
     }
 }

@@ -4,6 +4,7 @@ import SwiftData
 struct AddWordView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(VocabularyStore.self) private var vocabulary
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -13,32 +14,44 @@ struct AddWordView: View {
     @State private var saveError: String?
 
     @State private var selectedCategory: WordCategory?
-    @State private var draft = AddWordDraft()
+    @State private var draft: AddWordDraft
     @State private var speech = SpeechRecognitionService()
     @State private var isVisible = false
     @State private var selectionTick = 0
     @FocusState private var sourceFieldFocused: Bool
 
-    init(initialText: String = "", initialFolderID: UUID? = nil) {
+    /// `inputSide`: the stored typing side of a same-script pair; nil detects it from the script.
+    init(initialText: String = "", initialFolderID: UUID? = nil, pair: LanguagePair,
+         inputSide: WordSide? = nil) {
         self.initialText = initialText
         _selectedFolderID = State(initialValue: initialFolderID)
+        _draft = State(initialValue: AddWordDraft(pair: pair, inputSide: inputSide))
     }
 
-    private var detectedLanguage: AppLanguage {
-        LanguageDetector.detect(draft.sourceText)
+    private var pair: LanguagePair { draft.pair }
+    private var sourceLanguage: Language { pair.language(of: draft.resolvedSide) }
+    private var translationLanguage: Language { pair.language(of: draft.resolvedSide.other) }
+
+    /// Dictation: the studied language, or the typing side's language in a same-script pair.
+    private var dictationLanguage: Language {
+        pair.isSameScript ? pair.language(of: draft.inputSide ?? .term) : pair.term
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                    VStack(spacing: 0) {
-                        inputCard
-                        Divider().overlay(Color.appBorder)
-                            .padding(.horizontal, AppSpacing.l)
-                        translationCard
+                    if pair.isSameScript { inputSideControl }
+                    VStack(alignment: .leading, spacing: AppSpacing.s) {
+                        VStack(spacing: 0) {
+                            inputCard
+                            Divider().overlay(Color.appBorder)
+                                .padding(.horizontal, AppSpacing.l)
+                            translationCard
+                        }
+                        .cardStyle(cornerRadius: AppRadius.hero)
+                        if pair.isSameScript { sameScriptInfo }
                     }
-                    .cardStyle(cornerRadius: AppRadius.hero)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Размещение")
@@ -100,10 +113,54 @@ struct AddWordView: View {
         .achievementBanner()
     }
 
+    /// Same-script pairs cannot tell the sides apart by letters: the user picks the typing side, remembered per workspace.
+    private var inputSideControl: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text("Ввожу на")
+                .font(.footnote.weight(.bold))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundStyle(Color.subtleText)
+                .accessibilityHidden(true)
+            if dynamicTypeSize.isAccessibilitySize {
+                inputSidePicker.pickerStyle(.menu)
+            } else {
+                inputSidePicker.pickerStyle(.segmented)
+            }
+        }
+    }
+
+    private var inputSidePicker: some View {
+        Picker("Ввожу на", selection: Binding(
+            get: { draft.inputSide ?? .term },
+            set: { side in
+                draft.setInputSide(side)
+                if let id = workspaces.activeID { workspaces.setInputSide(side, for: id) }
+            }
+        )) {
+            ForEach([WordSide.term, .translation], id: \.self) { side in
+                let language = pair.language(of: side)
+                Text("\(language.flag) \(language.prepositionalRU.prefix(1).uppercased() + language.prepositionalRU.dropFirst())")
+                    .accessibilityLabel(language.nameRU)
+                    .tag(side)
+            }
+        }
+        .accessibilityIdentifier("inputSideControl")
+    }
+
+    private var sameScriptInfo: some View {
+        Label("У \(pair.term.genitiveRU) и \(pair.translation.genitiveRU) один алфавит, поэтому язык ввода выбирается вручную. Выбор запоминается.",
+              systemImage: "info.circle")
+            .font(.footnote)
+            .foregroundStyle(Color.subtleText)
+            .padding(.horizontal, AppSpacing.xxs)
+    }
+
     private var automaticCategory: WordCategory {
-        WordCategory.detect(
-            russian: detectedLanguage == .russian ? draft.sourceText : draft.translatedText,
-            polish: detectedLanguage == .polish ? draft.sourceText : draft.translatedText
+        let isTerm = draft.resolvedSide == .term
+        return WordCategory.detect(
+            term: isTerm ? draft.sourceText : draft.translatedText,
+            translation: isTerm ? draft.translatedText : draft.sourceText
         )
     }
 
@@ -129,7 +186,7 @@ struct AddWordView: View {
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
-                Text("\((speech.isBusy ? AppLanguage.polish : detectedLanguage).flag) \((speech.isBusy ? AppLanguage.polish : detectedLanguage).displayName)")
+                Text("\((speech.isBusy ? dictationLanguage : sourceLanguage).flag) \((speech.isBusy ? dictationLanguage : sourceLanguage).endonym)")
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -156,7 +213,7 @@ struct AddWordView: View {
                     } else {
                         sourceFieldFocused = false
                         draft.beginDictation()
-                        speech.start { text in
+                        speech.start(locale: dictationLanguage.speechCode) { text in
                             guard isVisible && scenePhase != .background else { return }
                             draft.commitDictation(text)
                         }
@@ -168,7 +225,7 @@ struct AddWordView: View {
                         .frame(width: 44, height: 44)
                 }
                 .disabled(speech.isBusy && speech.state != .listening)
-                .accessibilityLabel(speech.state == .listening ? "Остановить запись" : "Продиктовать по-польски")
+                .accessibilityLabel(speech.state == .listening ? "Остановить запись" : "Продиктовать \(dictationLanguage.adverbRU)")
             }
             voiceStatus
         }
@@ -179,7 +236,7 @@ struct AddWordView: View {
     private var translationCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Перевод — \(detectedLanguage.other.flag) \(detectedLanguage.other.displayName)")
+                Text("Перевод — \(translationLanguage.flag) \(translationLanguage.endonym)")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(Color.subtleText)
                 Spacer()
@@ -212,8 +269,8 @@ struct AddWordView: View {
                 HStack {
                     Spacer()
                     PronounceButton(
-                        text: detectedLanguage == .russian ? draft.translatedText : draft.sourceText,
-                        language: .polish
+                        text: draft.resolvedSide == .term ? draft.sourceText : draft.translatedText,
+                        language: pair.term
                     )
                     .disabled(speech.isBusy)
                 }
@@ -278,7 +335,7 @@ struct AddWordView: View {
             if speech.isBusy {
                 HStack {
                     Text(speech.state == .requestingPermission ? "Запрашиваем доступ…" :
-                         speech.state == .finishing ? "Завершаем распознавание…" : "Говорите по-польски…")
+                         speech.state == .finishing ? "Завершаем распознавание…" : "Говорите \(dictationLanguage.adverbRU)…")
                     Spacer()
                     Button("Отменить запись") { speech.cancel() }
                         .frame(minHeight: 44)
@@ -298,7 +355,7 @@ struct AddWordView: View {
         let text = draft.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let translation = draft.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try vocabulary.add(source: text, translation: translation, category: selectedCategory,
+            try vocabulary.add(WordEntry.make(input: text, translation: translation, side: draft.resolvedSide), category: selectedCategory,
                                folderID: selectedFolderID)
             dismiss()
         } catch { saveError = error.localizedDescription }
@@ -307,8 +364,9 @@ struct AddWordView: View {
 
 #Preview {
     let resources = AppResources.preview
-    AddWordView()
+    AddWordView(pair: .polishRussian)
         .modelContainer(resources.container)
+        .environment(resources.workspaces)
         .environment(resources.folders)
         .environment(resources.vocabulary)
         .environment(resources.dailyStudy)

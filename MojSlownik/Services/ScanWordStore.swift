@@ -4,48 +4,47 @@ import SwiftData
 @MainActor
 enum ScanWordStore {
     /// A separate context keeps failed scan writes from rolling back unrelated edits.
-    static func toggle(source: String, translation: String, category: WordCategory,
-                       folderID: UUID? = nil, container: ModelContainer,
+    static func toggle(_ entry: WordEntry, category: WordCategory, folderID: UUID? = nil,
+                       workspace: WorkspaceContext, container: ModelContainer,
                        now: Date = .now) throws -> Bool {
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        let language = LanguageDetector.detect(source)
-        let words = try context.fetch(FetchDescriptor<Word>()).filter(\.isActive)
-        let existing = words.filter { $0.matches(source: source, translation: translation, language: language) }
+        let words = WorkspaceScope.words(try context.fetch(FetchDescriptor<Word>()), workspaceID: workspace.id)
+        let existing = words.filter { $0.matches(entry) }
+        let memberships = try context.fetch(FetchDescriptor<FolderMembership>())
+        var undo = FolderStore.MembershipUndo()
         let isIncluded: Bool
         if let folderID {
-            try FolderStore.requireFolder(folderID, in: context)
+            try FolderStore.requireFolder(folderID, in: context, workspaceID: workspace.id)
             if existing.isEmpty {
-                let word = Word(
-                    russian: language == .russian ? source : translation,
-                    polish: language == .polish ? source : translation,
-                    sourceLanguage: language, createdAt: now, category: category
-                )
-                word.folderIDs = [folderID]
+                let word = makeWord(entry, category: category, workspace: workspace, now: now)
                 context.insert(word)
+                FolderStore.setMembership(wordID: word.uuid ?? UUID(), folderID: folderID, workspaceID: workspace.id,
+                                          included: true, among: memberships, context: context, now: now,
+                                          undo: &undo)
                 isIncluded = true
             } else {
-                let wasIncluded = existing.contains { $0.folderIDs.contains(folderID) }
-                let previousFolders = existing.map(\.folderIDs)
+                let index = MembershipIndex(memberships)
+                let wasIncluded = existing.contains { index.contains(wordID: $0.uuid, folderID: folderID) }
                 // Legacy duplicates must not leave hidden membership behind.
-                for word in existing { word.folderIDs.removeAll { $0 == folderID } }
-                if !wasIncluded { existing[0].folderIDs.append(folderID) }
-                for (word, previous) in zip(existing, previousFolders) where word.folderIDs != previous {
-                    word.updatedAt = now
+                for (offset, word) in existing.enumerated() {
+                    guard let uuid = word.uuid else { continue }
+                    FolderStore.setMembership(wordID: uuid, folderID: folderID, workspaceID: workspace.id,
+                                              included: !wasIncluded && offset == 0, among: memberships,
+                                              context: context, now: now, undo: &undo)
                 }
                 isIncluded = !wasIncluded
             }
         } else if !existing.isEmpty {
-            for word in existing { word.markDeleted(now: now) }
+            for word in existing {
+                word.markDeleted(now: now)
+                if let uuid = word.uuid {
+                    FolderStore.tombstoneMemberships(ofWord: uuid, among: memberships, now: now, undo: &undo)
+                }
+            }
             isIncluded = false
         } else {
-            context.insert(Word(
-                russian: language == .russian ? source : translation,
-                polish: language == .polish ? source : translation,
-                sourceLanguage: language,
-                createdAt: now,
-                category: category
-            ))
+            context.insert(makeWord(entry, category: category, workspace: workspace, now: now))
             isIncluded = true
         }
         do {
@@ -66,6 +65,11 @@ enum ScanWordStore {
             throw FolderStore.StoreError.missingWord
         }
         word.markDeleted(now: now)
+        if let uuid = word.uuid {
+            var undo = FolderStore.MembershipUndo()
+            FolderStore.tombstoneMemberships(ofWord: uuid, among: try context.fetch(FetchDescriptor<FolderMembership>()),
+                                             now: now, undo: &undo)
+        }
         do { try context.save() }
         catch {
             context.rollback()
@@ -73,36 +77,30 @@ enum ScanWordStore {
         }
     }
 
-    static func add(source: String, translation: String, category: WordCategory? = nil,
-                    folderID: UUID? = nil, container: ModelContainer, now: Date = .now) throws {
+    static func add(_ entry: WordEntry, category: WordCategory? = nil, folderID: UUID? = nil,
+                    workspace: WorkspaceContext, container: ModelContainer, now: Date = .now) throws {
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        if let folderID { try FolderStore.requireFolder(folderID, in: context) }
-        let language = LanguageDetector.detect(source)
-        let words = try context.fetch(FetchDescriptor<Word>()).filter(\.isActive)
+        if let folderID { try FolderStore.requireFolder(folderID, in: context, workspaceID: workspace.id) }
+        let words = WorkspaceScope.words(try context.fetch(FetchDescriptor<Word>()), workspaceID: workspace.id)
         let word: Word
-        if let existing = words.first(where: {
-            $0.matches(source: source, translation: translation, language: language)
-        }) {
+        if let existing = words.first(where: { $0.matches(entry) }) {
             word = existing
             var changed = false
             if let category, word.category != category {
                 word.category = category
                 changed = true
             }
-            if let folderID, !word.folderIDs.contains(folderID) {
-                word.folderIDs.append(folderID)
-                changed = true
-            }
             if changed { word.updatedAt = now }
         } else {
-            word = Word(
-                russian: language == .russian ? source : translation,
-                polish: language == .polish ? source : translation,
-                sourceLanguage: language, createdAt: now, category: category
-            )
+            word = makeWord(entry, category: category, workspace: workspace, now: now)
             context.insert(word)
-            if let folderID { word.folderIDs.append(folderID) }
+        }
+        if let folderID, let uuid = word.uuid {
+            var undo = FolderStore.MembershipUndo()
+            FolderStore.setMembership(wordID: uuid, folderID: folderID, workspaceID: workspace.id, included: true,
+                                      among: try context.fetch(FetchDescriptor<FolderMembership>()),
+                                      context: context, now: now, undo: &undo)
         }
         do { try context.save() }
         catch {
@@ -111,15 +109,12 @@ enum ScanWordStore {
         }
     }
 
-    static func changeCategory(_ category: WordCategory, source: String, translation: String,
+    static func changeCategory(_ category: WordCategory, entry: WordEntry, workspace: WorkspaceContext,
                                container: ModelContainer, now: Date = .now) throws {
         let context = ModelContext(container)
         context.autosaveEnabled = false
-        let language = LanguageDetector.detect(source)
-        let words = try context.fetch(FetchDescriptor<Word>()).filter(\.isActive)
-        guard let existing = words.first(where: {
-            $0.matches(source: source, translation: translation, language: language)
-        }) else { return }
+        let words = WorkspaceScope.words(try context.fetch(FetchDescriptor<Word>()), workspaceID: workspace.id)
+        guard let existing = words.first(where: { $0.matches(entry) }) else { return }
         guard existing.category != category else { return }
         existing.category = category
         existing.updatedAt = now
@@ -129,5 +124,10 @@ enum ScanWordStore {
             context.rollback()
             throw error
         }
+    }
+
+    private static func makeWord(_ entry: WordEntry, category: WordCategory?, workspace: WorkspaceContext,
+                                 now: Date) -> Word {
+        Word(entry: entry, pair: workspace.pair, workspaceID: workspace.id, createdAt: now, category: category)
     }
 }

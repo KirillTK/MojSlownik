@@ -5,10 +5,13 @@ struct ListeningPracticeView: View {
     var folderID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(DailyStudyStore.self) private var dailyStudy
     @Environment(AchievementStore.self) private var achievements
     @Query private var storedAllWords: [Word]
-    private var allWords: [Word] { storedAllWords.filter(\.isActive) }
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
+    private var allWords: [Word] { WorkspaceScope.words(storedAllWords, workspaceID: workspaces.activeID) }
 
     @State private var questions: [ListeningQuestion] = []
     @State private var currentIndex = 0
@@ -63,7 +66,7 @@ struct ListeningPracticeView: View {
     }
 
     private func startSession() {
-        let words = FolderStore.words(allWords, in: folderID)
+        let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard questions.isEmpty, !words.isEmpty else { return }
         dailyStudy.refresh()
         questions = ListeningQuestion.generate(from: words, count: 10)
@@ -208,7 +211,7 @@ struct ListeningPracticeView: View {
 
     private func spellingAnswer(_ question: ListeningQuestion) -> some View {
         VStack(spacing: 12) {
-            TextField("Польское слово", text: $answer)
+            TextField("\(workspaces.pair.term.neuterRU) слово", text: $answer)
                 .font(.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -285,7 +288,7 @@ struct ListeningPracticeView: View {
 
     private func speakCurrentQuestion() {
         guard let question = currentQuestion, question.mode != .translation else { return }
-        SpeechService.shared.speak(question.correctAnswer, language: .polish)
+        SpeechService.shared.speak(question.correctAnswer, language: workspaces.pair.term)
     }
 
     private func scheduleAdvance() {
@@ -386,6 +389,7 @@ struct ListeningPracticeView: View {
         ListeningPracticeView()
     }
     .modelContainer(resources.container)
+    .environment(resources.workspaces)
     .environment(resources.folders)
     .environment(resources.vocabulary)
     .environment(resources.dailyStudy)

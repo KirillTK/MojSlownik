@@ -10,6 +10,7 @@ struct ScannerScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .largeTitle) private var unavailableIconSize: CGFloat = 44
+    let pair: LanguagePair
     var onPick: (String) -> Void
 
     @State private var cameraAuthorized = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
@@ -55,6 +56,7 @@ struct ScannerScreen: View {
                 .ignoresSafeArea()
             } else if cameraAuthorized && scannerSupported {
                 DataScannerRepresentable(
+                    languages: ScannedImageTextRecognizer.ocrLanguages(for: pair),
                     onPick: onPick,
                     onRecognized: { recognizedLines = $0 },
                     captureRequestID: captureRequestID,
@@ -228,9 +230,12 @@ struct ScanResultView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(VocabularyStore.self) private var vocabulary
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var storedSavedWords: [Word]
-    private var savedWords: [Word] { storedSavedWords.filter(\.isActive) }
+    @Query private var storedMemberships: [FolderMembership]
+    private var memberships: MembershipIndex { MembershipIndex(storedMemberships) }
+    private var savedWords: [Word] { WorkspaceScope.words(storedSavedWords, workspaceID: workspaces.activeID) }
     @State private var draft: ScanResultDraft
     @State private var selectedWord: SelectedWord?
     @State private var saveErrors: [String: String] = [:]
@@ -238,10 +243,10 @@ struct ScanResultView: View {
     @State private var selectedFolderID: UUID?
     @State private var savedOverrides: [String: Bool] = [:]
 
-    init(scannedText: String) {
+    init(scannedText: String, pair: LanguagePair) {
         self.scannedText = scannedText
         _draft = State(initialValue: ScanResultDraft(
-            sourceText: ScannedTextTokenizer.joiningLineBreakHyphenation(in: scannedText)
+            sourceText: ScannedTextTokenizer.joiningLineBreakHyphenation(in: scannedText), pair: pair
         ))
     }
 
@@ -279,7 +284,8 @@ struct ScanResultView: View {
                 categoryOverrides.removeAll()
                 draft.startTranslationIfNeeded()
             }) { selection in
-                AddWordView(initialText: selection.text, initialFolderID: selectedFolderID)
+                AddWordView(initialText: selection.text, initialFolderID: selectedFolderID, pair: workspaces.pair,
+                            inputSide: workspaces.activeInputSide)
             }
             .onChange(of: selectedFolderID) { savedOverrides.removeAll() }
             .onChange(of: draft.sourceText) {
@@ -486,7 +492,7 @@ struct ScanResultView: View {
             return
         }
         do {
-            try vocabulary.changeCategory(category, source: word, translation: translation)
+            try vocabulary.changeCategory(category, entry: entry(for: word, translation: translation))
             categoryOverrides[word] = category
             saveErrors[word] = nil
         } catch {
@@ -529,27 +535,26 @@ struct ScanResultView: View {
 
     private func category(_ word: String, translation: String) -> WordCategory {
         if let selected = categoryOverrides[word] { return selected }
-        let language = LanguageDetector.detect(word)
-        return WordCategory.detect(
-            russian: language == .russian ? word : translation,
-            polish: language == .polish ? word : translation
-        )
+        let isTerm = draft.side(of: word) == .term
+        return WordCategory.detect(term: isTerm ? word : translation, translation: isTerm ? translation : word)
+    }
+
+    private func entry(for word: String, translation: String) -> WordEntry {
+        WordEntry.make(input: word, translation: translation, side: draft.side(of: word))
     }
 
     private func existingWord(_ word: String) -> Word? {
         guard let translation = draft.translations[word] else { return nil }
-        let language = LanguageDetector.detect(word)
-        let matches = savedWords.filter {
-            $0.matches(source: word, translation: translation, language: language)
-        }
+        let entry = entry(for: word, translation: translation)
+        let matches = savedWords.filter { $0.matches(entry) }
         if let selectedFolderID,
-           let member = matches.first(where: { $0.folderIDs.contains(selectedFolderID) }) { return member }
+           let member = matches.first(where: { memberships.contains(wordID: $0.uuid, folderID: selectedFolderID) }) { return member }
         return matches.first
     }
 
     private func isIncluded(_ word: Word?) -> Bool {
         guard let word else { return false }
-        return selectedFolderID.map { word.folderIDs.contains($0) } ?? true
+        return selectedFolderID.map { memberships.contains(wordID: word.uuid, folderID: $0) } ?? true
     }
 
     private func toggleSaved(_ text: String) {
@@ -558,7 +563,7 @@ struct ScanResultView: View {
             ?? category(text, translation: translation)
         do {
             savedOverrides[text] = try vocabulary.toggleScanned(
-                source: text, translation: translation, category: selectedCategory,
+                entry(for: text, translation: translation), category: selectedCategory,
                 folderID: selectedFolderID
             )
             categoryOverrides[text] = selectedCategory
@@ -624,6 +629,7 @@ private struct FrozenBlockOverlay: View {
 }
 
 private struct DataScannerRepresentable: UIViewControllerRepresentable {
+    var languages: [String]
     var onPick: (String) -> Void
     var onRecognized: ([ScannedTextLine]) -> Void
     var captureRequestID: Int
@@ -633,12 +639,9 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
     var onCaptureFailed: (String) -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
-        // Польский и русский; если системе языки неизвестны, Vision использует базовый набор.
+        // Языки словаря; если системе языки неизвестны, список пуст = автоматический выбор.
         let supported = DataScannerViewController.supportedTextRecognitionLanguages
-        var languages = ["pl-PL", "ru-RU"].filter { code in
-            supported.contains { $0.hasPrefix(String(code.prefix(2))) }
-        }
-        if languages.isEmpty { languages = [] } // пустой список = автоматический выбор
+        let languages = ScannedImageTextRecognizer.dataScannerLanguages(wanted: self.languages, supported: supported)
 
         let scanner = DataScannerViewController(
             recognizedDataTypes: [.text(languages: languages)],
@@ -668,12 +671,13 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick, onRecognized: onRecognized, captureRequestID: captureRequestID,
+        Coordinator(languages: languages, onPick: onPick, onRecognized: onRecognized, captureRequestID: captureRequestID,
                     onCapturePhoto: onCapturePhoto, onCapturedLines: onCapturedLines,
                     onCaptureFinished: onCaptureFinished, onCaptureFailed: onCaptureFailed)
     }
 
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        let languages: [String]
         let onPick: (String) -> Void
         let onRecognized: ([ScannedTextLine]) -> Void
         let onCapturePhoto: (UIImage) -> Void
@@ -685,10 +689,11 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
         fileprivate var isCapturingPhoto = false
         fileprivate var isFrozen = false
 
-        init(onPick: @escaping (String) -> Void, onRecognized: @escaping ([ScannedTextLine]) -> Void,
+        init(languages: [String], onPick: @escaping (String) -> Void, onRecognized: @escaping ([ScannedTextLine]) -> Void,
              captureRequestID: Int, onCapturePhoto: @escaping (UIImage) -> Void,
              onCapturedLines: @escaping ([ScannedTextLine]) -> Void,
              onCaptureFinished: @escaping () -> Void, onCaptureFailed: @escaping (String) -> Void) {
+            self.languages = languages
             self.onPick = onPick
             self.onRecognized = onRecognized
             self.lastCaptureRequestID = captureRequestID
@@ -712,7 +717,8 @@ private struct DataScannerRepresentable: UIViewControllerRepresentable {
                     isFrozen = true
                     scanner.stopScanning()
                     onCapturePhoto(photo)
-                    let lines = try await ScannedImageTextRecognizer.recognize(image: photo, viewportSize: viewportSize)
+                    let lines = try await ScannedImageTextRecognizer.recognize(image: photo, viewportSize: viewportSize,
+                                                                              languages: languages)
                     onCapturedLines(lines)
                 } catch {
                     onCaptureFailed(error.localizedDescription)

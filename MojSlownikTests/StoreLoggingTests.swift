@@ -12,7 +12,8 @@ final class StoreLoggingTests: XCTestCase {
     func testAddLogsLanguageCategoryAndFolderPresenceOnly() throws {
         let spy = AppLogSpy()
         let store = VocabularyStore(repository: RecordingVocabularyRepository(), logger: spy)
-        try store.add(source: "кот", translation: "kot", category: .food, folderID: UUID())
+        store.workspace = .legacy
+        try store.add(WordEntry.legacy(source: "кот", translation: "kot"), category: .food, folderID: UUID())
         XCTAssertEqual(spy.events, [.wordAdded])
         XCTAssertEqual(spy.entries[0].properties, [.source: .name("manual"), .language: .name("ru"),
                                                    .category: .name("food"), .inFolder: .bool(true)])
@@ -23,10 +24,11 @@ final class StoreLoggingTests: XCTestCase {
         let spy = AppLogSpy()
         let repository = RecordingVocabularyRepository()
         let store = VocabularyStore(repository: repository, logger: spy)
+        store.workspace = .legacy
         repository.toggleResult = true
-        try store.toggleScanned(source: "dom", translation: "дом", category: .home)
+        try store.toggleScanned(WordEntry.legacy(source: "dom", translation: "дом"), category: .home)
         repository.toggleResult = false
-        try store.toggleScanned(source: "dom", translation: "дом", category: .home)
+        try store.toggleScanned(WordEntry.legacy(source: "dom", translation: "дом"), category: .home)
         XCTAssertEqual(spy.events, [.wordAdded, .wordRemoved])
         XCTAssertEqual(spy.entries[0].properties[.source], .name("scan"))
         XCTAssertEqual(spy.entries[0].properties[.language], .name("pl"))
@@ -35,8 +37,9 @@ final class StoreLoggingTests: XCTestCase {
     func testEveryVocabularyMutationLogsAnEvent() throws {
         let spy = AppLogSpy()
         let store = VocabularyStore(repository: RecordingVocabularyRepository(), logger: spy)
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: now)
-        try store.changeCategory(.food, source: "кот", translation: "kot")
+        store.workspace = .legacy
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: now)
+        try store.changeCategory(.food, entry: WordEntry.legacy(source: "кот", translation: "kot"))
         try store.setCategory(.home, for: word)
         try store.setMembership(of: word, folderID: UUID(), included: true)
         try store.removeFromAllFolders(word)
@@ -50,7 +53,8 @@ final class StoreLoggingTests: XCTestCase {
         let repository = RecordingVocabularyRepository()
         repository.nextError = UserTextError(text: "кот")
         let store = VocabularyStore(repository: repository, logger: spy)
-        XCTAssertThrowsError(try store.add(source: "кот", translation: "kot"))
+        store.workspace = .legacy
+        XCTAssertThrowsError(try store.add(WordEntry.legacy(source: "кот", translation: "kot")))
         XCTAssertEqual(spy.events, [.storageFailed])
         XCTAssertEqual(spy.entries[0].level, .error)
         XCTAssertEqual(spy.entries[0].properties[.operation], .name("vocabulary.add_word"))
@@ -61,7 +65,7 @@ final class StoreLoggingTests: XCTestCase {
 
     func testFolderEventsNeverIncludeNames() throws {
         let spy = AppLogSpy()
-        let store = FolderLibraryStore(repository: InMemoryFolderRepository(), logger: spy)
+        let store = FolderLibraryStore.inLegacyWorkspace(repository: InMemoryFolderRepository(), logger: spy)
         let first = try store.create(name: "Секретная папка")
         let second = try store.create(name: "Еда")
         try store.rename(id: first, name: "Работа")
@@ -76,7 +80,7 @@ final class StoreLoggingTests: XCTestCase {
         let spy = AppLogSpy()
         let repository = InMemoryFolderRepository()
         repository.nextError = UserTextError(text: "Еда")
-        let store = FolderLibraryStore(repository: repository, logger: spy)
+        let store = FolderLibraryStore.inLegacyWorkspace(repository: repository, logger: spy)
         XCTAssertThrowsError(try store.create(name: "Еда"))
         XCTAssertEqual(spy.events, [.storageFailed])
         XCTAssertEqual(spy.entries[0].properties[.operation], .name("folders.create"))
@@ -95,10 +99,10 @@ final class StoreLoggingTests: XCTestCase {
     }
 
     func testPracticeAnswersAreLoggedWithModeAndResult() throws {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: now)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: now)
         context.insert(word)
         try context.save()
         let spy = AppLogSpy()
@@ -122,9 +126,9 @@ final class StoreLoggingTests: XCTestCase {
         let repository = InMemoryDailyActivityRepository()
         let spy = AppLogSpy()
         let store = DailyStudyStore(repository: repository, now: now, logger: spy)
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let word = Word(russian: "кот", polish: "kot", sourceLanguage: .russian, createdAt: now)
+        let word = Word(russian: "кот", polish: "kot", side: .translation, createdAt: now)
         container.mainContext.insert(word)
         try container.mainContext.save()
 

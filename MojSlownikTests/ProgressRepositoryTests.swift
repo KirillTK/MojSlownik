@@ -82,10 +82,10 @@ final class ProgressRepositoryTests: XCTestCase {
     // MARK: Daily activity
 
     private func makeIDs() throws -> (ModelContainer, [PersistentIdentifier]) {
-        let container = try ModelContainer(for: Word.self, WordFolder.self,
+        let container = try ModelContainer(for: AppSchema.schema,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let words = [Word(russian: "а", polish: "a", sourceLanguage: .polish),
-                     Word(russian: "б", polish: "b", sourceLanguage: .polish)]
+        let words = [Word(russian: "а", polish: "a", side: .term),
+                     Word(russian: "б", polish: "b", side: .term)]
         words.forEach(container.mainContext.insert)
         try container.mainContext.save()
         return (container, words.map(\.persistentModelID))

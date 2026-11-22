@@ -117,4 +117,20 @@ final class ScannedTextTokenizerTests: XCTestCase {
     private func line(_ suffix: String, _ text: String, _ bounds: CGRect) -> ScannedTextLine {
         ScannedTextLine(id: UUID(uuidString: "00000000-0000-0000-0000-\(suffix)")!, text: text, bounds: bounds)
     }
+
+    func testOCRLanguagesFollowThePairWithoutRepeats() {
+        XCTAssertEqual(ScannedImageTextRecognizer.ocrLanguages(for: .polishRussian), ["pl-PL", "ru-RU"])
+        XCTAssertEqual(ScannedImageTextRecognizer.ocrLanguages(for: LanguagePair(term: .german, translation: .ukrainian)),
+                       ["de-DE", "uk-UA"])
+        let same = LanguagePair(term: Language.polish, translation: Language.polish)
+        XCTAssertEqual(ScannedImageTextRecognizer.ocrLanguages(for: same), ["pl-PL"])
+    }
+
+    func testRecognitionLanguagesAreFilteredBySupportAndMayBeEmpty() {
+        XCTAssertEqual(ScannedImageTextRecognizer.recognitionLanguages(wanted: ["pl-PL", "ru-RU"],
+                                                                       supported: ["ru-RU", "en-US"]), ["ru-RU"])
+        XCTAssertTrue(ScannedImageTextRecognizer.recognitionLanguages(wanted: ["cs-CZ"], supported: ["en-US"]).isEmpty)
+        XCTAssertEqual(ScannedImageTextRecognizer.dataScannerLanguages(wanted: ["pt-BR", "uk-UA"],
+                                                                       supported: ["pt-PT", "en-US"]), ["pt-BR"])
+    }
 }

@@ -6,7 +6,7 @@ import XCTest
 class E2ETestCase: XCTestCase {
     /// Mirrors the app-side `UITestFixture` (names are pinned by a unit test).
     enum Fixture: String {
-        case empty, basicVocabulary, dueForReview, foldersOrdered, syncedVocabulary
+        case empty, basicVocabulary, dueForReview, foldersOrdered, freshInstall, multiWorkspace, sameScriptWorkspace, syncedVocabulary
     }
 
     /// Mirrors the app-side `UITestAuthState` (a network-free auth backend).
@@ -16,7 +16,7 @@ class E2ETestCase: XCTestCase {
 
     /// Mirrors the app-side `UITestSyncState` (a network-free sync server model).
     enum SyncState: String {
-        case empty, remoteVocabulary, failsOnce, linkedToOtherAccount, syncedThenRemoteChanges
+        case empty, remoteVocabulary, failsOnce, linkedToOtherAccount, syncedThenRemoteChanges, remoteWorkspaces
     }
 
     var app: XCUIApplication!
@@ -119,6 +119,13 @@ class E2ETestCase: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed,
                        "Value of \(element) is '\(element.value as? String ?? "nil")', expected '\(expected)'",
                        file: file, line: line)
+    }
+
+    /// The dictionary is on screen (its title is the workspace name, so wait for the add button).
+    @MainActor
+    func waitForDictionary(timeout: TimeInterval = E2ETestCase.defaultTimeout,
+                           file: StaticString = #filePath, line: UInt = #line) {
+        waitForHittable(element("addWordButton"), timeout: timeout, file: file, line: line)
     }
 
     @MainActor

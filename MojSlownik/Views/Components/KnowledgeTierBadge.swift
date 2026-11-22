@@ -42,7 +42,7 @@ struct KnowledgeTierBadge: View {
 
     static func accessibilityDescription(for word: Word, level: Int, hidesWord: Bool = false) -> String {
         let levelName = presentation(for: level).levelName
-        return hidesWord ? "Уровень знания: \(levelName)" : "Уровень знания слова \(word.polish): \(levelName)"
+        return hidesWord ? "Уровень знания: \(levelName)" : "Уровень знания слова \(word.term): \(levelName)"
     }
 
     struct Presentation: Equatable {

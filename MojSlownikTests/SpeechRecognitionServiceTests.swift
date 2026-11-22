@@ -3,11 +3,20 @@ import XCTest
 
 @MainActor
 final class SpeechRecognitionServiceTests: XCTestCase {
+    func testStartPassesTheCallerLocaleToTheBackend() async {
+        let backend = FakeSpeechBackend()
+        let service = SpeechRecognitionService(backend: backend)
+        service.start(locale: "de-DE") { _ in }
+        await backend.waitForPermission()
+        XCTAssertEqual(backend.locales, ["de-DE"])
+        service.cancel()
+    }
+
     func testDeniedPermissionNeverStartsCapture() async {
         let backend = FakeSpeechBackend()
         backend.allowed = false
         let service = SpeechRecognitionService(backend: backend)
-        service.start { _ in XCTFail("Denied permission committed text") }
+        service.start(locale: "pl-PL") { _ in XCTFail("Denied permission committed text") }
         await backend.waitForPermission()
         await settle()
         XCTAssertEqual(service.state, .idle)
@@ -21,10 +30,10 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         backend.holdPermission = true
         let service = SpeechRecognitionService(backend: backend)
         var values: [String] = []
-        service.start { values.append($0) }
+        service.start(locale: "pl-PL") { values.append($0) }
         await backend.waitForPermission()
         service.cancel()
-        service.start { values.append($0) }
+        service.start(locale: "pl-PL") { values.append($0) }
         await backend.waitForPermission(count: 2)
         backend.permissions.removeFirst().resume(returning: true)
         await settle()
@@ -35,7 +44,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         let oldResult = backend.results[0]
         service.cancel()
         backend.holdPermission = false
-        service.start { values.append($0) }
+        service.start(locale: "pl-PL") { values.append($0) }
         await backend.waitForPermission(count: 3)
         await settle()
         oldResult("stale", true)
@@ -49,7 +58,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         let backend = FakeSpeechBackend()
         let service = SpeechRecognitionService(backend: backend)
         var values: [String] = []
-        service.start { values.append($0) }
+        service.start(locale: "pl-PL") { values.append($0) }
         await backend.waitForPermission()
         await settle()
         XCTAssertEqual(backend.locales, ["pl-PL"])
@@ -64,7 +73,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         XCTAssertEqual(backend.cancelCount, 1)
         service.cancel()
         XCTAssertEqual(backend.cancelCount, 1)
-        service.start { values.append($0) }
+        service.start(locale: "pl-PL") { values.append($0) }
         await backend.waitForPermission(count: 2)
         await settle()
         backend.results[1]("dziękuję", true)
@@ -75,7 +84,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         let backend = FakeSpeechBackend()
         let service = SpeechRecognitionService(backend: backend)
         var values: [String] = []
-        service.start { values.append($0) }
+        service.start(locale: "pl-PL") { values.append($0) }
         await backend.waitForPermission()
         await settle()
         backend.results[0]("żół", false)
@@ -93,7 +102,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         let backend = FakeSpeechBackend()
         let service = SpeechRecognitionService(backend: backend, finishTimeout: .milliseconds(1))
         let committed = expectation(description: "Timeout committed partial")
-        service.start { text in
+        service.start(locale: "pl-PL") { text in
             XCTAssertEqual(text, "woda")
             committed.fulfill()
         }
@@ -109,7 +118,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
     func testEmptyStopTimeoutReportsNoSpeechWithoutCommit() async throws {
         let backend = FakeSpeechBackend()
         let service = SpeechRecognitionService(backend: backend, finishTimeout: .milliseconds(1))
-        service.start { _ in XCTFail("Empty speech committed") }
+        service.start(locale: "pl-PL") { _ in XCTFail("Empty speech committed") }
         await backend.waitForPermission()
         await settle()
         service.finish()
@@ -123,10 +132,10 @@ final class SpeechRecognitionServiceTests: XCTestCase {
     func testCancelDuringFinalizationInvalidatesTimeoutAndEmptyFinalDoesNotCommit() async throws {
         let backend = FakeSpeechBackend()
         let service = SpeechRecognitionService(backend: backend, finishTimeout: .milliseconds(1))
-        service.start { _ in XCTFail("Cancelled capture committed") }
+        service.start(locale: "pl-PL") { _ in XCTFail("Cancelled capture committed") }
         await backend.waitForPermission()
         await settle()
-        service.start { _ in XCTFail("Overlapping start replaced completion") }
+        service.start(locale: "pl-PL") { _ in XCTFail("Overlapping start replaced completion") }
         XCTAssertEqual(backend.locales.count, 1)
         backend.results[0]("woda", false)
         service.finish()
@@ -135,7 +144,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         XCTAssertEqual(service.state, .idle)
         XCTAssertNil(service.errorMessage)
         XCTAssertEqual(backend.cancelCount, 1)
-        service.start { _ in XCTFail("Empty final committed") }
+        service.start(locale: "pl-PL") { _ in XCTFail("Empty final committed") }
         await backend.waitForPermission(count: 2)
         await settle()
         backend.results[1]("   ", true)
@@ -148,7 +157,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         let backend = FakeSpeechBackend()
         backend.startError = NSError(domain: "test", code: 1)
         let service = SpeechRecognitionService(backend: backend)
-        service.start { _ in XCTFail("Setup failure committed") }
+        service.start(locale: "pl-PL") { _ in XCTFail("Setup failure committed") }
         await backend.waitForPermission()
         await settle()
         XCTAssertEqual(service.state, .idle)
@@ -160,7 +169,7 @@ final class SpeechRecognitionServiceTests: XCTestCase {
         for terminal in 0..<3 {
             let backend = FakeSpeechBackend()
             let service = SpeechRecognitionService(backend: backend)
-            service.start { _ in XCTFail("Failed or cancelled capture committed") }
+            service.start(locale: "pl-PL") { _ in XCTFail("Failed or cancelled capture committed") }
             await backend.waitForPermission()
             await settle()
             backend.results[0]("woda", false)

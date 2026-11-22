@@ -18,7 +18,7 @@ Paths below are relative to `MojSlownik/` unless stated otherwise.
 | Persistence | `Models/Word.swift`: Russian/Polish pair, source language, persisted category, creation date, last card grade, adaptive knowledge tier and SRS state; alongside the `WordFolder` model for custom study packs. |
 | Dictionary | `Views/WordListView.swift`: creation-date `@Query`, search in both languages, deletion, add and camera presentation; `Views/Components/KnowledgeTierBadge.swift`: compact confidence indicator reused by dictionary, scanner chips and practice prompts. |
 | Adding words | `Views/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
-| Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `TranslationLanguage.swift` is the central descriptor table (provider codes, Apple identifier, expected scripts); `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
+| Translation | `Services/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `Language.swift` is the central descriptor table (10 languages: names, speech/OCR/provider codes, Apple identifier, script, case rule) and `LanguagePair`; `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
 | Camera and results | `Views/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
 | Practice | `Views/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/ListeningPracticeView.swift`/`Services/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/SRSEngine.swift`: card scheduling and last card grade. |
 | Achievements | `Services/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue (`recordNextUnlocksSilently` skips banners for unlocks caused by just-pulled vocabulary); `Views/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
@@ -170,25 +170,65 @@ computation in `AchievementMetrics.vocabulary`; a recorded metric also needs a l
 field (decoded with a default), an `AchievementEvent` and a call site; a new criterion
 kind needs an `AchievementCriterion` case, an evaluator branch and a test.
 
+## Workspaces
+
+A workspace is a language pair (studied `term` ← `translation`); its id is the uuid v5 of the pair
+(`WorkspaceID`), so one pair is one workspace on every device. Words, folders, memberships, the daily ring
+and practice are scoped to the active workspace (`WorkspaceScope`, in memory, `effectiveWorkspaceID`).
+Achievements stay global.
+
+- **Store.** `WorkspaceStore` is the single write entry point (create/restore, select, reorder, soft delete,
+  input side of same-script pairs). `create` logs `workspace.created`, or `workspace.restored` when the pair
+  revives a tombstone (`WorkspaceEnsureResult.outcome`). Changing the active workspace re-points
+  `VocabularyStore`/`FolderLibraryStore` (`onActiveChange`). Deleting is soft: words and folders stay hidden
+  and return when the pair is added again; the last active workspace cannot be deleted.
+- **Gate (`RootTabView`, `Services/WorkspaceGate.swift`).** No active workspace: `loading` while the session
+  is restored (`AuthStore.unknown`), `waitingForAccount` while a signed-in, linked account's first workspace
+  pull is running (`SyncStore.workspacePullFinished`, set after the pulled workspaces are loaded), else
+  `needsSetup` = the first-launch wizard as a full-screen cover. One 10 s timer covers loading and waiting.
+  A fresh install gets no workspace from `WorkspaceBackfill`; an existing install gets pl ← ru silently.
+- **UI.** `WorkspaceWizardView` (two steps, also a sheet from «Новый язык…»), `.workspaceTitleMenu(words:)`
+  on Словарь and Практика (inline title with the system `toolbarTitleMenu` chevron; the large-title menu has
+  no chevron on iOS 26), `WorkspaceManagerView` («Языки»: select, reorder, delete with confirmation, add).
+  A workspace switch dismisses sheets built with the old pair and resets folder/category/search filters.
+  Same-script pairs show the «Ввожу на» control in `AddWordView` (remembered per workspace).
+- **Fixtures.** `freshInstall`, `multiWorkspace`, `sameScriptWorkspace`; sync state `remoteWorkspaces`.
+
 ## Sync
 
-Words and folders (with memberships and SRS state) sync with `public.words`/`public.folders`;
+Workspaces, folders, words and memberships (with SRS state) sync with `public.workspaces`, `public.folders`,
+`public.words` and `public.word_folders`;
 achievements and daily activity stay per device. Local SwiftData is the source of truth and the
 app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/SwiftDataSyncStore.swift`
 (the SwiftData side), `Services/SyncRemote.swift` (transport protocol, cursor), `Services/SyncState.swift`
 (`sync.v1` in UserDefaults), `Backend/SupabaseSyncRemote.swift` (the only Supabase import),
 `Stores/SyncStore.swift` (triggers, status). `InMemorySyncRemote` (DEBUG) serves unit and UI tests.
 
-- **Cycle.** Every cycle pulls folder deltas, pulls word deltas, pushes dirty folders, then pushes
-  dirty words, so a remote tombstone is seen before any push. One cycle runs at a time; a trigger
+- **Cycle.** Every cycle pulls workspaces, folders, words and memberships (the foreign-key order), then
+  pushes them in the same order, so a remote tombstone is seen before any push. A membership is pushed
+  only when its word and folder are known synced (not held, not session-rejected). One cycle runs at a time; a trigger
   during a run schedules one follow-up. Triggers: sign-in/launch with a restored session, foreground
   (throttled to 30 s), 5 s after the last local edit (`LocalChangeSignal` from the three stores),
   background (inside a background task) and before sign-out (inside the 3 s bound), and the
   manual button in the account sheet.
-- **Wire mapping.** `term` = `polish` (`pl`), `translation` = `russian` (`ru`), `entered_language` =
-  `sourceLanguageCode` (invalid falls back to `pl`), `category` = `WordCategory.stableID`. On pull the
-  side whose language is Russian becomes `russian`. Text length counts Unicode scalars; interior
-  tab/newline are allowed. Every upsert row encodes every key (explicit `null`s).
+- **Wire mapping (v2).** `workspace_id` (= `WorkspaceID`, the uuid v5 of `term>translation`; the server
+  enforces it), `term` = `polish`, `translation` = `russian` (storage names), `entered_side` (`term` |
+  `translation`) = `sourceLanguageCode` against the workspace's codes (an unknown code pushes `term`),
+  `category` = `WordCategory.stableID`. Pulled text is stored with the per-language case rule
+  (`Services/LanguageCodes.swift`: only German keeps case). Workspace languages are validated against
+  the supported list (`pl ru uk en de fr es it cs pt`); a word/folder whose workspace is unknown is
+  held until it arrives. Text length counts Unicode scalars; interior tab/newline are allowed. Every
+  upsert row encodes every key (explicit `null`s); the legacy columns no longer exist.
+- **Memberships.** `FolderMembership` (id = `MembershipID`, a client-only uuid v5 of word and folder)
+  mirrors `word_folders`; conflicts are per (word, folder). Removing one is a tombstone, adding it
+  again revives it. A local or pulled word/folder tombstone tombstones its active memberships. A
+  membership tombstone whose word or folder is unknown is skipped (`orphan_tombstone`), an active one
+  is held. `Word.folderIDs` is frozen legacy storage, migrated once into memberships
+  (`WorkspaceBackfill`, flag `legacyFolderIDsMigrated`).
+- **Workspaces.** Ids are deterministic, so there is no workspace adoption. `RemoteMergePolicy` has one
+  documented exception to «a remote tombstone with no local row creates nothing»: workspace tombstones
+  are stored (clean), so words and folders of a workspace deleted elsewhere are stored hidden and come
+  back when the pair is re-added.
 - **Dirty tracking.** `serverUpdatedAt` on `Word`/`WordFolder` holds only a server `updated_at`, nil
   (never synced) or the re-link sentinel `Date.distantPast`; device time is never written to it.
   `isSyncDirty = serverUpdatedAt != lastModifiedAt` (equality, never ordering). After a push ack or an
@@ -197,12 +237,14 @@ app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/Sw
 - **Server time.** A trigger (`private.set_server_updated_at`, `clock_timestamp()` truncated to ms, at
   least previous + 1 ms) assigns `updated_at`; clients never send it. Server hard deletes are revoked:
   soft delete (`deleted_at`) is the only deletion, tombstones are always pushed.
-- **Cursor.** One cursor per table: `(updated_at millis, id)`. A pull starts 60 s before it
+- **Cursor.** One cursor per table (four): `(updated_at millis, id)`; memberships use
+  `(updated_at, word_id, folder_id)` (`SyncCursor.secondaryID`). A pull starts 60 s before it
   (out-of-order commits), filters `user_id`, orders by `(updated_at, id)` and pages by 500 with the
   keyset filter; the cursor is saved after each applied page. Content-invalid rows are skipped and
   counted and the cursor moves past them; their ids are held (`SyncState.heldIDs`, max 5 000) so the
   local copies are not pushed over a newer client's version. A foreign-owner row aborts the cycle.
-  `capabilityVersion` bumps clear cursors and held ids.
+  `capabilityVersion` bumps (now 2) clear all cursors and held ids; widening the supported languages or a
+  validator later bumps it again.
 - **Conflict rule** (`RemoteMergePolicy`): no local row inserts (or adopts a duplicate pair/folder name
   that was never synced); the re-link sentinel lets the server win unless the row was edited after the
   link (`SyncState.linkedAt`, device clock vs the row's own `updatedAt`); an echo or stale row keeps
@@ -212,7 +254,8 @@ app works offline. Pieces: `Services/SyncEngine.swift` (one cycle), `Services/Sw
   (clean synced rows get the sentinel, others nil). A different account pauses sync
   (`accountMismatch`); «Объединить» in the account sheet re-links after confirmation. Sign-out keeps
   local data and the link.
-- **After a pull.** Changed folders refresh `FolderLibraryStore.options`; changed vocabulary makes
+- **After a pull.** Changed workspaces reload `WorkspaceStore`, changed folders or memberships refresh
+  `FolderLibraryStore.options`; `SyncStore.workspacePullFinished` is set after the workspace pull; changed vocabulary makes
   `AchievementStore.recordNextUnlocksSilently` skip banners for the next unlock (10 s, one-shot).
 - **Logging.** `sync.completed/failed/rows_skipped/linked/account_mismatch` with counts, trigger and
   reason names, error domain/code; never text, ids or emails.
@@ -224,8 +267,9 @@ display order. Existing folders whose additive ordering value is equal retain a
 deterministic legacy order by creation date and UUID; the first explicit reorder
 replaces that fallback with contiguous saved positions. New folders append after
 the current order, and deletion keeps the relative order of the remaining folders.
-`Word.folderIDs` is an additive array defaulting to empty: one vocabulary entry can
-belong to multiple folders, sharing its SRS progress. Categories remain independent.
+Memberships are `FolderMembership` rows (`Models/FolderMembership.swift`; `Services/MembershipIndex.swift`
+reads them): one vocabulary entry can belong to multiple folders, sharing its SRS progress.
+`Word.folderIDs` is frozen legacy storage, migrated into memberships once. Categories remain independent.
 `Services/FolderStore.swift` validates folder names, prevents case-equivalent duplicates,
 changes memberships and soft-deletes folders (`FolderLibraryStore` over `FolderRepository`)
 without deleting vocabulary or SRS.
@@ -297,7 +341,7 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
   one. Cancellation handling prevents session waiting from blocking the timeout.
 - Google uses an unofficial endpoint without a key. MyMemory rejects empty,
   unchanged and script-incompatible candidates (target script required, source-only
-  script letters rejected, driven by `TranslationLanguage` descriptors); it tries the
+  script letters rejected, driven by `Language` descriptors); it tries the
   main response, then `matches` in descending score order. A non-200 `responseStatus`
   and `MYMEMORY WARNING` texts are never used as translations. This filters candidates
   but does not guarantee quality. Requests include the implementation's default contact email.
@@ -356,11 +400,16 @@ free Personal Team). The redirect `com.kirill.personal.mojslownik://auth-callbac
 Supabase → Authentication → URL Configuration; Apple and Google providers are configured in the
 Supabase dashboard (README). The session lives in the SDK's Keychain storage.
 
-Remote schema (`supabase/migrations`): `words` is a language-neutral pair (`term` +
-`term_language`, `translation` + `translation_language`, BCP 47; `entered_language` is one of
-them; `category` is `WordCategory.stableID`), `folders`, and write-only `app_logs`. All RLS-scoped
-to `user_id`; `anon` has no grants. The local `Word` is still ru/pl (`polish` → `term`,
-`russian` → `translation`); a multi-language local model needs its own SwiftData migration.
+Remote schema (`supabase/migrations`, normalized by `20261121090000_language_workspaces`):
+`workspaces` (one row per language pair; the languages live only here; id = uuid v5 of the pair),
+`folders` and `words` (both with `workspace_id`; `words.entered_side` is `term` or `translation`;
+`category` is `WordCategory.stableID`), `word_folders` (memberships with composite foreign keys that
+keep word and folder in one workspace and one owner) and write-only `app_logs`. All RLS-scoped to
+`user_id`; `anon` has no grants; no hard deletes. The migration dropped `term_language`,
+`translation_language`, `entered_language` and `folder_ids`; their data is in
+`private.words_backup_20261121` / `private.folders_backup_20261121` until a later migration drops them.
+Pre-migration app builds cannot sync afterwards. The local `Word` keeps the ru/pl storage names
+(`polish` → `term`, `russian` → `translation`).
 `RemoteRecordValidator` runs on every pulled row (and on outgoing rows); `RemoteMergePolicy` decides.
 
 Remaining gaps:
@@ -369,10 +418,11 @@ Remaining gaps:
 - **B.** Closed: `updated_at` is server-assigned (trigger); conflicts compare server time only.
 - **C.** Tombstones are never purged; purging needs server acknowledgement.
 - **D.** Device-local by design: daily activity is not synced (keyed by `PersistentIdentifier`; adoption keeps identifiers).
-- **E.** Accepted: `folderIDs` conflicts at whole-array (whole-word) granularity.
+- **E.** Closed: membership conflicts are per (word, folder) (`word_folders`).
 - **F.** Accepted: SRS state merges per whole row (last device to sync wins).
 - **G.** Device-local by design: achievements are not synced; unlocks caused by pulled vocabulary are recorded silently.
-- **H.** RLS and category encoding done; pair uniqueness is intentionally absent on the server, mitigated by duplicate adoption on pull.
+- **H.** RLS and category encoding done; the pair is unique per user on the server (`workspaces`); words
+  and folders stay unique only by id, mitigated by duplicate adoption on pull (scoped to the workspace).
 
 ## Tests and CI
 

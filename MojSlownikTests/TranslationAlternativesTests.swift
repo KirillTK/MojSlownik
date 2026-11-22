@@ -2,8 +2,8 @@ import XCTest
 @testable import MojSlownik
 
 final class TranslationAlternativesTests: XCTestCase {
-    private let german = TranslationLanguage(id: "de", googleCode: "de", myMemoryCode: "de", appleIdentifier: "de", scripts: [.latin])
-    private let english = TranslationLanguage(id: "en", googleCode: "en", myMemoryCode: "en", appleIdentifier: "en", scripts: [.latin])
+    private let german = Language.german
+    private let english = Language.english
     private let pl_ru = TranslationPair(source: .polish, target: .russian)
     private let ru_pl = TranslationPair(source: .russian, target: .polish)
     private var de_ru: TranslationPair { TranslationPair(source: german, target: .russian) }
@@ -162,10 +162,17 @@ final class TranslationAlternativesTests: XCTestCase {
         XCTAssertFalse(noEmail.absoluteString.contains("de=me"))
     }
 
-    func testEveryAppLanguageHasDescriptor() {
-        for language in AppLanguage.allCases {
-            XCTAssertEqual(language.translationLanguage.id, language.rawValue)
-            XCTAssertEqual(language.translationPair.target, language.other.translationLanguage)
+    func testEveryLanguageBuildsPairsWithItsCodes() {
+        for language in Language.all {
+            let pair = TranslationPair(source: language, target: .russian)
+            XCTAssertEqual(pair.source.googleCode, language.code)
+            XCTAssertEqual(pair.source.myMemoryCode, language.code)
         }
+    }
+
+    func testCyrillicPairsAcceptTheirOwnScriptsOnly() {
+        let uk_ru = TranslationPair(source: .ukrainian, target: .russian)
+        XCTAssertTrue(TranslationAlternatives.isValid("дім", sourceText: "dom", pair: TranslationPair(source: .polish, target: .ukrainian)))
+        XCTAssertFalse(TranslationAlternatives.isValid("house", sourceText: "дім", pair: uk_ru))
     }
 }
