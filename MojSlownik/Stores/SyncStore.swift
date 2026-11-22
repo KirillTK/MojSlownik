@@ -64,10 +64,24 @@ final class SyncStore {
         status = engine == nil ? .unavailable : .signedOut
         // Before the first pulled page is saved: the tracker's re-sync must not announce it.
         engine?.willApplyPulledRows = { [weak self] in self?.achievements?.beginQuietUnlocks() }
-        engine?.onWorkspacesPulled = { [weak self] in self?.workspacePullFinished = true }
+        engine?.onWorkspacesPulled = { [weak self] in
+            // Pulled workspaces are saved by now: load them before the gate leaves its waiting state.
+            try? self?.workspaces.load()
+            self?.workspacePullFinished = true
+        }
     }
 
     var isSyncing: Bool { status == .syncing }
+
+    /// A transport exists (false for previews and the unit-test host).
+    var isAvailable: Bool { status != .unavailable }
+    /// The signed-in account is linked to this iPhone's data, so a cycle runs (or ran) for it.
+    var isLinkedToCurrentAccount: Bool {
+        switch status {
+        case .idle, .syncing, .synced, .failed: account != nil
+        case .unavailable, .signedOut, .accountMismatch: false
+        }
+    }
     var canSyncNow: Bool { canRun && status != .syncing }
     var statusText: String { Self.text(for: status) }
 

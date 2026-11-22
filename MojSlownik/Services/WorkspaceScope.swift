@@ -12,4 +12,11 @@ enum WorkspaceScope {
         guard let workspaceID else { return [] }
         return folders.filter { $0.isActive && $0.effectiveWorkspaceID == workspaceID }
     }
+
+    /// Active word counts per workspace (rows without a workspace count for the legacy one).
+    static func wordCounts(_ words: [Word]) -> [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for word in words where word.isActive { counts[word.effectiveWorkspaceID, default: 0] += 1 }
+        return counts
+    }
 }

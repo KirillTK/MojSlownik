@@ -337,9 +337,13 @@ enum UITestSyncState: String, CaseIterable, Sendable {
     /// For the `syncedVocabulary` fixture: the server mirrors it, linked, and after the first
     /// successful cycle two newer server versions appear (`дом` deleted, `кот` -> `котик`).
     case syncedThenRemoteChanges
+    /// For `freshInstall` + signed in: the server holds de ← ru at sort 0 («das Haus») and pl ← ru at
+    /// sort 1 with the cloud words, so the opened workspace proves the pull (a local default would be pl).
+    case remoteWorkspaces
 
     static let otherAccountID = UUID(uuidString: "00000000-0000-4000-8000-0000000000e2")!
     static let cloudFolderID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F9")!
+    static let germanWordID = UUID(uuidString: "00000000-0000-0000-0000-0000000000B4")!
     static let cloudWordIDs = [UUID(uuidString: "00000000-0000-0000-0000-0000000000B1")!,
                                UUID(uuidString: "00000000-0000-0000-0000-0000000000B2")!,
                                UUID(uuidString: "00000000-0000-0000-0000-0000000000B3")!]
@@ -352,6 +356,18 @@ enum UITestSyncState: String, CaseIterable, Sendable {
         switch self {
         case .empty, .linkedToOtherAccount:
             break
+        case .remoteWorkspaces:
+            let stamp = UITestFixture.truncatedToMillis(now.addingTimeInterval(-600))
+            let german = WorkspaceID.make(term: "de", translation: "ru")
+            remote.seed(
+                workspaces: [Self.workspaceRecord(id: german, term: "de", sortOrder: 0, now: now, updatedAt: stamp),
+                             Self.workspaceRecord(sortOrder: 1, now: now, updatedAt: stamp)],
+                words: [Self.wordRecord(id: Self.germanWordID, polish: "das Haus", russian: "дом", category: "other",
+                                        now: now, updatedAt: stamp, workspaceID: german),
+                        Self.wordRecord(id: Self.cloudWordIDs[0], polish: "most", russian: "мост", category: "other",
+                                        now: now, updatedAt: stamp),
+                        Self.wordRecord(id: Self.cloudWordIDs[1], polish: "ser", russian: "сыр", category: "food",
+                                        now: now, updatedAt: stamp)])
         case .failsOnce:
             remote.failNextCalls = 1
         case .remoteVocabulary:
@@ -402,7 +418,7 @@ enum UITestSyncState: String, CaseIterable, Sendable {
     @MainActor
     func seedState(into repository: any SyncStateRepository, now: Date) {
         switch self {
-        case .empty, .remoteVocabulary, .failsOnce:
+        case .empty, .remoteVocabulary, .failsOnce, .remoteWorkspaces:
             break
         case .linkedToOtherAccount:
             try? repository.save(SyncState(linkedAccountID: Self.otherAccountID,
@@ -417,17 +433,20 @@ enum UITestSyncState: String, CaseIterable, Sendable {
         }
     }
 
-    @MainActor private static func workspaceRecord(now: Date, updatedAt: Date) -> RemoteWorkspaceRecord {
-        RemoteWorkspaceRecord(id: WorkspaceID.legacy, userID: owner, termLanguage: "pl", translationLanguage: "ru",
-                              sortOrder: 0, createdAt: now.addingTimeInterval(-7_200), updatedAt: updatedAt,
+    @MainActor private static func workspaceRecord(id: UUID = WorkspaceID.legacy, term: String = "pl",
+                                                   sortOrder: Int = 0, now: Date,
+                                                   updatedAt: Date) -> RemoteWorkspaceRecord {
+        RemoteWorkspaceRecord(id: id, userID: owner, termLanguage: term, translationLanguage: "ru",
+                              sortOrder: sortOrder, createdAt: now.addingTimeInterval(-7_200), updatedAt: updatedAt,
                               deletedAt: nil)
     }
 
     @MainActor private static func wordRecord(id: UUID, polish: String, russian: String, category: String,
                                               now: Date, updatedAt: Date, createdAt: Date? = nil,
-                                              entered: WordSide = .translation) -> RemoteWordRecord {
+                                              entered: WordSide = .translation,
+                                              workspaceID: UUID = WorkspaceID.legacy) -> RemoteWordRecord {
         RemoteWordRecord(
-            id: id, userID: owner, workspaceID: WorkspaceID.legacy, term: polish, translation: russian,
+            id: id, userID: owner, workspaceID: workspaceID, term: polish, translation: russian,
             enteredSide: entered.rawValue, category: category,
             createdAt: createdAt ?? now.addingTimeInterval(-3_600), updatedAt: updatedAt,
             deletedAt: nil, easeFactor: 2.5, intervalDays: 30, repetitions: 3,

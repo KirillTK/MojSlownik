@@ -87,15 +87,17 @@ final class WorkspaceStore {
     /// Adds the pair (or revives it after a delete) and makes it active.
     @discardableResult
     func create(term: String, translation: String) throws -> UUID {
-        let isNew = !options.contains { $0.id == WorkspaceID.make(term: term, translation: translation) }
-        let id = try repository.ensure(term: term, translation: translation)
+        let result = try repository.ensure(term: term, translation: translation)
         changeSignal?.notify()
-        if isNew {
-            logger.log(.workspaceCreated, [.termLanguage: .name(term), .targetLanguage: .name(translation)])
+        let languages: [LogKey: LogValue] = [.termLanguage: .name(term), .targetLanguage: .name(translation)]
+        switch result.outcome {
+        case .created: logger.log(.workspaceCreated, languages)
+        case .restored: logger.log(.workspaceRestored, languages)
+        case .existing: break
         }
         try load()
-        select(id: id)
-        return id
+        select(id: result.id)
+        return result.id
     }
 
     func delete(id: UUID) throws {

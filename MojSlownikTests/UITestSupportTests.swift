@@ -29,9 +29,11 @@ final class UITestSupportTests: XCTestCase {
     func testFixtureNamesArePinned() {
         // The UI-test E2ETestCase.Fixture enum mirrors these raw values.
         XCTAssertEqual(UITestFixture.allCases.map(\.rawValue),
-                       ["empty", "basicVocabulary", "dueForReview", "foldersOrdered", "syncedVocabulary"])
+                       ["empty", "basicVocabulary", "dueForReview", "foldersOrdered", "freshInstall",
+                        "multiWorkspace", "sameScriptWorkspace", "syncedVocabulary"])
         XCTAssertEqual(UITestSyncState.allCases.map(\.rawValue),
-                       ["empty", "remoteVocabulary", "failsOnce", "linkedToOtherAccount", "syncedThenRemoteChanges"])
+                       ["empty", "remoteVocabulary", "failsOnce", "linkedToOtherAccount", "syncedThenRemoteChanges",
+                        "remoteWorkspaces"])
     }
 
     func testEmptyFixtureHasNoData() throws {
@@ -71,8 +73,8 @@ final class UITestSupportTests: XCTestCase {
             .allSatisfy { $0.workspaceID == WorkspaceID.legacy })
     }
 
-    func testEveryFixtureSeedsExactlyOneLegacyWorkspaceAndAssignsIt() throws {
-        for fixture in UITestFixture.allCases {
+    func testEveryPlainFixtureSeedsExactlyOneLegacyWorkspaceAndAssignsIt() throws {
+        for fixture in UITestFixture.allCases where ![.freshInstall, .multiWorkspace, .sameScriptWorkspace].contains(fixture) {
             let container = try seeded(fixture)
             let workspaces = try container.mainContext.fetch(FetchDescriptor<Workspace>())
             XCTAssertEqual(workspaces.map(\.id), [WorkspaceID.legacy], "\(fixture)")
@@ -82,6 +84,47 @@ final class UITestSupportTests: XCTestCase {
             let folders = try container.mainContext.fetch(FetchDescriptor<WordFolder>())
             XCTAssertTrue(folders.allSatisfy { $0.workspaceID == WorkspaceID.legacy }, "\(fixture)")
         }
+    }
+
+    func testFreshInstallSeedsNothingNotEvenAWorkspace() throws {
+        let container = try seeded(.freshInstall)
+        XCTAssertEqual(try container.mainContext.fetch(FetchDescriptor<Workspace>()).count, 0)
+        XCTAssertEqual(try words(container).count, 0)
+        XCTAssertEqual(try container.mainContext.fetch(FetchDescriptor<WordFolder>()).count, 0)
+    }
+
+    func testSameScriptWorkspaceIsAnEmptyEnglishPolishPair() throws {
+        let container = try seeded(.sameScriptWorkspace)
+        let workspaces = try WorkspaceCatalog.workspaces(in: container.mainContext)
+        XCTAssertEqual(workspaces.map(\.id), [WorkspaceID.make(term: "en", translation: "pl")])
+        XCTAssertEqual(try words(container).count, 0)
+        let pair = try XCTUnwrap(LanguagePair(termCode: "en", translationCode: "pl"))
+        XCTAssertTrue(pair.isSameScript, "the direction control appears")
+    }
+
+    func testMultiWorkspaceHasPolishFirstAndScopedWordsAndFolders() throws {
+        let container = try seeded(.multiWorkspace)
+        let context = container.mainContext
+        let german = WorkspaceID.make(term: "de", translation: "ru")
+        let workspaces = try WorkspaceCatalog.workspaces(in: context)
+        XCTAssertEqual(workspaces.map(\.id), [WorkspaceID.legacy, german])
+        XCTAssertEqual(workspaces.map(\.sortOrder), [0, 1])
+        let all = try words(container)
+        XCTAssertEqual(Set(WorkspaceScope.words(all, workspaceID: WorkspaceID.legacy).map(\.term)),
+                       ["kot", "dom", "woda", "chleb", "książka"])
+        XCTAssertEqual(Set(WorkspaceScope.words(all, workspaceID: german).map(\.term)), ["das Haus", "lernen"],
+                       "German keeps its case")
+        let folders = try context.fetch(FetchDescriptor<WordFolder>())
+        XCTAssertEqual(WorkspaceScope.folders(folders, workspaceID: WorkspaceID.legacy).map(\.name), ["Урок 1"])
+        XCTAssertEqual(WorkspaceScope.folders(folders, workspaceID: german).map(\.name), ["Lektion 1"])
+        let index = MembershipIndex(try context.fetch(FetchDescriptor<FolderMembership>()))
+        let byTerm = Dictionary(uniqueKeysWithValues: all.map { ($0.term, $0.uuid.map { index.folderIDs(of: $0) } ?? []) })
+        XCTAssertEqual(byTerm["kot"], [UITestFixture.lesson1ID])
+        XCTAssertEqual(byTerm["dom"], [UITestFixture.lesson1ID])
+        XCTAssertEqual(byTerm["das Haus"], [UITestFixture.lektion1ID])
+        XCTAssertEqual(byTerm["lernen"], [])
+        let memberships = try context.fetch(FetchDescriptor<FolderMembership>())
+        XCTAssertTrue(memberships.filter { $0.folderID == UITestFixture.lektion1ID }.allSatisfy { $0.workspaceID == german })
     }
 
     // MARK: Launch configuration
@@ -200,6 +243,34 @@ final class UITestSupportTests: XCTestCase {
         XCTAssertTrue(remote.server.workspaces.values.allSatisfy { $0.userID == owner })
     }
 
+    func testRemoteWorkspacesServerHoldsGermanFirstAndPolishSecond() throws {
+        let remote = UITestSyncState.remoteWorkspaces.makeRemote(now: now)
+        let owner = StaticAuthBackend.testAccount.userID
+        let german = WorkspaceID.make(term: "de", translation: "ru")
+        let rows = remote.server.workspaces.values.sorted { $0.sortOrder < $1.sortOrder }
+        XCTAssertEqual(rows.map(\.id), [german, WorkspaceID.legacy])
+        XCTAssertEqual(rows.map(\.sortOrder), [0, 1])
+        XCTAssertEqual(Set(remote.server.words.values.filter { $0.workspaceID == german }.map(\.term)), ["das Haus"])
+        XCTAssertEqual(Set(remote.server.words.values.filter { $0.workspaceID == WorkspaceID.legacy }.map(\.term)),
+                       ["most", "ser"])
+        var known = KnownRemoteIDs(workspaceIDs: [german, WorkspaceID.legacy])
+        for row in remote.server.words.values {
+            known.words[row.id] = row.workspaceID
+            XCTAssertNoThrow(try RemoteRecordValidator.validate(row, ownerID: owner, known: known, now: now))
+        }
+        for row in rows {
+            XCTAssertNoThrow(try RemoteRecordValidator.validate(row, ownerID: owner, now: now))
+        }
+    }
+
+    func testRemoteWorkspacesSeedsNoLocalLinkState() {
+        let defaults = UserDefaults(suiteName: "UITestSupportTests.remoteWorkspaces")!
+        defaults.removePersistentDomain(forName: "UITestSupportTests.remoteWorkspaces")
+        let repository = UserDefaultsSyncStateRepository(defaults: defaults)
+        UITestSyncState.remoteWorkspaces.seedState(into: repository, now: now)
+        XCTAssertNil(repository.load().linkedAccountID)
+    }
+
     func testScriptedChangesAreArmedOnceAndAreNewer() throws {
         let remote = UITestSyncState.syncedThenRemoteChanges.makeRemote(now: now)
         let owner = StaticAuthBackend.testAccount.userID
@@ -310,10 +381,25 @@ final class UITestSupportTests: XCTestCase {
         XCTAssertNil(UserDefaults(suiteName: suite)!.object(forKey: "sentinel"))
         XCTAssertEqual(try resources.container.mainContext.fetch(FetchDescriptor<Word>()).count, 5)
         XCTAssertEqual(try resources.container.mainContext.fetch(FetchDescriptor<Workspace>()).count, 1,
-                       "the backfill fallback and the fixture share one workspace")
+                       "the fixture seeds its single workspace")
         XCTAssertEqual(resources.workspaces.activeID, WorkspaceID.legacy)
         XCTAssertEqual(resources.vocabulary.workspace?.id, WorkspaceID.legacy)
         XCTAssertEqual(resources.folders.workspaceID, WorkspaceID.legacy)
+    }
+
+    func testFreshInstallResourcesHaveNoWorkspaceSoTheGateShowsTheWizard() throws {
+        let resources = try AppResources.uiTest(
+            UITestLaunchConfiguration(fixture: .freshInstall, prefill: nil), now: now)
+        XCTAssertTrue(resources.workspaces.options.isEmpty)
+        XCTAssertNil(resources.workspaces.activeID)
+        XCTAssertEqual(try resources.container.mainContext.fetch(FetchDescriptor<Workspace>()).count, 0)
+    }
+
+    func testMultiWorkspaceResourcesStartOnPolish() throws {
+        let resources = try AppResources.uiTest(
+            UITestLaunchConfiguration(fixture: .multiWorkspace, prefill: nil), now: now)
+        XCTAssertEqual(resources.workspaces.options.map(\.termCode), ["pl", "de"])
+        XCTAssertEqual(resources.workspaces.activeID, WorkspaceID.legacy)
     }
 }
 #endif

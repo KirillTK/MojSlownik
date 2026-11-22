@@ -88,8 +88,7 @@ struct WordListView: View {
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
             .overlay(alignment: .bottomTrailing) { floatingActions }
-            .navigationTitle("Словарь")
-            .navigationBarTitleDisplayMode(.large)
+            .workspaceTitleMenu(words: storedWords)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if selectedFolderID != nil {
@@ -135,6 +134,15 @@ struct WordListView: View {
                         scannedResult = ScannedText(text: text)
                     }
                 }
+            }
+            .onChange(of: workspaces.activeID) {
+                // Sheets and filters were built for the previous workspace's pair and folders.
+                showAddSheet = false
+                showScanner = false
+                scannedResult = nil
+                selectedFolderID = nil
+                selectedCategory = nil
+                searchText = ""
             }
             .onAppear {
                 // Вход для UI-тестов: имитирует префилл из сканера (ввод кириллицы

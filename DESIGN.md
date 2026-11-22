@@ -75,7 +75,7 @@ SF Pro, text styles only. Custom sizes use `@ScaledMetric`. No fixed text point 
 
 | Use | Spec |
 |---|---|
-| Root screen titles | system large title; pushed screens inline |
+| Root screen titles | system large title; pushed screens inline; the workspace screens (Словарь) use an inline title because the large-title menu shows no chevron on iOS 26 |
 | Hero number | `@ScaledMetric(relativeTo: .largeTitle)` 40, heavy, `.monospacedDigit()`, `.contentTransition(.numericText())` |
 | Hero "из N" suffix | `.title3.weight(.semibold)`, opacity 0.75 |
 | Flashcard word | `@ScaledMetric(relativeTo: .largeTitle)` 38, heavy, centered, wraps |
@@ -126,6 +126,11 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 | Floating add/scan | bottom-trailing pair; add = yellow, scan = card; size scaled, capped at 72 |
 | Pronounce button | 44 pt circle, `appSecondarySurface`, ink `speaker.wave.2` |
 | Flip card | one `Button` with two faces; the pronounce button is a sibling overlay |
+| Workspace title menu | `.workspaceTitleMenu(words:)`: inline title «🇵🇱 Польский» (flag + studied language; «🇩🇪 Немецкий ← 🇷🇺» when two workspaces study the same language) with the system `toolbarTitleMenu` chevron. Menu: inline `Picker` «Язык» (each option «🇵🇱 Польский ← 🇷🇺» and the word count on a second line of the same `Text`; the system checkmark marks the active one), `Divider`, «Новый язык…» (`plus`), «Управлять языками» (`gearshape`). Switching dismisses sheets built for the previous pair |
+| Language wizard | two-step `NavigationStack` (full-screen cover on first launch, sheet with «Отмена» from «Новый язык…»): two progress capsules (4 pt, `appAccentStrong` / `appSecondarySurface`), section-style kicker «Шаг N из 2», `.title.heavy` title, `.subheadline` `subtleText` body, one `cardStyle` card of rows (min 56 pt, flag `.title2`, name `.body.semibold`, endonym/status `.footnote` `subtleText`, `checkmark` `appAccentStrong` + `.isSelected`; the studied language is disabled at 0.45 on step 2), one `PrimaryButtonStyle` accent button in a bottom inset («Далее» / «Начать — 🇩🇪 ← 🇷🇺»), step 2 info line (`info.circle` footnote, stacks at AX). Back is a custom «Назад» toolbar button |
+| Loading gate | `appBackground`, centred `ProgressView` and «Загружаем словарь…» (`.subheadline` `subtleText`), no tab bar; shown while the session is restored or the first pull runs (10 s limit) |
+| Languages sheet | `.sheet` + inline «Языки»; leading «Править» (reads «Готово» `.bold` while editing), trailing «Готово» (`appAccentText`, hidden while editing). Inset-grouped `List` on `appBackground`, rows on `cardBackground`: flag `.title2`, «Польский ← Русский» `.body.semibold`, «248 слов · 4 папки» `.footnote` `subtleText` `.monospacedDigit()`, `checkmark` `appAccentStrong` on the active row. Delete through `.onDelete` + `confirmationDialog` (`.deleteDisabled` for the only workspace), reorder through `.onMove`. «Добавить язык» (`plus`, `appAccentText`, min 44 pt) opens the wizard sheet; calm `info.circle` footnote below |
+| Input-side control | Same-script pairs only, above the Add Word card: section header «Ввожу на» and a segmented `Picker` («🇺🇦 Украинском» / «🇷🇺 Русском»), plus a calm `info.circle` footnote under the card; remembered per workspace |
 | Account sheet | `.sheet` + inline "Аккаунт", "Готово" (`appAccentText`). Signed out: 64 pt `appAccentSoft` tile, `.title3.bold` title, Apple (`PrimaryButtonStyle(kind: .ink)`, `apple.logo`) and Google (`.card`, official multicolour `GoogleLogo` asset at body size, never tinted) buttons, no yellow; failure is the calm `info.circle` footnote; a successful sign-in closes the sheet. Signed in: card with email and provider (`subtleText`), then the sync card, then "Выйти" text button. Sync card (`cardStyle`, `AppSpacing.m` padding, hidden when the build has no sync): "Синхронизация" header (`.subheadline.weight(.semibold)`, `appInk`, one line, scales down to 0.6), a `.footnote` `subtleText` status line («Синхронизировано: сегодня, 12:14», date without year) with a small `ProgressView` while a cycle runs (label «Идёт синхронизация»), and the «Синхронизировать сейчас» text button (`appAccentText`, min height 44, disabled while a cycle runs). A failed cycle and the paused state use the calm `info.circle` footnote (no red; the icon stacks above the text at accessibility sizes). Paused (data linked to another account): explanation plus the «Объединить словари» text button, which opens a `confirmationDialog` «Объединить словари?» (message: both directions, nothing is deleted; actions «Объединить» / «Отмена»); no manual sync while paused. A manual sync announces its result to VoiceOver |
 
 ### Patterns
@@ -165,6 +170,7 @@ Mode and achievements icons sit on `appAccentSoft` tiles with an ink glyph.
 | Close camera / retry / edit / delete | `xmark` / `arrow.clockwise` / `pencil` / `trash` |
 | Account / Sign in with Apple | `person.crop.circle` / `apple.logo` |
 | Network error / inline error | `wifi.exclamationmark` / `exclamationmark.circle` |
+| Manage languages / new language / selected language row | `gearshape` / `plus` / `checkmark` |
 | Search empty / camera unavailable / translate selection | `magnifyingglass` / `camera` / `text.magnifyingglass` |
 
 Achievement catalog symbols are outline names (no `.fill`, unique); unlocked badges add `.fill` via `symbolVariant`.

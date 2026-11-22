@@ -72,7 +72,7 @@ final class LoggingWorkspaceRepository: WorkspaceRepository {
         try logger.logged("workspaces.load") { try base.workspaces() }
     }
 
-    func ensure(term: String, translation: String) throws -> UUID {
+    func ensure(term: String, translation: String) throws -> WorkspaceEnsureResult {
         try logger.logged("workspaces.ensure") { try base.ensure(term: term, translation: translation) }
     }
 

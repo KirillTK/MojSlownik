@@ -5,6 +5,13 @@ import SwiftData
 /// Named SwiftData fixtures for UI-test mode. Dates are relative to `now` (launch time).
 enum UITestFixture: String, CaseIterable, Sendable {
     case empty, basicVocabulary, dueForReview, foldersOrdered
+    /// Nothing at all, not even a workspace: the first-launch wizard (or the pull gate when signed in).
+    case freshInstall
+    /// pl ← ru (`basicVocabulary` words, folder «Урок 1» with kot and dom) and de ← ru
+    /// («das Haus», «lernen», folder «Lektion 1» with «das Haus»); pl sorts first and is active.
+    case multiWorkspace
+    /// en ← pl active and empty: both sides use Latin letters, so «Ввожу на» appears (ASCII typing works for both).
+    case sameScriptWorkspace
     /// `basicVocabulary` with fixed uuids and rows already synced (clean): pairs with the
     /// `syncedThenRemoteChanges` server state.
     case syncedVocabulary
@@ -12,6 +19,7 @@ enum UITestFixture: String, CaseIterable, Sendable {
     static let lesson1ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F1")!
     static let lesson2ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F2")!
     static let lesson3ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F3")!
+    static let lektion1ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F4")!
 
     /// Fixed ids of the `syncedVocabulary` words, in `basicVocabulary` order (kot = a1, dom = a2).
     static let syncedWordIDs: [UUID] = (1...5).map { UUID(uuidString: "00000000-0000-0000-0000-0000000000A\($0)")! }
@@ -50,6 +58,11 @@ enum UITestFixture: String, CaseIterable, Sendable {
 
     @MainActor
     func seed(into context: ModelContext, now: Date) throws {
+        if self == .freshInstall { return }
+        if self == .sameScriptWorkspace {
+            try WorkspaceCatalog.ensure(term: "en", translation: "pl", context: context, now: now)
+            return
+        }
         let workspace = try WorkspaceCatalog.ensure(term: "pl", translation: "ru", context: context, now: now)
         let workspaceID = workspace.id
         if self == .syncedVocabulary {
@@ -58,12 +71,13 @@ enum UITestFixture: String, CaseIterable, Sendable {
             workspace.updatedAt = stamp
             workspace.serverUpdatedAt = stamp
         }
-        var memberships: [(word: Word, folderID: UUID)] = []
+        var memberships: [(word: Word, folderID: UUID, workspaceID: UUID)] = []
         var index = 0
         func word(_ russian: String, _ polish: String, _ source: WordSide,
-                  due: Bool = false, folders: [UUID] = []) -> Word {
+                  due: Bool = false, folders: [UUID] = [],
+                  pair: LanguagePair = .polishRussian, in owner: UUID? = nil) -> Word {
             let word = Word(entry: WordEntry(term: polish, translation: russian, enteredSide: source),
-                            pair: .polishRussian, workspaceID: workspaceID,
+                            pair: pair, workspaceID: owner ?? workspaceID,
                             createdAt: now.addingTimeInterval(-Double(index + 1) * 3600))
             index += 1
             if due {
@@ -76,14 +90,32 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 word.easeFactor = 2.5
                 word.dueDate = now.addingTimeInterval(30 * 86_400)
             }
-            memberships += folders.map { (word, $0) }
+            memberships += folders.map { (word, $0, owner ?? workspaceID) }
             return word
         }
 
         var words: [Word] = []
         switch self {
-        case .empty:
+        case .empty, .freshInstall, .sameScriptWorkspace:
             break
+        case .multiWorkspace:
+            let german = try WorkspaceCatalog.ensure(term: "de", translation: "ru", context: context, now: now)
+            let germanPair = LanguagePair(term: .german, translation: .russian)
+            let created = now.addingTimeInterval(-86_400)
+            for (name, id, owner) in [("Урок 1", Self.lesson1ID, workspaceID),
+                                      ("Lektion 1", Self.lektion1ID, german.id)] {
+                let folder = WordFolder(name: name)
+                folder.id = id
+                folder.createdAt = created
+                folder.workspaceID = owner
+                context.insert(folder)
+            }
+            words = [word("кот", "kot", .translation, folders: [Self.lesson1ID]),
+                     word("дом", "dom", .term, folders: [Self.lesson1ID]),
+                     word("вода", "woda", .term), word("хлеб", "chleb", .translation),
+                     word("книга", "książka", .translation),
+                     word("дом", "das Haus", .translation, folders: [Self.lektion1ID], pair: germanPair, in: german.id),
+                     word("учить", "lernen", .translation, pair: germanPair, in: german.id)]
         case .basicVocabulary:
             words = [word("кот", "kot", .translation), word("дом", "dom", .term),
                      word("вода", "woda", .term), word("хлеб", "chleb", .translation),
@@ -118,9 +150,9 @@ enum UITestFixture: String, CaseIterable, Sendable {
                      word("хлеб", "chleb", .translation)]
         }
         words.forEach(context.insert)
-        for (word, folderID) in memberships {
+        for (word, folderID, owner) in memberships {
             guard let uuid = word.uuid else { continue }
-            context.insert(FolderMembership(wordID: uuid, folderID: folderID, workspaceID: workspaceID,
+            context.insert(FolderMembership(wordID: uuid, folderID: folderID, workspaceID: owner,
                                             createdAt: word.createdAt))
         }
         try context.save()

@@ -83,6 +83,45 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertFalse(store.workspacePullFinished, "reset when the account changes")
     }
 
+    func testPulledWorkspacesAreLoadedBeforePullFinishedIsSet() async throws {
+        // A fresh install: no local workspace, the account has one. The gate must never see
+        // "pull finished" with an empty workspace list (it would flash the wizard).
+        let fresh = try Kit.makeContainer()
+        let freshWorkspaces = WorkspaceStore(repository: SwiftDataWorkspaceRepository(container: fresh),
+                                             activeRepository: UserDefaultsActiveWorkspaceRepository(
+                                                defaults: UserDefaults(suiteName: suite)!))
+        try freshWorkspaces.load()
+        XCTAssertNil(freshWorkspaces.activeID)
+        remote.seed(workspaces: [Kit.remoteWorkspace(term: "de", translation: "ru", updatedAt: t0.addingTimeInterval(-60))])
+        let engine = SyncEngine(remote: remote, local: SwiftDataSyncStore(container: fresh, now: { self.t0 }),
+                                state: state, now: { self.t0 })
+        let store = SyncStore(engine: engine, state: state, workspaces: freshWorkspaces,
+                              folders: FolderLibraryStore.inLegacyWorkspace(repository: SwiftDataFolderRepository(container: fresh)),
+                              achievements: nil, logger: spy, debounce: .milliseconds(20), now: { self.appNow })
+
+        store.accountDidChange(account)
+        await waitUntil("workspace pull finished") { store.workspacePullFinished }
+
+        XCTAssertEqual(freshWorkspaces.options.map(\.termCode), ["de"])
+        XCTAssertNotNil(freshWorkspaces.activeID)
+    }
+
+    func testGateInputsFollowTheAccountAndTheTransport() async {
+        let store = makeStore()
+        XCTAssertTrue(store.isAvailable)
+        XCTAssertFalse(store.isLinkedToCurrentAccount, "signed out")
+        store.accountDidChange(account)
+        XCTAssertTrue(store.isLinkedToCurrentAccount)
+        await waitForSynced(store)
+        XCTAssertTrue(store.isLinkedToCurrentAccount)
+        store.accountDidChange(nil)
+        XCTAssertFalse(store.isLinkedToCurrentAccount)
+
+        let none = makeStore(engine: false)
+        XCTAssertFalse(none.isAvailable)
+        XCTAssertFalse(none.isLinkedToCurrentAccount)
+    }
+
     // MARK: Account changes
 
     func testNoAccountMeansSignedOutAndNoEngineMeansUnavailable() {
@@ -131,6 +170,7 @@ final class SyncStoreTests: XCTestCase {
         XCTAssertEqual(remote.callCount, 0)
         XCTAssertEqual(spy.events.filter { $0 == .syncAccountMismatch }.count, 1)
         XCTAssertFalse(store.canSyncNow)
+        XCTAssertFalse(store.isLinkedToCurrentAccount, "the gate must not wait for a pull that never runs")
     }
 
     func testConfirmLinkUploadsAndOnlyWorksFromMismatch() async throws {

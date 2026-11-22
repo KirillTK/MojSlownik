@@ -46,13 +46,11 @@ enum WorkspaceBackfill {
         if !hasLegacy {
             let unassigned = words.contains { $0.workspaceID == nil } || folders.contains { $0.workspaceID == nil }
             let existingInstall = !markerPresent && (!words.isEmpty || !folders.isEmpty)
-            // Phases 1-3 fallback (removed in phase 4): without any active workspace the app has no scope.
-            let noActive = !workspaces.contains(where: \.isActive)
-            if existingInstall || unassigned || noActive {
+            // A fresh install gets no workspace here: the gate shows the wizard (or waits for the first pull).
+            if existingInstall || unassigned {
                 let earliest = (words.map(\.createdAt) + folders.map(\.createdAt)).min()
-                let created = (existingInstall || unassigned) ? (earliest ?? now) : now
                 context.insert(Workspace(termLanguageCode: "pl", translationLanguageCode: "ru",
-                                         sortOrder: 0, createdAt: created))
+                                         sortOrder: 0, createdAt: earliest ?? now))
             }
         }
 

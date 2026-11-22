@@ -43,7 +43,8 @@ struct TrainingView: View {
             }
             .background(Color.appBackground)
             .foregroundStyle(Color.appInk)
-            .navigationTitle("Практика")
+            .workspaceTitleMenu(words: storedAllWords)
+            .onChange(of: workspaces.activeID) { selectedFolderID = nil }
             .onAppear { refreshClock() }
             .onChange(of: scenePhase) {
                 if scenePhase == .active { refreshClock() }

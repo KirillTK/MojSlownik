@@ -46,12 +46,18 @@ enum RepositoryError: LocalizedError, Equatable {
     }
 }
 
+struct WorkspaceEnsureResult: Equatable, Sendable {
+    enum Outcome: Equatable, Sendable { case created, existing, restored }
+    let id: UUID
+    let outcome: Outcome
+}
+
 @MainActor
 protocol WorkspaceRepository: AnyObject {
     /// Active workspaces in display order.
     func workspaces() throws -> [WorkspaceRecord]
-    /// Adds the pair, or revives it after a delete; returns its id.
-    func ensure(term: String, translation: String) throws -> UUID
+    /// Adds the pair, or revives it after a delete; reports which of the three happened.
+    func ensure(term: String, translation: String) throws -> WorkspaceEnsureResult
     /// Soft delete; refuses the last active workspace. Never touches words or folders.
     func delete(id: UUID) throws
     func reorder(ids: [UUID]) throws

@@ -71,6 +71,17 @@ enum WorkspaceCatalog {
         return try ensure(term: term, translation: translation, context: context, now: now).id
     }
 
+    /// `ensure` plus what it did: a new row, an already active one, or a revived tombstone.
+    static func ensureReportingOutcome(term: String, translation: String, container: ModelContainer,
+                                       now: Date = .now) throws -> WorkspaceEnsureResult {
+        let id = WorkspaceID.make(term: term, translation: translation)
+        let before = try ModelContext(container).fetch(FetchDescriptor<Workspace>()).filter { $0.id == id }
+        let outcome: WorkspaceEnsureResult.Outcome =
+            before.isEmpty ? .created : (before.contains(where: \.isActive) ? .existing : .restored)
+        try ensure(term: term, translation: translation, container: container, now: now)
+        return WorkspaceEnsureResult(id: id, outcome: outcome)
+    }
+
     /// Soft delete; refuses the last active workspace.
     static func delete(id: UUID, container: ModelContainer, now: Date = .now) throws {
         let context = ModelContext(container)

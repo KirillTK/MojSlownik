@@ -14,7 +14,7 @@ final class SyncFlowTests: E2ETestCase {
     @MainActor
     private func closeAccount() {
         app.navigationBars["Аккаунт"].buttons["Готово"].tap()
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
     }
 
     /// Polls the status line (label) until it contains `text`.
@@ -33,7 +33,7 @@ final class SyncFlowTests: E2ETestCase {
         let google = element("signIn.google")
         waitForHittable(google)
         google.tap()
-        XCTAssertTrue(app.navigationBars["Словарь"].waitForExistence(timeout: 10))
+        waitForDictionary()
 
         XCTAssertTrue(app.staticTexts["мост"].waitForExistence(timeout: 20), "Account word missing")
         XCTAssertTrue(app.staticTexts["сыр"].waitForExistence(timeout: 20), "Account word missing")

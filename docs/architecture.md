@@ -170,6 +170,30 @@ computation in `AchievementMetrics.vocabulary`; a recorded metric also needs a l
 field (decoded with a default), an `AchievementEvent` and a call site; a new criterion
 kind needs an `AchievementCriterion` case, an evaluator branch and a test.
 
+## Workspaces
+
+A workspace is a language pair (studied `term` ← `translation`); its id is the uuid v5 of the pair
+(`WorkspaceID`), so one pair is one workspace on every device. Words, folders, memberships, the daily ring
+and practice are scoped to the active workspace (`WorkspaceScope`, in memory, `effectiveWorkspaceID`).
+Achievements stay global.
+
+- **Store.** `WorkspaceStore` is the single write entry point (create/restore, select, reorder, soft delete,
+  input side of same-script pairs). `create` logs `workspace.created`, or `workspace.restored` when the pair
+  revives a tombstone (`WorkspaceEnsureResult.outcome`). Changing the active workspace re-points
+  `VocabularyStore`/`FolderLibraryStore` (`onActiveChange`). Deleting is soft: words and folders stay hidden
+  and return when the pair is added again; the last active workspace cannot be deleted.
+- **Gate (`RootTabView`, `Services/WorkspaceGate.swift`).** No active workspace: `loading` while the session
+  is restored (`AuthStore.unknown`), `waitingForAccount` while a signed-in, linked account's first workspace
+  pull is running (`SyncStore.workspacePullFinished`, set after the pulled workspaces are loaded), else
+  `needsSetup` = the first-launch wizard as a full-screen cover. One 10 s timer covers loading and waiting.
+  A fresh install gets no workspace from `WorkspaceBackfill`; an existing install gets pl ← ru silently.
+- **UI.** `WorkspaceWizardView` (two steps, also a sheet from «Новый язык…»), `.workspaceTitleMenu(words:)`
+  on Словарь and Практика (inline title with the system `toolbarTitleMenu` chevron; the large-title menu has
+  no chevron on iOS 26), `WorkspaceManagerView` («Языки»: select, reorder, delete with confirmation, add).
+  A workspace switch dismisses sheets built with the old pair and resets folder/category/search filters.
+  Same-script pairs show the «Ввожу на» control in `AddWordView` (remembered per workspace).
+- **Fixtures.** `freshInstall`, `multiWorkspace`, `sameScriptWorkspace`; sync state `remoteWorkspaces`.
+
 ## Sync
 
 Workspaces, folders, words and memberships (with SRS state) sync with `public.workspaces`, `public.folders`,

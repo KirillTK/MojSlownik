@@ -4,6 +4,7 @@ import SwiftData
 struct AddWordView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(VocabularyStore.self) private var vocabulary
+    @Environment(WorkspaceStore.self) private var workspaces
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -40,13 +41,17 @@ struct AddWordView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
-                    VStack(spacing: 0) {
-                        inputCard
-                        Divider().overlay(Color.appBorder)
-                            .padding(.horizontal, AppSpacing.l)
-                        translationCard
+                    if pair.isSameScript { inputSideControl }
+                    VStack(alignment: .leading, spacing: AppSpacing.s) {
+                        VStack(spacing: 0) {
+                            inputCard
+                            Divider().overlay(Color.appBorder)
+                                .padding(.horizontal, AppSpacing.l)
+                            translationCard
+                        }
+                        .cardStyle(cornerRadius: AppRadius.hero)
+                        if pair.isSameScript { sameScriptInfo }
                     }
-                    .cardStyle(cornerRadius: AppRadius.hero)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Размещение")
@@ -106,6 +111,49 @@ struct AddWordView: View {
             }
         }
         .achievementBanner()
+    }
+
+    /// Same-script pairs cannot tell the sides apart by letters: the user picks the typing side, remembered per workspace.
+    private var inputSideControl: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text("Ввожу на")
+                .font(.footnote.weight(.bold))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundStyle(Color.subtleText)
+                .accessibilityHidden(true)
+            if dynamicTypeSize.isAccessibilitySize {
+                inputSidePicker.pickerStyle(.menu)
+            } else {
+                inputSidePicker.pickerStyle(.segmented)
+            }
+        }
+    }
+
+    private var inputSidePicker: some View {
+        Picker("Ввожу на", selection: Binding(
+            get: { draft.inputSide ?? .term },
+            set: { side in
+                draft.setInputSide(side)
+                if let id = workspaces.activeID { workspaces.setInputSide(side, for: id) }
+            }
+        )) {
+            ForEach([WordSide.term, .translation], id: \.self) { side in
+                let language = pair.language(of: side)
+                Text("\(language.flag) \(language.prepositionalRU.prefix(1).uppercased() + language.prepositionalRU.dropFirst())")
+                    .accessibilityLabel(language.nameRU)
+                    .tag(side)
+            }
+        }
+        .accessibilityIdentifier("inputSideControl")
+    }
+
+    private var sameScriptInfo: some View {
+        Label("У \(pair.term.genitiveRU) и \(pair.translation.genitiveRU) один алфавит, поэтому язык ввода выбирается вручную. Выбор запоминается.",
+              systemImage: "info.circle")
+            .font(.footnote)
+            .foregroundStyle(Color.subtleText)
+            .padding(.horizontal, AppSpacing.xxs)
     }
 
     private var automaticCategory: WordCategory {

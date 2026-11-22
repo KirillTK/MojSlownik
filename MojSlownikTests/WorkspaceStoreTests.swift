@@ -121,6 +121,28 @@ final class WorkspaceStoreTests: XCTestCase {
         XCTAssertFalse(spy.events.contains(.workspaceCreated))
     }
 
+    func testReAddingADeletedPairLogsRestoredNotCreated() throws {
+        let store = makeStore()
+        try store.load()
+        try store.delete(id: de)
+        let before = spy.entries.count
+        try store.create(term: "de", translation: "ru")
+        XCTAssertEqual(store.activeID, de)
+        let entries = Array(spy.entries.dropFirst(before))
+        XCTAssertEqual(entries.map(\.event), [.workspaceRestored, .workspaceSwitched])
+        XCTAssertEqual(entries[0].properties, [.termLanguage: .name("de"), .targetLanguage: .name("ru")])
+    }
+
+    func testEnsureReportsCreatedExistingAndRestored() throws {
+        let repository = SwiftDataWorkspaceRepository(container: container)
+        XCTAssertEqual(try repository.ensure(term: "en", translation: "pl").outcome, .created)
+        XCTAssertEqual(try repository.ensure(term: "en", translation: "pl").outcome, .existing)
+        try repository.delete(id: WorkspaceID.make(term: "en", translation: "pl"))
+        let restored = try repository.ensure(term: "en", translation: "pl")
+        XCTAssertEqual(restored.outcome, .restored)
+        XCTAssertEqual(restored.id, WorkspaceID.make(term: "en", translation: "pl"))
+    }
+
     func testDeletingTheActiveWorkspaceSelectsAnother() throws {
         let store = makeStore()
         try store.load()

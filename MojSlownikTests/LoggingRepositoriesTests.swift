@@ -57,7 +57,7 @@ final class LoggingRepositoriesTests: XCTestCase {
         let base = SwiftDataWorkspaceRepository(container: container)
         let spy = AppLogSpy()
         let repository = LoggingWorkspaceRepository(base, logger: spy)
-        let id = try repository.ensure(term: "pl", translation: "ru")
+        let id = try repository.ensure(term: "pl", translation: "ru").id
         XCTAssertEqual(try repository.workspaces().map(\.id), [id], "successful calls pass through unlogged")
         XCTAssertTrue(spy.entries.isEmpty)
         let cases: [(String, () throws -> Void)] = [

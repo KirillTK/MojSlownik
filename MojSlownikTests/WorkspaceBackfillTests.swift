@@ -81,18 +81,14 @@ final class WorkspaceBackfillTests: XCTestCase {
         XCTAssertEqual(try workspaces().count, 1)
     }
 
-    func testFreshInstallWithOnlySyncDefaultsInfersNothingAndWritesTheMarker() throws {
+    func testFreshInstallWithOnlySyncDefaultsCreatesNoWorkspaceAndWritesTheMarker() throws {
         defaults.set(Data("{}".utf8), forKey: "sync.v1")
         defaults.set(Data("{}".utf8), forKey: "achievements.v1")
 
         XCTAssertTrue(backfill())
 
-        // Phases 1-3 only: the fallback gives an empty install its default workspace, stamped `now`
-        // (an inferred existing-install workspace would carry an old word's createdAt).
-        let all = try workspaces()
-        XCTAssertEqual(all.count, 1)
-        XCTAssertEqual(all[0].createdAt, now)
-        XCTAssertEqual(all[0].id, WorkspaceID.legacy)
+        // A fresh install gets no workspace: the phase-4 gate shows the wizard (or waits for the pull).
+        XCTAssertEqual(try workspaces().count, 0)
         XCTAssertTrue(defaults.bool(forKey: WorkspaceBackfill.markerKey))
     }
 
@@ -105,7 +101,7 @@ final class WorkspaceBackfillTests: XCTestCase {
         XCTAssertEqual(try workspaces().count, 1, "rows without a workspace need the legacy one")
     }
 
-    func testMarkerPresentAndNothingToAssignInsertsNoInferredWorkspaceBeyondTheFallback() throws {
+    func testMarkerPresentAndNothingToAssignInsertsNoInferredWorkspace() throws {
         defaults.set(true, forKey: WorkspaceBackfill.markerKey)
         let context = ModelContext(container)
         let word = Word(russian: "в", polish: "w", side: .term, createdAt: t0)
@@ -138,7 +134,7 @@ final class WorkspaceBackfillTests: XCTestCase {
             .allSatisfy { $0.workspaceID == WorkspaceID.legacy }, "rows are assigned but the workspace is not revived")
     }
 
-    func testFallbackNeverRevivesATombstoneNorInsertsASecondLegacyRow() throws {
+    func testBackfillNeverRevivesATombstoneNorInsertsASecondLegacyRow() throws {
         let context = ModelContext(container)
         let tombstone = Workspace(termLanguageCode: "pl", translationLanguageCode: "ru", createdAt: t0)
         tombstone.markDeleted(now: t0.addingTimeInterval(9))

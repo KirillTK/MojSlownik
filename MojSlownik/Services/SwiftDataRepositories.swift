@@ -21,8 +21,9 @@ final class SwiftDataWorkspaceRepository: WorkspaceRepository {
         }
     }
 
-    func ensure(term: String, translation: String) throws -> UUID {
-        try WorkspaceCatalog.ensure(term: term, translation: translation, container: container, now: now())
+    func ensure(term: String, translation: String) throws -> WorkspaceEnsureResult {
+        try WorkspaceCatalog.ensureReportingOutcome(term: term, translation: translation, container: container,
+                                                    now: now())
     }
 
     func delete(id: UUID) throws {
