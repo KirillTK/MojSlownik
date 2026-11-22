@@ -1,11 +1,11 @@
 import Foundation
 
-/// Запасной веб-переводчик: https://mymemory.translated.net
-/// Без ключа. Email в параметре `de` поднимает лимит с 5 000 до 50 000 символов/день.
-/// Качество краудсорсных совпадений нестабильно, поэтому результат валидируется
-/// по алфавиту целевого языка, а из `matches` выбирается лучший корректный вариант.
+/// Fallback web translator: https://mymemory.translated.net
+/// No key needed. An email in the `de` parameter raises the limit from 5,000 to 50,000 characters/day.
+/// Crowdsourced matches vary in quality, so the result is validated against the target
+/// language's alphabet and the best valid variant is picked from `matches`.
 struct MyMemoryTranslator: TranslationService {
-    /// Необязательно; можно заменить или убрать.
+    /// Optional; can be replaced or removed.
     var contactEmail: String? = "ktkachyov@gmail.com"
 
     func translate(_ text: String, from source: Language, to target: Language) async throws -> String {
@@ -30,13 +30,13 @@ struct MyMemoryTranslator: TranslationService {
             items.append(URLQueryItem(name: "de", value: contactEmail))
         }
         components.queryItems = items
-        // «+» не входит в urlQueryAllowed-экранирование, а сервер трактует его как пробел.
+        // "+" is not escaped by urlQueryAllowed, and the server treats it as a space.
         components.percentEncodedQuery = components.percentEncodedQuery?
             .replacingOccurrences(of: "+", with: "%2B")
         return components.url!
     }
 
-    /// Выбирает лучший корректный вариант; квота и не-200 `responseStatus` дают badResponse.
+    /// Picks the best valid variant; a quota error or a non-200 `responseStatus` gives badResponse.
     static func bestTranslation(from data: Data, sourceText: String, pair: TranslationPair) throws -> String {
         let payload: MyMemoryPayload
         do {

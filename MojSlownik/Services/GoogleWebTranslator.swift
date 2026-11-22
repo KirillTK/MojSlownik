@@ -1,7 +1,7 @@
 import Foundation
 
-/// Неофициальный бесплатный эндпоинт Google Translate (client=gtx).
-/// Без ключа, качество заметно выше MyMemory. Для личного использования.
+/// Unofficial free Google Translate endpoint (client=gtx).
+/// No key needed, quality is noticeably higher than MyMemory. For personal use.
 struct GoogleWebTranslator: TranslationService {
     static func url(for text: String, pair: TranslationPair, dt: [String], interfaceLanguage: String? = nil) -> URL {
         var components = URLComponents(string: "https://translate.googleapis.com/translate_a/single")!
@@ -17,7 +17,7 @@ struct GoogleWebTranslator: TranslationService {
         items.append(URLQueryItem(name: "q", value: text))
         components.queryItems = items
 
-        // «+» не входит в urlQueryAllowed-экранирование, а сервер трактует его как пробел.
+        // "+" is not escaped by urlQueryAllowed, and the server treats it as a space.
         components.percentEncodedQuery = components.percentEncodedQuery?
             .replacingOccurrences(of: "+", with: "%2B")
         return components.url!
@@ -32,7 +32,7 @@ struct GoogleWebTranslator: TranslationService {
             throw TranslationError.badResponse
         }
 
-        // Формат ответа: [[["перевод","оригинал",...], ...], ...]
+        // Response shape: [[["translation","original",...], ...], ...]
         guard let root = try JSONSerialization.jsonObject(with: data) as? [Any],
               let segments = root.first as? [Any] else {
             throw TranslationError.badResponse

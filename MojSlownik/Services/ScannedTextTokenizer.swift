@@ -113,7 +113,7 @@ enum ScannedImageTextRecognizer {
     enum RecognitionError: LocalizedError {
         case imageUnavailable
 
-        var errorDescription: String? { "Не удалось прочитать изображение кадра." }
+        var errorDescription: String? { String(localized: "Couldn’t read the camera frame image.") }
     }
 
     static func recognize(image: UIImage, viewportSize: CGSize,
@@ -215,7 +215,7 @@ private extension UIImage.Orientation {
     }
 }
 
-/// Делит распознанную строку на слова и промежуточный текст, сохраняя пунктуацию.
+/// Splits a recognized line into words and the text between them, keeping punctuation.
 enum ScannedTextTokenizer {
     enum Token: Equatable {
         case word(String)

@@ -1,6 +1,8 @@
 import Foundation
 
+/// The raw values are persisted in `Word.categoryRawValue` and must never change; show `title` in the UI.
 enum WordCategory: String, CaseIterable, Identifiable {
+    // l10n:data-begin persisted raw values
     case food = "Еда и напитки"
     case home = "Дом"
     case travel = "Путешествия"
@@ -9,8 +11,23 @@ enum WordCategory: String, CaseIterable, Identifiable {
     case work = "Работа и учёба"
     case health = "Здоровье"
     case other = "Другое"
+    // l10n:data-end
 
     var id: String { rawValue }
+
+    /// Localized name for the UI.
+    var title: String {
+        switch self {
+        case .food: String(localized: "Food & drinks")
+        case .home: String(localized: "Home")
+        case .travel: String(localized: "Travel")
+        case .nature: String(localized: "Nature")
+        case .people: String(localized: "People")
+        case .work: String(localized: "Work & study")
+        case .health: String(localized: "Health")
+        case .other: String(localized: "Other")
+        }
+    }
 
     // Exact dictionary matches keep unrelated words out; unknown forms fall back to Other.
     static func detect(term: String, translation: String) -> WordCategory {
@@ -25,6 +42,7 @@ enum WordCategory: String, CaseIterable, Identifiable {
             .precomposedStringWithCanonicalMapping.lowercased()
     }
 
+    // l10n:data-begin category detection vocabulary
     private static let vocabulary: [(category: WordCategory, words: Set<String>)] = [
         (.food, Set("еда|напиток|хлеб|молоко|вода|кофе|чай|сахар|соль|мясо|рыба|сыр|яйцо|яблоко|суп|масло|рис|картофель|овощи|фрукты|завтрак|обед|ужин|jedzenie|napój|chleb|mleko|woda|kawa|herbata|cukier|sól|mięso|ryba|ser|jajko|jabłko|zupa|masło|ryż|ziemniak|warzywa|owoce|śniadanie|obiad|kolacja".components(separatedBy: "|"))),
         (.home, Set("дом|квартира|комната|кухня|дверь|окно|стол|стул|кровать|ванная|лампа|ключ|шкаф|пол|стена|dom|mieszkanie|pokój|kuchnia|drzwi|okno|stół|krzesło|łóżko|łazienka|lampa|klucz|szafa|podłoga|ściana".components(separatedBy: "|"))),
@@ -34,6 +52,7 @@ enum WordCategory: String, CaseIterable, Identifiable {
         (.work, Set("работа|школа|университет|учитель|ученик|студент|книга|тетрадь|ручка|офис|компьютер|урок|экзамен|praca|szkoła|uniwersytet|nauczyciel|uczeń|student|książka|zeszyt|długopis|biuro|komputer|lekcja|egzamin".components(separatedBy: "|"))),
         (.health, Set("врач|больница|аптека|лекарство|здоровье|боль|голова|рука|нога|сердце|зуб|lekarz|szpital|apteka|lek|zdrowie|ból|głowa|ręka|noga|serce|ząb".components(separatedBy: "|")))
     ]
+    // l10n:data-end
 }
 
 extension WordCategory {

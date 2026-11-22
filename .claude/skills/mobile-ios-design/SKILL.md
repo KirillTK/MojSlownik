@@ -7,7 +7,7 @@ description: iOS/SwiftUI visual and UX design rules for Mój Słownik — palett
 
 Use this skill for design exploration, design specs inside `/ios-feature-flow` plans,
 and UI review. It sets the process and review bar; `DESIGN.md` and `Theme/Theme.swift` hold the values.
-Russian UI copy, iOS 17+, SwiftUI only, no third-party UI kits.
+English + Russian UI copy (String Catalogs), iOS 17+, SwiftUI only, no third-party UI kits.
 
 ## 1. Process: how a design gets approved
 

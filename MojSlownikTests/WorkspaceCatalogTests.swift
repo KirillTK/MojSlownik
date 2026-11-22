@@ -87,7 +87,7 @@ final class WorkspaceCatalogTests: XCTestCase {
         try WorkspaceCatalog.ensure(term: "pl", translation: "ru", container: container, now: t0)
         XCTAssertThrowsError(try WorkspaceCatalog.delete(id: WorkspaceID.legacy, container: container)) {
             XCTAssertEqual($0 as? WorkspaceCatalog.StoreError, .lastWorkspace)
-            XCTAssertEqual($0.localizedDescription, "Нельзя удалить единственный язык")
+            XCTAssertEqual($0.localizedDescription, "You can’t delete the only language")
         }
         XCTAssertThrowsError(try WorkspaceCatalog.delete(id: UUID(), container: container)) {
             XCTAssertEqual($0 as? WorkspaceCatalog.StoreError, .missingWorkspace)

@@ -63,7 +63,7 @@ final class DailyStudyStore {
         return Summary(completed: completed, remaining: dueIDs.count)
     }
 
-    /// Keep "Не помню" retries visible even during their ten-minute SRS delay.
+    /// Keep "Again" retries visible even during their ten-minute SRS delay.
     func reviewWords(for words: [Word], now: Date = .now) -> [Word] {
         let words = words.filter(\.isActive)
         let isToday = calendar.isDate(activity.day, inSameDayAs: now)

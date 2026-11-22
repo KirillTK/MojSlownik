@@ -40,9 +40,9 @@ struct QuizView: View {
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
         .tint(Color.appAccentText)
-        .navigationTitle("Викторина")
+        .navigationTitle("Quiz")
         .navigationBarTitleDisplayMode(.inline)
-        .errorAlert(title: "Не удалось сохранить ответ", error: $answerError)
+        .errorAlert(title: "Couldn’t save the answer", error: $answerError)
         .onAppear {
             startQuiz()
             if selectedAnswer != nil { scheduleAdvance() }
@@ -79,7 +79,7 @@ struct QuizView: View {
                                               hidesWordInAccessibilityLabel: question.promptSide == .translation)
                         }
                     }
-                    Text("Как переводится")
+                    Text("How do you translate")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(Color.subtleText)
                     Text(question.prompt)
@@ -113,12 +113,12 @@ struct QuizView: View {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(Color.appMastery)
                                             .transition(feedbackTransition)
-                                            .accessibilityLabel("Правильный ответ")
+                                            .accessibilityLabel("Correct answer")
                                     } else if option == selectedAnswer {
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundStyle(Color.appError)
                                             .transition(feedbackTransition)
-                                            .accessibilityLabel("Неверный ответ")
+                                            .accessibilityLabel("Wrong answer")
                                     }
                                 }
                             }
@@ -154,7 +154,7 @@ struct QuizView: View {
         guard selectedAnswer == nil else { return }
         let isCorrect = option == question.correctAnswer
         guard let word = allWords.first(where: { $0.persistentModelID == question.wordID }) else {
-            answerError = "Слово больше не найдено в словаре."
+            answerError = String(localized: "The word is no longer in the dictionary.")
             return
         }
         do {
@@ -197,7 +197,7 @@ struct QuizView: View {
                     .padding(AppSpacing.m)
                     .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     .accessibilityHidden(true)
-                Text("\(score) из \(questions.count)")
+                Text("\(score) of \(questions.count)")
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Color.appInk)
                     .monospacedDigit()
@@ -221,7 +221,7 @@ struct QuizView: View {
                     quizStarted = false
                     startQuiz()
                 } label: {
-                    Text("Ещё раз")
+                    Text("Try again")
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .padding(.top, AppSpacing.xxs)
@@ -232,12 +232,12 @@ struct QuizView: View {
 
     private var resultBadges: some View {
         Group {
-            Label("Верных: \(score)", systemImage: "checkmark")
+            Label("Correct: \(score)", systemImage: "checkmark")
                 .foregroundStyle(Color.appMastery)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(Color.appMasterySurface, in: Capsule())
-            Label("Ошибок: \(questions.count - score)", systemImage: "xmark")
+            Label("Incorrect: \(questions.count - score)", systemImage: "xmark")
                 .foregroundStyle(Color.appError)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -250,10 +250,10 @@ struct QuizView: View {
     private var resultCaption: String {
         let ratio = Double(score) / Double(max(questions.count, 1))
         switch ratio {
-        case 1: return "Świetnie! Идеально!"
-        case 0.7...: return "Отличный результат"
-        case 0.4...: return "Неплохо, продолжайте тренироваться"
-        default: return "Карточки помогут запомнить лучше"
+        case 1: return String(localized: "Świetnie! Perfect!")
+        case 0.7...: return String(localized: "Excellent result")
+        case 0.4...: return String(localized: "Not bad, keep practicing")
+        default: return String(localized: "Flashcards will help you remember better")
         }
     }
 }
@@ -271,8 +271,8 @@ struct QuizQuestion {
             let promptSide: WordSide = Bool.random() ? .translation : .term
             let answerSide = promptSide.other
             let correct = word.text(on: answerSide)
-            // Дедупликация по тексту: слова с одинаковым переводом не должны
-            // давать два одинаковых варианта ответа.
+            // Deduplicate by text: words with the same translation must not
+            // produce two identical answer options.
             var seen: Set<String> = [correct]
             var distractors: [String] = []
             for candidate in words.shuffled() where distractors.count < 3 {

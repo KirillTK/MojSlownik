@@ -193,7 +193,7 @@ final class WorkspaceScopingTests: XCTestCase {
         XCTAssertThrowsError(try store.toggleScanned(entry, category: .other))
         XCTAssertThrowsError(try store.changeCategory(.food, entry: entry))
         XCTAssertTrue(repo.calls.isEmpty)
-        XCTAssertEqual(RepositoryError.noWorkspace.localizedDescription, "Выберите язык словаря")
+        XCTAssertEqual(RepositoryError.noWorkspace.localizedDescription, "Choose a dictionary language")
 
         store.workspace = .germanRussian
         try store.add(entry)

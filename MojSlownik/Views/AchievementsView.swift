@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Pushed from Практика; owns no NavigationStack.
+/// Pushed from Practice; owns no NavigationStack.
 struct AchievementsView: View {
     @Query private var storedWords: [Word]
     @Query private var storedFolders: [WordFolder]
@@ -28,7 +28,7 @@ struct AchievementsView: View {
         }
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
-        .navigationTitle("Достижения")
+        .navigationTitle("Achievements")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -37,20 +37,20 @@ struct AchievementsView: View {
         let secondary = Color.appOnInverse.opacity(0.75)
         return VStack(alignment: .leading, spacing: AppSpacing.s) {
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text("\(store.totalPoints) очков")
+                Text("\(store.totalPoints) points")
                     .font(.largeTitle.weight(.heavy))
                     .monospacedDigit()
                     .foregroundStyle(Color.appAccent)
                     .contentTransition(.numericText())
                     .animation(reduceMotion ? nil : .snappy, value: store.totalPoints)
-                Text("\(store.unlockedCount) из \(store.catalog.count) получено · рекорд \(store.ledger.longestStreakDays) дн.")
+                Text(verbatim: "\(String(localized: "\(store.unlockedCount) of \(store.catalog.count) unlocked")) · \(String(localized: "best streak \(store.ledger.longestStreakDays) days"))")
                     .font(.subheadline)
                     .foregroundStyle(secondary)
             }
             MarkerProgressBar(value: Double(store.unlockedCount) / Double(max(store.catalog.count, 1)),
                               track: Color.appOnInverse.opacity(0.12), fill: .appAccent)
             Label {
-                Text("Серия: \(store.currentStreak()) дн.")
+                Text("Streak: \(store.currentStreak()) days")
                     .foregroundStyle(Color.appOnInverse)
             } icon: {
                 Image(systemName: "flame").foregroundStyle(Color.appAccent)
@@ -75,7 +75,7 @@ struct AchievementsView: View {
                     .tracking(0.6)
                     .foregroundStyle(Color.subtleText)
                 Spacer(minLength: 0)
-                Text("\(done)/\(items.count)")
+                Text(verbatim: "\(done)/\(items.count)")
                     .font(.footnote)
                     .monospacedDigit()
                     .foregroundStyle(Color.subtleText)
@@ -99,7 +99,7 @@ struct AchievementsView: View {
             AchievementBadge(symbol: isHidden ? "questionmark" : item.symbol, isUnlocked: progress.isUnlocked)
             VStack(alignment: .leading, spacing: 4) {
                 if isHidden {
-                    Text("Секретное достижение").font(.headline)
+                    Text("Secret achievement").font(.headline)
                 } else {
                     Text(item.title).font(.headline)
                     Text(item.detail)
@@ -109,7 +109,7 @@ struct AchievementsView: View {
                 }
             }
             Spacer(minLength: 0)
-            Text("\(item.points)")
+            Text(verbatim: "\(item.points)")
                 .font(.subheadline.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(progress.isUnlocked ? Color.appInk : Color.subtleText)
@@ -122,12 +122,12 @@ struct AchievementsView: View {
     @ViewBuilder
     private func status(_ progress: AchievementProgress) -> some View {
         if let date = progress.unlockedAt {
-            Text("Получено \(date.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "ru_RU"))))")
+            Text("Unlocked \(date.formatted(.dateTime.day().month(.wide).year().locale(AppLocale.current)))")
                 .font(.caption)
                 .foregroundStyle(Color.subtleText)
         } else {
             MarkerProgressBar(value: progress.fraction, height: 4)
-            Text("\(progress.current) из \(progress.target)")
+            Text("\(progress.current) of \(progress.target)")
                 .font(.caption)
                 .monospacedDigit()
                 .foregroundStyle(Color.subtleText)

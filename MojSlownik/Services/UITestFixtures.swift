@@ -7,10 +7,10 @@ enum UITestFixture: String, CaseIterable, Sendable {
     case empty, basicVocabulary, dueForReview, foldersOrdered
     /// Nothing at all, not even a workspace: the first-launch wizard (or the pull gate when signed in).
     case freshInstall
-    /// pl ← ru (`basicVocabulary` words, folder «Урок 1» with kot and dom) and de ← ru
+    /// pl ← ru (`basicVocabulary` words, folder "Lesson 1" with kot and dom) and de ← ru
     /// («das Haus», «lernen», folder «Lektion 1» with «das Haus»); pl sorts first and is active.
     case multiWorkspace
-    /// en ← pl active and empty: both sides use Latin letters, so «Ввожу на» appears (ASCII typing works for both).
+    /// en ← pl active and empty: both sides use Latin letters, so the "I’m typing in" control appears (ASCII typing works for both).
     case sameScriptWorkspace
     /// `basicVocabulary` with fixed uuids and rows already synced (clean): pairs with the
     /// `syncedThenRemoteChanges` server state.
@@ -37,9 +37,9 @@ enum UITestFixture: String, CaseIterable, Sendable {
     }
 
     static func syncedWords(now: Date) -> [SyncedWord] {
-        let pairs: [(String, String, WordSide)] = [("кот", "kot", .translation), ("дом", "dom", .term),
-                                                      ("вода", "woda", .term), ("хлеб", "chleb", .translation),
-                                                      ("книга", "książka", .translation)]
+        let pairs: [(String, String, WordSide)] = [("кот", "kot", .translation), ("дом", "dom", .term), // l10n:data
+                                                      ("вода", "woda", .term), ("хлеб", "chleb", .translation), // l10n:data
+                                                      ("книга", "książka", .translation)] // l10n:data
         return pairs.enumerated().map { index, pair in
             SyncedWord(id: syncedWordIDs[index], russian: pair.0, polish: pair.1, source: pair.2,
                        createdAt: now.addingTimeInterval(-Double(index + 1) * 3600),
@@ -102,7 +102,7 @@ enum UITestFixture: String, CaseIterable, Sendable {
             let german = try WorkspaceCatalog.ensure(term: "de", translation: "ru", context: context, now: now)
             let germanPair = LanguagePair(term: .german, translation: .russian)
             let created = now.addingTimeInterval(-86_400)
-            for (name, id, owner) in [("Урок 1", Self.lesson1ID, workspaceID),
+            for (name, id, owner) in [("Урок 1", Self.lesson1ID, workspaceID), // l10n:data
                                       ("Lektion 1", Self.lektion1ID, german.id)] {
                 let folder = WordFolder(name: name)
                 folder.id = id
@@ -110,16 +110,16 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 folder.workspaceID = owner
                 context.insert(folder)
             }
-            words = [word("кот", "kot", .translation, folders: [Self.lesson1ID]),
-                     word("дом", "dom", .term, folders: [Self.lesson1ID]),
-                     word("вода", "woda", .term), word("хлеб", "chleb", .translation),
-                     word("книга", "książka", .translation),
-                     word("дом", "das Haus", .translation, folders: [Self.lektion1ID], pair: germanPair, in: german.id),
-                     word("учить", "lernen", .translation, pair: germanPair, in: german.id)]
+            words = [word("кот", "kot", .translation, folders: [Self.lesson1ID]), // l10n:data
+                     word("дом", "dom", .term, folders: [Self.lesson1ID]), // l10n:data
+                     word("вода", "woda", .term), word("хлеб", "chleb", .translation), // l10n:data
+                     word("книга", "książka", .translation), // l10n:data
+                     word("дом", "das Haus", .translation, folders: [Self.lektion1ID], pair: germanPair, in: german.id), // l10n:data
+                     word("учить", "lernen", .translation, pair: germanPair, in: german.id)] // l10n:data
         case .basicVocabulary:
-            words = [word("кот", "kot", .translation), word("дом", "dom", .term),
-                     word("вода", "woda", .term), word("хлеб", "chleb", .translation),
-                     word("книга", "książka", .translation)]
+            words = [word("кот", "kot", .translation), word("дом", "dom", .term), // l10n:data
+                     word("вода", "woda", .term), word("хлеб", "chleb", .translation), // l10n:data
+                     word("книга", "książka", .translation)] // l10n:data
         case .syncedVocabulary:
             words = Self.syncedWords(now: now).map { spec in
                 let item = word(spec.russian, spec.polish, spec.source)
@@ -129,14 +129,14 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 return item
             }
         case .dueForReview:
-            words = [word("кот", "kot", .translation), word("дом", "dom", .term),
-                     word("вода", "woda", .term),
-                     word("яблоко", "jabłko", .translation, due: true),
-                     word("окно", "okno", .term, due: true)]
+            words = [word("кот", "kot", .translation), word("дом", "dom", .term), // l10n:data
+                     word("вода", "woda", .term), // l10n:data
+                     word("яблоко", "jabłko", .translation, due: true), // l10n:data
+                     word("окно", "okno", .term, due: true)] // l10n:data
         case .foldersOrdered:
             let created = now.addingTimeInterval(-86_400)
-            for (name, id, order) in [("Урок 3", Self.lesson3ID, 2), ("Урок 1", Self.lesson1ID, 0),
-                                      ("Урок 2", Self.lesson2ID, 1)] {
+            for (name, id, order) in [("Урок 3", Self.lesson3ID, 2), ("Урок 1", Self.lesson1ID, 0), // l10n:data
+                                      ("Урок 2", Self.lesson2ID, 1)] { // l10n:data
                 let folder = WordFolder(name: name)
                 folder.id = id
                 folder.sortOrder = order
@@ -144,10 +144,10 @@ enum UITestFixture: String, CaseIterable, Sendable {
                 folder.workspaceID = workspaceID
                 context.insert(folder)
             }
-            words = [word("кот", "kot", .translation, folders: [Self.lesson1ID]),
-                     word("дом", "dom", .term, folders: [Self.lesson1ID]),
-                     word("вода", "woda", .term, folders: [Self.lesson2ID]),
-                     word("хлеб", "chleb", .translation)]
+            words = [word("кот", "kot", .translation, folders: [Self.lesson1ID]), // l10n:data
+                     word("дом", "dom", .term, folders: [Self.lesson1ID]), // l10n:data
+                     word("вода", "woda", .term, folders: [Self.lesson2ID]), // l10n:data
+                     word("хлеб", "chleb", .translation)] // l10n:data
         }
         words.forEach(context.insert)
         for (word, folderID, owner) in memberships {

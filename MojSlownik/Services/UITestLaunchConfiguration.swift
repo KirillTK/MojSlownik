@@ -94,14 +94,14 @@ enum UITestAuthState: String, CaseIterable, Sendable {
 /// Deterministic, network-free translation used in UI-test mode.
 enum UITestTranslationStub {
     private static let toPolish: [String: String] = [
-        "привет": "cześć", "мир": "świat", "привет мир": "cześć świecie",
-        "собака": "pies", "кот": "kot", "дом": "dom", "house": "dom",
+        "привет": "cześć", "мир": "świat", "привет мир": "cześć świecie", // l10n:data
+        "собака": "pies", "кот": "kot", "дом": "dom", "house": "dom", // l10n:data
     ]
-    private static let toGerman: [String: String] = ["дом": "das Haus", "учить": "lernen"]
+    private static let toGerman: [String: String] = ["дом": "das Haus", "учить": "lernen"] // l10n:data
     private static let toEnglish: [String: String] = ["dom": "house"]
     private static let toRussian: [String: String] = [
-        "dom": "дом", "kot": "кот", "woda": "вода", "dziękuję": "спасибо",
-        "bardzo": "очень", "dziękuję bardzo": "спасибо большое",
+        "dom": "дом", "kot": "кот", "woda": "вода", "dziękuję": "спасибо", // l10n:data
+        "bardzo": "очень", "dziękuję bardzo": "спасибо большое", // l10n:data
     ]
 
     private static func key(_ text: String) -> String {
@@ -112,7 +112,7 @@ enum UITestTranslationStub {
         let key = key(text)
         switch target.code {
         case "pl": return toPolish[key] ?? "słowo"
-        case "ru": return toRussian[key] ?? "слово"
+        case "ru": return toRussian[key] ?? "слово" // l10n:data
         case "de": return toGerman[key] ?? "Wort"
         case "en": return toEnglish[key] ?? "word"
         default: return "word"
@@ -123,9 +123,9 @@ enum UITestTranslationStub {
     static func alternatives(_ text: String, pair: TranslationPair) -> [[TranslationAlternative]] {
         switch key(text) {
         case "dom":
-            return [[TranslationAlternative(text: "дом", partOfSpeech: "существительное"),
-                     TranslationAlternative(text: "жилище", partOfSpeech: nil)], []]
-        case "собака":
+            return [[TranslationAlternative(text: "дом", partOfSpeech: "существительное"), // l10n:data
+                     TranslationAlternative(text: "жилище", partOfSpeech: nil)], []] // l10n:data
+        case "собака": // l10n:data
             return [[TranslationAlternative(text: "pies", partOfSpeech: "rzeczownik"),
                      TranslationAlternative(text: "psina", partOfSpeech: nil)], []]
         default:

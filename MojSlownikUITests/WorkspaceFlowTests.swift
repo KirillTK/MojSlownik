@@ -10,13 +10,6 @@ final class WorkspaceFlowTests: E2ETestCase {
     }
 
     @MainActor
-    private func openTitleMenu(_ title: String) {
-        let button = app.navigationBars.buttons[title]
-        waitForHittable(button)
-        button.tap()
-    }
-
-    @MainActor
     func testFreshInstallWizardCreatesWorkspace() {
         launch(.freshInstall)
         tapRow("wizardLanguage-de")
@@ -105,7 +98,7 @@ final class WorkspaceFlowTests: E2ETestCase {
         let swipeDelete = app.buttons.matching(NSPredicate(format: "label == 'Delete' OR label == 'Удалить'")).firstMatch
         waitForHittable(swipeDelete)
         swipeDelete.tap()
-        // Confirmation dialog (an action sheet, or a popover inside the sheet): a destructive «Удалить».
+        // Confirmation dialog (an action sheet, or a popover inside the sheet): a destructive "Delete".
         let confirm = app.buttons.matching(NSPredicate(format: "label == 'Удалить'")).firstMatch
         waitForHittable(confirm)
         confirm.tap()

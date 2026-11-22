@@ -9,18 +9,18 @@ struct SessionProgress: View {
         VStack(alignment: .leading, spacing: spacing) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Ответы")
+                    Text("Answers")
                         .foregroundStyle(Color.subtleText)
                     Spacer(minLength: 12)
-                    Text("\(completed) из \(total)")
+                    Text("\(completed) of \(total)")
                         .foregroundStyle(Color.appInk)
                         .monospacedDigit()
                 }
                 .fixedSize(horizontal: true, vertical: false)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Ответы")
+                    Text("Answers")
                         .foregroundStyle(Color.subtleText)
-                    Text("\(completed) из \(total)")
+                    Text("\(completed) of \(total)")
                         .foregroundStyle(Color.appInk)
                         .monospacedDigit()
                 }
@@ -29,8 +29,8 @@ struct SessionProgress: View {
             MarkerProgressBar(value: Double(completed) / Double(max(total, 1)))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Прогресс практики")
-        .accessibilityValue("Ответов: \(completed) из \(total)")
+        .accessibilityLabel("Practice progress")
+        .accessibilityValue("Answers: \(completed) of \(total)")
         .accessibilityIdentifier("sessionProgress")
     }
 }

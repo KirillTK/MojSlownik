@@ -19,6 +19,28 @@ class E2ETestCase: XCTestCase {
         case empty, remoteVocabulary, failsOnce, linkedToOtherAccount, syncedThenRemoteChanges, remoteWorkspaces
     }
 
+    /// Language the app launches in (launch arguments override the simulator's language).
+    enum UILanguage {
+        case russian, english, german, germanThenRussian
+
+        var appleLanguages: String {
+            switch self {
+            case .russian: return "(ru)"
+            case .english: return "(en)"
+            case .german: return "(de)"
+            case .germanThenRussian: return "(de, ru)"
+            }
+        }
+
+        var appleLocale: String {
+            switch self {
+            case .russian: return "ru_RU"
+            case .english: return "en_US"
+            case .german, .germanThenRussian: return "de_DE"
+            }
+        }
+    }
+
     var app: XCUIApplication!
 
     /// Default wait for helpers. Shared CI runners are slow (the first launch on a cold
@@ -32,8 +54,9 @@ class E2ETestCase: XCTestCase {
     @MainActor
     @discardableResult
     func launch(_ fixture: Fixture, prefill: String? = nil, auth: AuthState? = nil,
-                sync: SyncState? = nil) -> XCUIApplication {
+                sync: SyncState? = nil, language: UILanguage = .russian) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", language.appleLanguages, "-AppleLocale", language.appleLocale]
         app.launchEnvironment["UITEST_FIXTURE"] = fixture.rawValue
         if let auth {
             app.launchEnvironment["UITEST_AUTH"] = auth.rawValue
@@ -129,6 +152,13 @@ class E2ETestCase: XCTestCase {
     }
 
     @MainActor
+    func openTitleMenu(_ title: String) {
+        let button = app.navigationBars.buttons[title]
+        waitForHittable(button)
+        button.tap()
+    }
+
+    @MainActor
     func openTab(_ title: String) {
         let tab = app.tabBars.buttons[title]
         waitForHittable(tab)
@@ -152,12 +182,16 @@ class E2ETestCase: XCTestCase {
     @MainActor
     func dismissAchievementBannerIfPresent() {
         let banners = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label BEGINSWITH 'Достижение получено'"))
+            .matching(NSPredicate(format: "label BEGINSWITH 'Достижение получено' OR label BEGINSWITH 'Achievement unlocked'"))
         for _ in 0..<5 {
             let deadline = Date().addingTimeInterval(1)
             var hittable: XCUIElement?
             repeat {
-                hittable = banners.allElementsBoundByIndex.first { $0.exists && $0.isHittable }
+                // Same guard as waitForHittable: isHittable on a banner still mid-layout (sliding
+                // in or out) records "Failed to determine hittability" instead of returning false.
+                hittable = banners.allElementsBoundByIndex.first {
+                    $0.exists && !$0.frame.isEmpty && $0.isHittable
+                }
                 if hittable != nil { break }
                 Thread.sleep(forTimeInterval: 0.1)
             } while Date() < deadline

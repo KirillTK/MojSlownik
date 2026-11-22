@@ -40,8 +40,8 @@ enum RepositoryError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .missingIdentity: "Не удалось определить слово. Перезапустите приложение."
-        case .noWorkspace: "Выберите язык словаря"
+        case .missingIdentity: String(localized: "Couldn’t identify the word. Restart the app.")
+        case .noWorkspace: String(localized: "Choose a dictionary language")
         }
     }
 }

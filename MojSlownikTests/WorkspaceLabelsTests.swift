@@ -10,25 +10,25 @@ final class WorkspaceLabelsTests: XCTestCase {
 
     func testTitleIsFlagAndStudiedLanguage() {
         let pl = option("pl", "ru")
-        XCTAssertEqual(WorkspaceLabels.title(of: pl, among: [pl, option("de", "ru", order: 1)]), "🇵🇱 Польский")
+        XCTAssertEqual(WorkspaceLabels.title(of: pl, among: [pl, option("de", "ru", order: 1)]), "🇵🇱 Polish")
     }
 
     func testTitleAddsTheTranslationFlagWhenTheStudiedLanguageRepeats() {
         let first = option("de", "ru")
         let second = option("de", "en", order: 1)
-        XCTAssertEqual(WorkspaceLabels.title(of: first, among: [first, second]), "🇩🇪 Немецкий ← 🇷🇺")
-        XCTAssertEqual(WorkspaceLabels.title(of: second, among: [first, second]), "🇩🇪 Немецкий ← 🇬🇧")
+        XCTAssertEqual(WorkspaceLabels.title(of: first, among: [first, second]), "🇩🇪 German ← 🇷🇺")
+        XCTAssertEqual(WorkspaceLabels.title(of: second, among: [first, second]), "🇩🇪 German ← 🇬🇧")
     }
 
     func testMenuLabelAndName() {
         let de = option("de", "ru")
-        XCTAssertEqual(WorkspaceLabels.menuLabel(of: de), "🇩🇪 Немецкий ← 🇷🇺")
-        XCTAssertEqual(WorkspaceLabels.name(of: de), "Немецкий ← Русский")
+        XCTAssertEqual(WorkspaceLabels.menuLabel(of: de), "🇩🇪 German ← 🇷🇺")
+        XCTAssertEqual(WorkspaceLabels.name(of: de), "German ← Russian")
     }
 
     func testAccessibilityNameUsesTheEndonymOnlyWhenItDiffers() {
-        XCTAssertEqual(WorkspaceLabels.accessibilityName(of: .polish), "Польский, Polski")
-        XCTAssertEqual(WorkspaceLabels.accessibilityName(of: .russian), "Русский")
+        XCTAssertEqual(WorkspaceLabels.accessibilityName(of: .polish), "Polish, Polski")
+        XCTAssertEqual(WorkspaceLabels.accessibilityName(of: .english), "English")
     }
 
     func testWordCountsGroupActiveWordsByWorkspace() {
@@ -42,19 +42,6 @@ final class WorkspaceLabelsTests: XCTestCase {
         let counts = WorkspaceScope.wordCounts([legacy, german, deleted])
         XCTAssertEqual(counts[WorkspaceID.legacy], 1, "rows without a workspace belong to pl ← ru")
         XCTAssertEqual(counts[de], 1, "deleted words are not counted")
-    }
-
-    func testRussianPluralForms() {
-        XCTAssertEqual(RussianPlural.words(0), "0 слов")
-        XCTAssertEqual(RussianPlural.words(1), "1 слово")
-        XCTAssertEqual(RussianPlural.words(3), "3 слова")
-        XCTAssertEqual(RussianPlural.words(11), "11 слов")
-        XCTAssertEqual(RussianPlural.words(12), "12 слов")
-        XCTAssertEqual(RussianPlural.words(21), "21 слово")
-        XCTAssertEqual(RussianPlural.words(248), "248 слов")
-        XCTAssertEqual(RussianPlural.folders(1), "1 папка")
-        XCTAssertEqual(RussianPlural.folders(4), "4 папки")
-        XCTAssertEqual(RussianPlural.folders(5), "5 папок")
     }
 }
 

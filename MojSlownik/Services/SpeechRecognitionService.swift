@@ -48,7 +48,7 @@ final class SpeechRecognitionService {
             let allowed = await self.backend.requestPermission()
             guard self.token == session, self.state == .requestingPermission else { return }
             guard allowed else {
-                self.fail("Разрешите доступ к микрофону и распознаванию речи в Настройках.", session: session)
+                self.fail(String(localized: "Allow access to the microphone and speech recognition in Settings."), session: session)
                 return
             }
             do {
@@ -61,7 +61,7 @@ final class SpeechRecognitionService {
                 })
                 if self.token == session { self.state = .listening }
             } catch {
-                self.fail((error as? LocalizedError)?.errorDescription ?? "Не удалось включить микрофон. Попробуйте ещё раз.", session: session)
+                self.fail((error as? LocalizedError)?.errorDescription ?? String(localized: "Couldn’t turn on the microphone. Try again."), session: session)
             }
         }
     }
@@ -84,7 +84,7 @@ final class SpeechRecognitionService {
         guard token == session, isBusy else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            fail("Речь не распознана. Попробуйте ещё раз.", session: session)
+            fail(String(localized: "Speech wasn’t recognized. Try again."), session: session)
             return
         }
         let callback = completion
@@ -116,8 +116,8 @@ private enum CaptureError: LocalizedError {
     case unavailable, invalidFormat
     var errorDescription: String? {
         switch self {
-        case .unavailable: return "Распознавание польской речи сейчас недоступно. Попробуйте позже."
-        case .invalidFormat: return "Микрофон недоступен. Проверьте подключение и попробуйте ещё раз."
+        case .unavailable: return String(localized: "Polish speech recognition is unavailable right now. Try again later.")
+        case .invalidFormat: return String(localized: "The microphone is unavailable. Check the connection and try again.")
         }
     }
 }
@@ -166,14 +166,14 @@ final class NativeSpeechRecognitionBackend: SpeechRecognitionBackend {
             object: audio, queue: .main) { notification in
                 guard let value = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                       value == AVAudioSession.InterruptionType.began.rawValue else { return }
-                Task { @MainActor in onFailure("Запись прервана. Попробуйте ещё раз.") }
+                Task { @MainActor in onFailure(String(localized: "Recording was interrupted. Try again.")) }
             }
         recognitionTask = recognizer.recognitionTask(with: request) { result, error in
             let text = result?.bestTranscription.formattedString
             let final = result?.isFinal ?? false
             Task { @MainActor in
                 if let text { onResult(text, final) }
-                if error != nil { onFailure("Не удалось распознать речь. Проверьте подключение и попробуйте ещё раз.") }
+                if error != nil { onFailure(String(localized: "Couldn’t recognize speech. Check the connection and try again.")) }
             }
         }
         engine.prepare()

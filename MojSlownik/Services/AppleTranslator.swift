@@ -3,10 +3,10 @@ import SwiftUI
 import Translation
 #endif
 
-// Офлайн-перевод Apple (Translation framework, iOS 18+).
-// Особенность API: TranslationSession выдаётся только через view-модификатор
-// .translationTask, поэтому нужен «мост»: модель хранит запрос и continuation,
-// модификатор AppleTranslationHost (висит на корневом view) выполняет перевод.
+// Apple's offline translation (Translation framework, iOS 18+).
+// API quirk: a TranslationSession is only handed out through the .translationTask view
+// modifier, so a "bridge" is needed: the model keeps the request and a continuation,
+// and the AppleTranslationHost modifier (attached to the root view) performs the translation.
 
 #if canImport(Translation)
 @available(iOS 18.0, *)
@@ -38,8 +38,8 @@ final class AppleTranslationModel: ObservableObject {
                 }
             }
         } onCancel: {
-            // Иначе continuation зависает навсегда, если сессия так и не пришла
-            // (нет языковых пакетов и т.п.), и таймаут в Translator не срабатывает.
+            // Otherwise the continuation hangs forever if the session never arrives
+            // (no language packs, etc.) and the timeout in Translator never fires.
             Task { @MainActor in
                 AppleTranslationModel.shared.cancelPending()
             }
@@ -75,7 +75,7 @@ private struct AppleTranslationHost18: ViewModifier {
 }
 #endif
 
-/// Вешается на корневой view; на iOS < 18 ничего не делает.
+/// Attached to the root view; does nothing on iOS < 18.
 struct AppleTranslationHost: ViewModifier {
     func body(content: Content) -> some View {
         #if canImport(Translation)

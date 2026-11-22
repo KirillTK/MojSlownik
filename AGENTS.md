@@ -4,7 +4,9 @@ Personal iPhone dictionary and practice app for Russian speakers learning Polish
 SwiftUI, SwiftData, Swift 5.9, iOS 17+. Optional Supabase account (Apple/Google via the SDK's
 OAuth); words and folders sync with the account (offline-first, see docs/architecture.md › Sync). Local vocabulary stays the source of truth; web translation sends entered/scanned
 text to external services; signed-in users upload content-free diagnostics (app_logs).
-UI copy is Russian; code, file names and project instructions are English.
+UI copy is localized: English source strings and a Russian translation in String Catalogs
+(Localizable.xcstrings, InfoPlist.xcstrings); iOS picks the system language and falls back to
+English. Code, comments, file names and project instructions are English.
 
 ## Invariants
 
@@ -23,6 +25,12 @@ UI copy is Russian; code, file names and project instructions are English.
 - Logging (Services/AppLog.swift): events/keys are enums, values Int/Bool/ASCII ids; never
   log user text, emails, tokens or error messages (domain/code only). No SDK logger.
 - Before any UI/visual work read [DESIGN.md](DESIGN.md) (tokens, components, icons, a11y).
+- No hardcoded UI copy: every user-facing string goes through the String Catalog
+  (Localizable.xcstrings, InfoPlist.xcstrings). Adding or changing a string means writing both
+  `en` and `ru` (all plural forms) in the same change; never leave one language missing or
+  stale. `scripts/check-localization.sh` and SourceHygieneTests enforce it. Domain data
+  (words, folder names, WordCategory raw values, fixtures) is never localized and sits in
+  `// l10n:data` regions.
 - Stores/FolderLibraryStore.swift is injected once at the app root via environment;
   views keep only local selection/presentation state.
 - Removing folders or folder memberships never deletes words.
@@ -48,6 +56,8 @@ UI copy is Russian; code, file names and project instructions are English.
 - Database: `scripts/test-db.sh <URL of an empty Postgres>` (CI does this in a container).
 - Pick `<device>` from `xcrun simctl list devices available`. If CommandLineTools is
   active, set DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer.
+- After building, run `scripts/check-localization.sh <DerivedData>` (extracted string keys vs the
+  catalog: no missing, no dead keys; CI runs it after the build).
 - Filter output: `| grep -E 'error:|warning:|SUCCEEDED|FAILED|Executed'`.
 
 ```sh

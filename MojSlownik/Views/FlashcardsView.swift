@@ -43,9 +43,9 @@ struct FlashcardsView: View {
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
         .tint(Color.appAccentText)
-        .navigationTitle("Карточки")
+        .navigationTitle("Flashcards")
         .navigationBarTitleDisplayMode(.inline)
-        .errorAlert(title: "Не удалось сохранить ответ", error: $reviewError)
+        .errorAlert(title: "Couldn’t save the answer", error: $reviewError)
         .onAppear(perform: startSession)
     }
 
@@ -69,7 +69,7 @@ struct FlashcardsView: View {
                     if isFlipped {
                         gradeButtons(word: word)
                     } else {
-                        Text("Вспомните перевод, затем откройте ответ.")
+                        Text("Recall the translation, then reveal the answer.")
                             .font(.subheadline)
                             .foregroundStyle(Color.subtleText)
                             .multilineTextAlignment(.center)
@@ -118,7 +118,7 @@ struct FlashcardsView: View {
         .accessibilityLabel(isFlipped ? "\(frontText) — \(backText)" : frontText)
         .accessibilityValue(KnowledgeTierBadge.accessibilityDescription(
             for: word, level: tier, hidesWord: shownSide == .translation))
-        .accessibilityHint(isFlipped ? "Скрыть перевод" : "Показать перевод")
+        .accessibilityHint(isFlipped ? "Hide translation" : "Show translation")
         .accessibilityAddTraits(.isButton)
         .overlay(alignment: .topTrailing) {
             if shownSide == .term {
@@ -186,7 +186,7 @@ struct FlashcardsView: View {
 
     private func gradeButtons(word: Word) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.s) {
-            Text("Насколько легко вспомнили?")
+            Text("How easily did you recall it?")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color.subtleText)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.s),
@@ -261,20 +261,20 @@ struct FlashcardsView: View {
                     .padding(AppSpacing.m)
                     .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: AppRadius.card, style: .continuous))
                     .accessibilityHidden(true)
-                Text("Тренировка завершена")
+                Text("Practice complete")
                     .font(.title.weight(.bold))
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("flashcardsCompleted")
-                Text("Повторено слов: \(Set(sessionWords.map(\.persistentModelID)).count)")
+                Text("Words reviewed: \(Set(sessionWords.map(\.persistentModelID)).count)")
                     .font(.title3.weight(.medium))
-                Label("Всего ответов: \(reviewedCount)", systemImage: "checklist")
+                Label("Total answers: \(reviewedCount)", systemImage: "checklist")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color.subtleText)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Color.cardBackground, in: Capsule())
                     .overlay { Capsule().strokeBorder(Color.appCardEdge, lineWidth: 1) }
-                Button("К практике") { dismiss() }
+                Button("Back to Practice") { dismiss() }
                     .buttonStyle(PrimaryButtonStyle())
                     .accessibilityIdentifier("backToPracticeButton")
                     .padding(.top, AppSpacing.xs)
@@ -285,9 +285,9 @@ struct FlashcardsView: View {
 
     private var emptyView: some View {
         ContentUnavailableView {
-            Label("Нет слов", systemImage: "rectangle.on.rectangle.slash")
+            Label("No words", systemImage: "rectangle.on.rectangle.slash")
         } description: {
-            Text("Сначала добавьте слова в словарь.")
+            Text("Add words to the dictionary first.")
         }
     }
 }

@@ -37,7 +37,7 @@ final class SyncFlowTests: E2ETestCase {
 
         XCTAssertTrue(app.staticTexts["мост"].waitForExistence(timeout: 20), "Account word missing")
         XCTAssertTrue(app.staticTexts["сыр"].waitForExistence(timeout: 20), "Account word missing")
-        // `кот` exists locally and on the account under another id: adopted, shown once.
+        // `kot` exists locally and on the account under another id: adopted, shown once.
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label == 'кот'")).count, 1)
         let picker = element("folderPickerButton")
         waitForHittable(picker)

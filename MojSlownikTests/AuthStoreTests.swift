@@ -202,7 +202,7 @@ final class AuthStoreTests: XCTestCase {
         await waitUntil("session") { store.state != .unknown }
         await store.signIn(with: .google)
         XCTAssertEqual(store.state, .signedOut)
-        XCTAssertEqual(store.errorMessage, "Не удалось войти. Попробуйте ещё раз.")
+        XCTAssertEqual(store.errorMessage, "Couldn’t sign in. Try again.")
         XCTAssertEqual(spy.events, [.authFailed])
         XCTAssertEqual(spy.entries[0].level, .error)
         XCTAssertFalse(spy.loggedNames.contains { $0.contains("@") || $0.contains("server") })

@@ -23,4 +23,19 @@ final class WordCategoryTests: XCTestCase {
         XCTAssertEqual(WordCategory.detect(term: "das Haus", translation: "дом"), .home)
         XCTAssertEqual(WordCategory.detect(term: "das Fahrrad", translation: "велосипед"), .other)
     }
+
+    /// Persisted in SwiftData (`Word.categoryRawValue`): must never change, whatever the UI language.
+    func testRawValuesArePersistedRussianAndNeverLocalized() {
+        XCTAssertEqual(WordCategory.allCases.map(\.rawValue),
+                       ["Еда и напитки", "Дом", "Путешествия", "Природа", "Люди", "Работа и учёба", "Здоровье", "Другое"])
+        let word = Word(russian: "x", polish: "y", side: .term, category: .work)
+        XCTAssertEqual(word.categoryRawValue, "Работа и учёба")
+        XCTAssertEqual(word.category, .work)
+    }
+
+    func testTitlesAreEnglishInTheEnglishHostAndRussianInTheRussianBundle() {
+        XCTAssertEqual(WordCategory.allCases.map(\.title),
+                       ["Food & drinks", "Home", "Travel", "Nature", "People", "Work & study", "Health", "Other"])
+        XCTAssertEqual(WordCategory.allCases.map { LocalizationTestSupport.ru($0.title) }, WordCategory.allCases.map(\.rawValue))
+    }
 }

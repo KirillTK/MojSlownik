@@ -346,12 +346,12 @@ final class SyncStoreTests: XCTestCase {
 
     func testStatusTextCoversEveryStatus() {
         let date = Date(timeIntervalSince1970: 1_800_000_000)
-        XCTAssertEqual(SyncStore.text(for: .idle), "Ещё не синхронизировано")
-        XCTAssertEqual(SyncStore.text(for: .syncing), "Синхронизация…")
-        XCTAssertEqual(SyncStore.text(for: .failed), "Не удалось синхронизировать. Повторим позже.")
+        XCTAssertEqual(SyncStore.text(for: .idle), "Not synced yet")
+        XCTAssertEqual(SyncStore.text(for: .syncing), "Syncing…")
+        XCTAssertEqual(SyncStore.text(for: .failed), "Couldn’t sync. We’ll try again later.")
         XCTAssertEqual(SyncStore.text(for: .accountMismatch),
-                       "Словарь на этом iPhone связан с другим аккаунтом. Синхронизация выключена.")
-        XCTAssertTrue(SyncStore.text(for: .synced(date)).hasPrefix("Синхронизировано: "))
+                       "The dictionary on this iPhone is linked to a different account. Sync is turned off.")
+        XCTAssertTrue(SyncStore.text(for: .synced(date)).hasPrefix("Synced: "))
         XCTAssertFalse(SyncStore.text(for: .unavailable).isEmpty)
         XCTAssertFalse(SyncStore.text(for: .signedOut).isEmpty)
     }
@@ -360,12 +360,39 @@ final class SyncStoreTests: XCTestCase {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
         let now = Date(timeIntervalSince1970: 1_794_955_800 + 3_600)  // 2026-11-17 23:50 UTC
-        func text(_ date: Date) -> String { SyncStore.text(for: .synced(date), now: now, calendar: calendar) }
-        XCTAssertEqual(text(now.addingTimeInterval(-600)), "Синхронизировано: сегодня, 23:40")
-        XCTAssertEqual(text(now.addingTimeInterval(-86_400)), "Синхронизировано: вчера, 23:50")
-        let older = text(now.addingTimeInterval(-5 * 86_400))
-        XCTAssertEqual(older, "Синхронизировано: 12 нояб., 23:50")
+        let locale = Locale(identifier: "en_GB")
+        func time(_ date: Date, in locale: Locale) -> String {
+            date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
+                                            calendar: calendar, timeZone: calendar.timeZone))
+        }
+        func day(_ date: Date, in locale: Locale) -> String {
+            date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, locale: locale, calendar: calendar,
+                                            timeZone: calendar.timeZone).day().month(.abbreviated))
+        }
+        func text(_ date: Date, in locale: Locale) -> String {
+            SyncStore.text(for: .synced(date), now: now, calendar: calendar, locale: locale)
+        }
+        let recent = now.addingTimeInterval(-600)
+        XCTAssertEqual(text(recent, in: locale), "Synced: today, \(time(recent, in: locale))")
+        let yesterday = now.addingTimeInterval(-86_400)
+        XCTAssertEqual(text(yesterday, in: locale), "Synced: yesterday, \(time(yesterday, in: locale))")
+        let olderDate = now.addingTimeInterval(-5 * 86_400)
+        let older = text(olderDate, in: locale)
+        XCTAssertEqual(older, "Synced: \(day(olderDate, in: locale)), \(time(olderDate, in: locale))")
         XCTAssertFalse(older.contains("2026"), "no year")
+    }
+
+    /// The locale argument decides the date and time formatting (the day part comes from it).
+    func testSyncedDateHonorsTheLocale() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = Date(timeIntervalSince1970: 1_794_955_800 + 3_600)
+        let older = now.addingTimeInterval(-5 * 86_400)
+        let ru = Locale(identifier: "ru_RU")
+        let expectedDay = older.formatted(Date.FormatStyle(date: .omitted, time: .omitted, locale: ru, calendar: calendar,
+                                                           timeZone: calendar.timeZone).day().month(.abbreviated))
+        let text = SyncStore.whenText(older, now: now, calendar: calendar, locale: ru)
+        XCTAssertTrue(text.hasPrefix(expectedDay + ", "), text)
     }
 
     // MARK: Cancellation and quiet unlocks
