@@ -5,6 +5,9 @@ struct FolderPicker: View {
     @Binding var selectedFolderID: UUID?
     var allowsAll = false
     var compact = false
+    /// Learned/learning/new counts per folder (nil = all folders). Set only where the sheet should
+    /// show progress (Practice).
+    var progress: ((UUID?) -> StudyProgress.Breakdown)? = nil
     /// Grows with Dynamic Type so the title is not truncated at accessibility sizes.
     @ScaledMetric(relativeTo: .subheadline) private var compactMaxWidth: CGFloat = 220
 
@@ -116,6 +119,12 @@ struct FolderPicker: View {
                         }
                     }
                     .onMove(perform: moveFolders)
+                } footer: {
+                    if progress != nil, !isEditingFolders {
+                        Text("“Learned”: the word is reviewed every 21 days or less often. Intervals grow to at most 30 days, so learned words come back once a month.")
+                            .font(.footnote)
+                            .foregroundStyle(Color.subtleText)
+                    }
                 }
                 if !isEditingFolders {
                     Section {
@@ -228,13 +237,28 @@ struct FolderPicker: View {
         .presentationDragIndicator(.visible)
     }
 
+    @ViewBuilder
     private func optionRow(id: UUID?, name: String, identifier: String) -> some View {
-        Button {
+        let breakdown = progress?(id)
+        let row = Button {
             selectedFolderID = id
             showFolders = false
         } label: {
             HStack {
-                Text(name).foregroundStyle(Color.appInk)
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    Text(name).foregroundStyle(Color.appInk)
+                    if let breakdown {
+                        Text("\(breakdown.learned) of \(breakdown.total) learned")
+                            .font(.footnote)
+                            .monospacedDigit()
+                            .foregroundStyle(Color.subtleText)
+                            .accessibilityHidden(true)
+                        ProgressSegmentsBar(segments: [
+                            .init(id: "learned", value: breakdown.learned, color: .appMastery),
+                            .init(id: "learning", value: breakdown.learning, color: .appLearning)
+                        ], height: 4)
+                    }
+                }
                 Spacer()
                 if selectedFolderID == id {
                     Image(systemName: "checkmark")
@@ -247,6 +271,12 @@ struct FolderPicker: View {
         }
         .accessibilityAddTraits(selectedFolderID == id ? .isSelected : [])
         .accessibilityIdentifier("folderOption-\(identifier)")
+        // The value carries the count once; pickers without progress add no value node.
+        if let breakdown {
+            row.accessibilityValue(String(localized: "\(breakdown.learned) of \(breakdown.total) learned"))
+        } else {
+            row
+        }
     }
 
     private func managementRow(_ option: FolderLibraryStore.Option) -> some View {

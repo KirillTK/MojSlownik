@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import MojSlownik
 
@@ -7,7 +8,12 @@ final class KnowledgeTierBadgeTests: XCTestCase {
 
         XCTAssertEqual(presentations.map(\.filledMarks), [1, 2, 3, 4])
         XCTAssertEqual(presentations.map(\.levelName), ["Again", "Hard", "Good", "Easy"])
-        XCTAssertEqual(presentations.map(\.color), [.error, .warning, .accent, .mastery])
+        XCTAssertEqual(presentations.map(\.color), [.error, .warning, .learning, .mastery])
+    }
+
+    func testTierTwoRingUsesTheLearningColor() {
+        XCTAssertEqual(KnowledgeTierBadge.presentation(for: 2).color, .learning)
+        XCTAssertEqual(KnowledgeTierBadge.IndicatorColor.learning.color, Color.appLearning)
     }
 
     func testRingFillFractionGrowsWithTier() {

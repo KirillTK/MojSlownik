@@ -1,8 +1,17 @@
 import SwiftUI
 import SwiftData
 
+/// What a flashcard session draws from.
+enum FlashcardSession {
+    /// Today's due words (or ten random words when nothing is due).
+    case review
+    /// Only the scope's hard words (forgotten many times, not yet learned).
+    case hardWords
+}
+
 struct FlashcardsView: View {
     var folderID: UUID? = nil
+    var session: FlashcardSession = .review
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -43,7 +52,7 @@ struct FlashcardsView: View {
         .background(Color.appBackground)
         .foregroundStyle(Color.appInk)
         .tint(Color.appAccentText)
-        .navigationTitle("Flashcards")
+        .navigationTitle(session == .hardWords ? LocalizedStringKey("Hard words") : LocalizedStringKey("Flashcards"))
         .navigationBarTitleDisplayMode(.inline)
         .errorAlert(title: "Couldn’t save the answer", error: $reviewError)
         .onAppear(perform: startSession)
@@ -52,6 +61,13 @@ struct FlashcardsView: View {
     private func startSession() {
         let words = FolderStore.words(allWords, in: folderID, memberships: memberships)
         guard sessionWords.isEmpty, !words.isEmpty else { return }
+        if session == .hardWords {
+            let hard = StudyProgress.hardWords(words).shuffled()
+            guard !hard.isEmpty else { return }
+            sessionWords = hard
+            sessionStarted = true
+            return
+        }
         dailyStudy.refresh()
         let due = dailyStudy.reviewWords(for: words).shuffled()
         // Free practice stays available even after today's repetitions are complete.
@@ -116,8 +132,7 @@ struct FlashcardsView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("flashcard")
         .accessibilityLabel(isFlipped ? "\(frontText) — \(backText)" : frontText)
-        .accessibilityValue(KnowledgeTierBadge.accessibilityDescription(
-            for: word, level: tier, hidesWord: shownSide == .translation))
+        .accessibilityValue(cardAccessibilityValue(word: word, tier: tier, shownSide: shownSide))
         .accessibilityHint(isFlipped ? "Hide translation" : "Show translation")
         .accessibilityAddTraits(.isButton)
         .overlay(alignment: .topTrailing) {
@@ -129,30 +144,51 @@ struct FlashcardsView: View {
         }
     }
 
+    private func cardAccessibilityValue(word: Word, tier: Int, shownSide: WordSide) -> String {
+        let tierText = KnowledgeTierBadge.accessibilityDescription(
+            for: word, level: tier, hidesWord: shownSide == .translation)
+        return StudyProgress.isHardWord(word) ? String(localized: "\(tierText), hard word") : tierText
+    }
+
     private func faceHeader(side: WordSide, word: Word, tier: Int) -> some View {
-        HStack(spacing: AppSpacing.xs) {
-            Text(workspaces.pair.language(of: side).endonym)
-                .font(.caption.weight(.bold))
-                .textCase(.uppercase)
-                .tracking(0.6)
-                .foregroundStyle(Color.subtleText)
-            KnowledgeTierBadge(word: word, level: tier,
-                               hidesWordInAccessibilityLabel: side == .translation)
+        // One row when it fits, otherwise stacked (the hard-word pill never truncates).
+        ViewThatFits(in: .horizontal) {
+            HStackLayout(spacing: AppSpacing.xs) { faceHeaderItems(side: side, word: word, tier: tier) }
+            VStackLayout(alignment: .leading, spacing: AppSpacing.xs) {
+                faceHeaderItems(side: side, word: word, tier: tier)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .padding(.trailing, 56)
+    }
+
+    @ViewBuilder
+    private func faceHeaderItems(side: WordSide, word: Word, tier: Int) -> some View {
+        Text(workspaces.pair.language(of: side).endonym)
+            .font(.caption.weight(.bold))
+            .textCase(.uppercase)
+            .tracking(0.6)
+            .foregroundStyle(Color.subtleText)
+            .fixedSize()
+        KnowledgeTierBadge(word: word, level: tier,
+                           hidesWordInAccessibilityLabel: side == .translation)
+        if StudyProgress.isHardWord(word) {
+            Label("Hard word", systemImage: "exclamationmark.triangle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.appWarning)
+                .padding(.horizontal, AppSpacing.xs)
+                .padding(.vertical, AppSpacing.xxs)
+                .background(Color.appWarningSurface, in: Capsule())
+                .fixedSize()
+                .accessibilityHidden(true)
+        }
     }
 
     private func frontFace(word: Word, side: WordSide, text: String, tier: Int) -> some View {
         VStack(spacing: AppSpacing.m) {
             faceHeader(side: side, word: word, tier: tier)
             Spacer(minLength: 0)
-            Text(text)
-                .font(.system(size: cardWordSize, weight: .heavy))
-                .foregroundStyle(Color.appInk)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
+            WholeWordText(text: text, baseSize: cardWordSize)
             Spacer(minLength: 0)
         }
         .padding(AppSpacing.xl)
@@ -172,12 +208,7 @@ struct FlashcardsView: View {
                 .fill(Color.appBorder)
                 .frame(height: 1)
                 .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
-            Text(text)
-                .font(.system(size: cardWordSize, weight: .heavy))
-                .foregroundStyle(Color.appInk)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
+            WholeWordText(text: text, baseSize: cardWordSize)
             Spacer(minLength: 0)
         }
         .padding(AppSpacing.xl)
@@ -192,25 +223,35 @@ struct FlashcardsView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.s),
                                      count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: AppSpacing.s) {
                 ForEach(ReviewGrade.allCases, id: \.self) { grade in
+                    let preview = SRSEngine.preview(grade, for: word)
                     Button {
                         apply(grade, to: word)
                     } label: {
-                        Text(grade.title)
-                            .font(.body.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                            .foregroundStyle(gradeTint(grade))
-                            .background(gradeSurface(grade),
-                                        in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
-                            .overlay {
-                                if grade != .easy {
-                                    RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
-                                        .strokeBorder(Color.appBorder, lineWidth: 1)
-                                }
+                        VStack(spacing: 2) {
+                            Text(grade.title)
+                                .font(.body.weight(.semibold))
+                            Text(preview.caption)
+                                .font(.footnote.weight(.medium))
+                                .monospacedDigit()
+                                .foregroundStyle(grade == .easy ? Color.appOnAccent.opacity(0.75) : Color.subtleText)
+                        }
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, AppSpacing.xs)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .foregroundStyle(gradeTint(grade))
+                        .background(gradeSurface(grade),
+                                    in: RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
+                        .overlay {
+                            if grade != .easy {
+                                RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous)
+                                    .strokeBorder(Color.appBorder, lineWidth: 1)
                             }
-                            .contentShape(RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: AppRadius.control, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(grade.title)
+                    .accessibilityValue(preview.accessibilityText)
                     .accessibilityIdentifier("gradeButton-\(grade.rawValue)")
                 }
             }
@@ -288,6 +329,56 @@ struct FlashcardsView: View {
             Label("No words", systemImage: "rectangle.on.rectangle.slash")
         } description: {
             Text("Add words to the dictionary first.")
+        }
+    }
+}
+
+/// Card word that never breaks mid-word: the first scale at which the longest word fits on one
+/// line wins, so phrases still wrap between words. Keep it out of lists (up to five candidates).
+private struct WholeWordText: View {
+    let text: String
+    let baseSize: CGFloat
+
+    private static let scales: [CGFloat] = [1.0, 0.85, 0.7, 0.55, 0.4]
+
+    private var words: [String] { text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty } }
+
+    /// The widest word at the base size (measured with the same font weight, not by character count).
+    private var longestWord: String {
+        let font = UIFont.systemFont(ofSize: baseSize, weight: .heavy)
+        func width(_ word: String) -> CGFloat { (word as NSString).size(withAttributes: [.font: font]).width }
+        return words.max { width($0) < width($1) } ?? text
+    }
+
+    var body: some View {
+        let longest = longestWord
+        ViewThatFits(in: .horizontal) {
+            ForEach(Self.scales.dropLast(), id: \.self) { scale in
+                VStack(spacing: 0) {
+                    // Sets the ideal width to the longest word, so a candidate only fits when no word breaks.
+                    Text(longest)
+                        .font(.system(size: baseSize * scale, weight: .heavy))
+                        .fixedSize()
+                        .frame(height: 0)
+                        .hidden()
+                        .accessibilityHidden(true)
+                    Text(text)
+                        .font(.system(size: baseSize * scale, weight: .heavy))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.appInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity)
+                }
+            }
+            // Last resort: no hidden sizing text, so the card width wins and every word may shrink.
+            Text(text)
+                .font(.system(size: baseSize * (Self.scales.last ?? 0.4), weight: .heavy))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Color.appInk)
+                .lineLimit(max(1, words.count))
+                .minimumScaleFactor(0.3)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
         }
     }
 }

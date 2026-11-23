@@ -301,6 +301,7 @@ final class LegacySchemaMigrationTests: XCTestCase {
             XCTAssertEqual(word.easeFactor, 2.7)
             XCTAssertEqual(word.category, .food)
             XCTAssertEqual(word.knowledgeTier, 2)
+            XCTAssertEqual(word.lapseCount, 0, "a store from before lapseCount opens with 0")
             XCTAssertEqual(word.createdAt, created.addingTimeInterval(Double(index)))
             XCTAssertNil(word.updatedAt)
             XCTAssertNil(word.deletedAt)
@@ -316,6 +317,41 @@ final class LegacySchemaMigrationTests: XCTestCase {
         XCTAssertNil(folders.first?.deletedAt)
         try resources.folders.load()
         XCTAssertEqual(resources.folders.options, [.init(id: folderID, name: "Урок 1")])
+    }
+
+    /// `lapseCount` is additive: a store from before it opens with every word intact and 0 lapses,
+    /// and the launch normalizer leaves short schedules (and sync stamps) alone.
+    func testPreLapseCountStoreOpensWithEveryWordIntactAndZeroLapses() throws {
+        let legacy = Schema(versionedSchema: LegacySchemaV4.self)
+        let url = directory.appendingPathComponent("v4.store")
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        autoreleasepool {
+            do {
+                let container = try ModelContainer(for: legacy,
+                                                   configurations: ModelConfiguration(schema: legacy, url: url,
+                                                                                      cloudKitDatabase: .none))
+                let context = ModelContext(container)
+                for (index, pair) in [("вода", "woda"), ("кофе", "kawa")].enumerated() {
+                    let word = LegacySchemaV4.Word(russian: pair.0, polish: pair.1,
+                                                   createdAt: created.addingTimeInterval(Double(index)))
+                    word.repetitions = 4
+                    word.intervalDays = 12
+                    word.dueDate = created
+                    context.insert(word)
+                }
+                try context.save()
+            } catch {
+                XCTFail("Legacy seeding failed: \(error)")
+            }
+        }
+
+        let resources = try AppResources(
+            configuration: ModelConfiguration(url: url, cloudKitDatabase: .none),
+            defaults: UserDefaults(suiteName: "LegacySchemaMigrationTests.\(UUID().uuidString)")!)
+        let words = try ModelContext(resources.container).fetch(FetchDescriptor<Word>())
+
+        XCTAssertEqual(words.count, 2)
+        XCTAssertTrue(words.allSatisfy { $0.lapseCount == 0 && $0.intervalDays == 12 && $0.repetitions == 4 })
     }
 
     /// Sync adds `serverUpdatedAt` to both models: existing installs open with every row intact

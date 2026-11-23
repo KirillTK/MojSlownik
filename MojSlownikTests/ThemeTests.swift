@@ -85,6 +85,8 @@ final class ThemeTests: XCTestCase {
             ("error/card", Palette.error, Palette.card),
             ("accentText/card", Palette.accentText, Palette.card),
             ("mastery/card", Palette.mastery, Palette.card),
+            ("learning/card", Palette.learning, Palette.card),
+            ("learning/background", Palette.learning, Palette.background),
         ]
         for mode in modes {
             for (name, fg, bg) in pairs {
@@ -127,6 +129,9 @@ final class ThemeTests: XCTestCase {
             ("mastery/masterySurface", contrast(Palette.mastery, Palette.masterySurface, .light), 5.15),
             ("mastery/secondarySurface", contrast(Palette.mastery, Palette.secondarySurface, .light), 5.08),
             ("amber/paper", contrast(Palette.caution, Palette.background, .light), 3.26),
+            ("honey/card", contrast(Palette.learning, Palette.card, .light), 3.25),
+            ("honey/paper", contrast(Palette.learning, Palette.background, .light), 3.06),
+            ("dark honey/card", contrast(Palette.learning, Palette.card, .dark), 11.7),
         ]
         for (name, actual, wanted) in expected {
             XCTAssertEqual(actual, wanted, accuracy: 0.05, name)
@@ -149,7 +154,7 @@ final class ThemeTests: XCTestCase {
             "appInverseEdge": Palette.inverseEdge, "appMastery": Palette.mastery,
             "appMasterySurface": Palette.masterySurface, "appError": Palette.error,
             "appErrorSurface": Palette.errorSurface, "appWarning": Palette.warning,
-            "appWarningSurface": Palette.warningSurface, "appCaution": Palette.caution,
+            "appWarningSurface": Palette.warningSurface, "appCaution": Palette.caution, "appLearning": Palette.learning,
         ]
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()

@@ -124,6 +124,41 @@ final class SwiftDataSyncStoreTests: XCTestCase {
         XCTAssertTrue(inserted.isActive)
     }
 
+    func testPulledLongScheduleIsClampedAndTheRowStaysClean() throws {
+        let synced = t0.addingTimeInterval(-600)
+        let existing = try Kit.insertWord(container, polish: "e", syncedAt: synced)
+        let newer = t0.addingTimeInterval(-60)
+        let insertedID = UUID()
+        let far = t0.addingTimeInterval(400 * 86_400)
+
+        _ = try store.applyWords([
+            try Kit.validated(Kit.remoteWord(id: existing, term: "e", updatedAt: newer, intervalDays: 400, dueDate: far)),
+            try Kit.validated(Kit.remoteWord(id: insertedID, term: "n", updatedAt: newer, intervalDays: 400, dueDate: far)),
+        ])
+
+        for id in [existing, insertedID] {
+            let word = try XCTUnwrap(Kit.word(container, id))
+            XCTAssertLessThanOrEqual(word.intervalDays, 30)
+            XCTAssertLessThanOrEqual(word.dueDate, t0.addingTimeInterval(31 * 86_400))
+            XCTAssertFalse(word.isSyncDirty, "the clamp must not make the pulled row dirty")
+            XCTAssertEqual(word.serverUpdatedAt, newer)
+        }
+    }
+
+    func testLapseCountRoundTripsThroughApplyAndPending() throws {
+        let id = UUID()
+        _ = try store.applyWords([try Kit.validated(Kit.remoteWord(id: id, updatedAt: t0.addingTimeInterval(-60),
+                                                                   lapseCount: 7))])
+        XCTAssertEqual(try Kit.word(container, id)?.lapseCount, 7)
+        try Kit.edit(container, id, at: t0) { $0.repetitions = 2 }
+        let row = try XCTUnwrap(store.pendingWords(ownerID: Kit.owner, now: t0, excluding: []).rows.first)
+        XCTAssertEqual(row.payload.lapseCount, 7)
+        // A server row without the column reads as 0.
+        let legacy = UUID()
+        _ = try store.applyWords([try Kit.validated(Kit.remoteWord(id: legacy, updatedAt: t0.addingTimeInterval(-50)))])
+        XCTAssertEqual(try Kit.word(container, legacy)?.lapseCount, 0)
+    }
+
     func testApplyWordsRestoresALocalTombstone() throws {
         let synced = t0.addingTimeInterval(-600)
         let id = try Kit.insertWord(container, syncedAt: synced, deletedAt: synced)

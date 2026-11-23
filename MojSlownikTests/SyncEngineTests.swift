@@ -201,6 +201,31 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(remote.upsertedWordBatches.isEmpty)
     }
 
+    /// The launch normalizer never dirties a row, so a newer remote edit to a normalized word wins
+    /// instead of being overwritten by the local copy.
+    func testNormalizedCleanWordStillTakesANewerRemoteEditAndPushesNothing() async throws {
+        let synced = t0.addingTimeInterval(-3_000)
+        let id = try Kit.insertWord(container, polish: "kot", syncedAt: synced)
+        try Kit.edit(container, id, at: synced) {
+            $0.intervalDays = 400
+            $0.repetitions = 5
+            $0.dueDate = t0.addingTimeInterval(400 * 86_400)
+        }
+        try linked()
+        let changed = try ScheduleNormalizer.normalize(in: ModelContext(container), now: t0)
+        XCTAssertEqual(changed, 1)
+        remote.seed(words: [Kit.remoteWord(id: id, term: "kot-remote", updatedAt: t0.addingTimeInterval(-60),
+                                           intervalDays: 400, dueDate: t0.addingTimeInterval(400 * 86_400))])
+
+        _ = try await engine.run(ownerID: owner)
+
+        let local = try XCTUnwrap(Kit.word(container, id))
+        XCTAssertEqual(local.polish, "kot-remote")
+        XCTAssertLessThanOrEqual(local.intervalDays, 30)
+        XCTAssertFalse(local.isSyncDirty)
+        XCTAssertTrue(remote.upsertedWordBatches.isEmpty, "nothing is pushed for the normalized word")
+    }
+
     func testLocalDirtyAndRemoteNewerKeepsLocalAndPushesIt() async throws {
         let synced = t0.addingTimeInterval(-3_000)
         let id = try Kit.insertWord(container, polish: "local", syncedAt: synced)

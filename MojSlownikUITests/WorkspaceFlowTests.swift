@@ -66,10 +66,12 @@ final class WorkspaceFlowTests: E2ETestCase {
         XCTAssertTrue(app.navigationBars.buttons["🇩🇪 Немецкий"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Слов в выбранном наборе: 2"].waitForExistence(timeout: 10),
                       "the folder filter resets and the count is the workspace's")
+        waitForValue(element("studyProgressSummary"), equals: "выучено 2, учу 0, новые 0 из 2")
 
         openTitleMenu("🇩🇪 Немецкий")
         choose("Польский")
         XCTAssertTrue(app.staticTexts["Слов в выбранном наборе: 5"].waitForExistence(timeout: 10))
+        waitForValue(element("studyProgressSummary"), equals: "выучено 5, учу 0, новые 0 из 5")
         openTab("Словарь")
         XCTAssertTrue(app.staticTexts["kot"].waitForExistence(timeout: 10))
     }

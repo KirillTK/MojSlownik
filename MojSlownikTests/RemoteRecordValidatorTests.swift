@@ -16,14 +16,14 @@ final class RemoteRecordValidatorTests: XCTestCase {
                       createdAt: Date? = nil, updatedAt: Date? = nil, deletedAt: Date? = nil,
                       easeFactor: Double = 2.5, intervalDays: Double = 1, repetitions: Int = 1,
                       dueDate: Date? = nil, grade: String? = "good", tier: Int? = 2,
-                      softMisses: Int = 0) -> RemoteWordRecord {
+                      softMisses: Int = 0, lapseCount: Int? = nil) -> RemoteWordRecord {
         RemoteWordRecord(id: id, userID: userID ?? owner, workspaceID: workspaceID ?? workspace, term: term,
                          translation: translation, enteredSide: entered, category: category,
                          createdAt: createdAt ?? now.addingTimeInterval(-3_600),
                          updatedAt: updatedAt ?? now.addingTimeInterval(-60), deletedAt: deletedAt,
                          easeFactor: easeFactor, intervalDays: intervalDays, repetitions: repetitions,
                          dueDate: dueDate ?? now.addingTimeInterval(86_400), lastReviewGrade: grade,
-                         knowledgeTier: tier, consecutiveSoftMisses: softMisses)
+                         knowledgeTier: tier, consecutiveSoftMisses: softMisses, lapseCount: lapseCount)
     }
 
     private func validate(_ record: RemoteWordRecord) throws -> ValidatedRemoteWord {
@@ -96,7 +96,21 @@ final class RemoteRecordValidatorTests: XCTestCase {
         for _ in 0..<80 { SRSEngine.apply(.easy, to: local, now: now) }
         let validated = try validate(word(easeFactor: local.easeFactor, intervalDays: local.intervalDays,
                                           repetitions: local.repetitions, dueDate: local.dueDate, grade: "easy"))
-        XCTAssertEqual(validated.intervalDays, SRSEngine.maxIntervalDays)
+        XCTAssertEqual(validated.intervalDays, SRSEngine.maxScheduledIntervalDays)
+    }
+
+    func testLegacyLongIntervalsAreStillAccepted() throws {
+        let validated = try validate(word(intervalDays: SRSEngine.maxIntervalDays,
+                                          dueDate: now.addingTimeInterval(36_000 * 86_400)))
+        XCTAssertEqual(validated.intervalDays, 36_500)
+    }
+
+    func testMissingLapseCountReadsAsZeroAndNegativeIsRejected() throws {
+        XCTAssertEqual(try validate(word(lapseCount: nil)).lapseCount, 0)
+        XCTAssertEqual(try validate(word(lapseCount: 7)).lapseCount, 7)
+        assertRejects(word(lapseCount: -1), .invalidSchedule)
+        XCTAssertEqual(try validate(word(lapseCount: RemoteRecordValidator.maxLapseCount)).lapseCount, 10_000)
+        assertRejects(word(lapseCount: RemoteRecordValidator.maxLapseCount + 1), .invalidSchedule)
     }
 
     /// Review finding: a category added by a newer version used to become `.other`, which this
@@ -253,10 +267,11 @@ final class RemoteRecordValidatorTests: XCTestCase {
           "created_at":"2026-11-17T22:49:18.123456+00:00","updated_at":"2026-11-17T22:50:00+00:00",
           "deleted_at":null,"ease_factor":2.5,"interval_days":1,"repetitions":1,
           "due_date":"2026-11-18T22:49:18.123456+00:00","last_review_grade":"good",
-          "knowledge_tier":2,"consecutive_soft_misses":0}]
+          "knowledge_tier":2,"consecutive_soft_misses":0,"lapse_count":4}]
         """
         let rows = try RemoteRecordDecoder.words(from: Data(json.utf8))
         XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].lapseCount, 4)
         XCTAssertEqual(rows[0].userID, owner)
         XCTAssertEqual(rows[0].workspaceID, workspace)
         XCTAssertEqual(rows[0].enteredSide, "translation")

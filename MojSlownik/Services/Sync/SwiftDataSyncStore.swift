@@ -354,7 +354,8 @@ final class SwiftDataSyncStore {
     }
 
     /// Remote content onto a local word (text keeps the per-language case rule).
-    private func apply(_ remote: ValidatedRemoteWord, to word: Word, pair: (term: String, translation: String)) {
+    private func apply(_ remote: ValidatedRemoteWord, to word: Word, pair: (term: String, translation: String),
+                       now: Date = .now) {
         word.term = LanguageCodes.storedForm(remote.term, language: pair.term)
         word.translation = LanguageCodes.storedForm(remote.translation, language: pair.translation)
         word.categoryRawValue = remote.category.rawValue
@@ -367,6 +368,12 @@ final class SwiftDataSyncStore {
         word.lastReviewGradeRawValue = remote.lastReviewGrade?.rawValue
         word.knowledgeTier = remote.knowledgeTier
         word.consecutiveSoftMisses = remote.consecutiveSoftMisses
+        word.lapseCount = remote.lapseCount
+        // Older clients may hold long intervals: clamp like the launch normalizer. Callers mark
+        // the row synced right after, so the clamp never makes it dirty.
+        if let fixed = ScheduleNormalizer.normalized(SRSState(word: word), uuid: word.uuid, now: now) {
+            fixed.write(to: word)
+        }
     }
 
     private func markSynced(_ word: Word, _ serverTime: Date) {
@@ -531,7 +538,8 @@ final class SwiftDataSyncStore {
                 dueDate: min(word.dueDate, latestDue),
                 lastReviewGrade: word.lastReviewGradeRawValue.flatMap { ReviewGrade(rawValue: $0)?.rawValue },
                 knowledgeTier: word.knowledgeTier.flatMap { tierRange.contains($0) ? $0 : nil },
-                consecutiveSoftMisses: max(0, word.consecutiveSoftMisses))
+                consecutiveSoftMisses: max(0, word.consecutiveSoftMisses),
+                lapseCount: max(0, word.lapseCount))
             do {
                 let valid = try RemoteRecordValidator.validate(record, ownerID: ownerID, known: known, now: now)
                 batch.rows.append(PendingRow(
@@ -543,7 +551,7 @@ final class SwiftDataSyncStore {
                         deletedAt: valid.deletedAt, easeFactor: valid.easeFactor,
                         intervalDays: valid.intervalDays, repetitions: valid.repetitions, dueDate: valid.dueDate,
                         lastReviewGrade: valid.lastReviewGrade?.rawValue, knowledgeTier: valid.knowledgeTier,
-                        consecutiveSoftMisses: valid.consecutiveSoftMisses)))
+                        consecutiveSoftMisses: valid.consecutiveSoftMisses, lapseCount: valid.lapseCount)))
             } catch {
                 batch.invalid[Self.reason(for: error), default: 0] += 1
             }

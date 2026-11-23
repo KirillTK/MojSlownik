@@ -45,17 +45,27 @@ final class SoftDeleteExclusionTests: XCTestCase {
         let context = container.mainContext
         let active = Word(russian: "кофе", polish: "kawa", side: .term, createdAt: now)
         let deleted = tombstone()
+        let second = Word(russian: "чай", polish: "herbata", side: .term, createdAt: now)
         context.insert(active)
         context.insert(deleted)
+        context.insert(second)
         try context.save()
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Europe/Warsaw")!
         let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
-        try store.recordQuizAnswer(wordID: deleted.persistentModelID, isCorrect: false, now: now)
+        second.repetitions = 2
+        try store.recordPracticeAnswer(word: second, answer: .choice(isCorrect: false), context: context,
+                                       mode: .quiz, now: now)
+        let secondSRS = SRSState(word: second)
+        XCTAssertEqual(second.lapseCount, 1)
+        second.markDeleted(now: now)
+        try context.save()
 
-        XCTAssertEqual(store.progress(for: [active, deleted], now: now), .init(completed: 0, remaining: 1))
-        XCTAssertEqual(store.reviewWords(for: [active, deleted], now: now).map(\.polish), ["kawa"])
-        XCTAssertEqual(store.answerTotals(for: [active, deleted], now: now), .init(correct: 0, incorrect: 0))
+        XCTAssertEqual(store.progress(for: [active, deleted, second], now: now), .init(completed: 0, remaining: 1))
+        XCTAssertEqual(store.reviewWords(for: [active, deleted, second], now: now).map(\.polish), ["kawa"])
+        XCTAssertEqual(store.answerTotals(for: [active, deleted, second], now: now), .init(correct: 0, incorrect: 0))
+        XCTAssertEqual(StudyProgress.breakdown([active, deleted, second]).total, 1)
+        XCTAssertEqual(SRSState(word: second), secondSRS, "a deleted word keeps its SRS fields and lapse count")
     }
 
     func testFolderCatalogAndNameCheckIgnoreDeletedFolders() throws {

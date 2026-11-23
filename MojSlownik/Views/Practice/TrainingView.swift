@@ -26,11 +26,19 @@ struct TrainingView: View {
                 let now = max(timeline.date, refreshDate)
                 let progress = dailyStudy.progress(for: words, now: now)
                 let answers = dailyStudy.answerTotals(for: words, now: now)
+                let breakdown = StudyProgress.breakdown(words)
+                let forecast = StudyProgress.forecast(words, now: now, calendar: .autoupdatingCurrent)
+                let hardWordCount = StudyProgress.hardWords(words).count
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppSpacing.l) {
-                        FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true, compact: true)
+                        FolderPicker(selectedFolderID: $selectedFolderID, allowsAll: true, compact: true,
+                                     progress: { StudyProgress.breakdown(FolderStore.words(allWords, in: $0, memberships: memberships)) })
                         todayHero(progress: progress, answers: answers)
                         modeGrid
+                        if !words.isEmpty {
+                            StudyProgressCard(breakdown: breakdown, forecast: forecast,
+                                              hardWordCount: hardWordCount, folderID: selectedFolderID)
+                        }
                         achievementsRow(now: now)
                         Text("Words in the selected set: \(words.count)")
                             .font(.footnote)
@@ -242,7 +250,7 @@ struct TrainingView: View {
 }
 
 /// Renders the label unchanged so the system does not dim the whole tile when disabled.
-private struct TileButtonStyle: ButtonStyle {
+struct TileButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {

@@ -35,6 +35,23 @@
       },
       "comment" : "Both arguments are language names in the genitive"
     },
+    "%@, hard word" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, hard word"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, трудное слово"
+          }
+        }
+      },
+      "comment" : "Accessibility value of a hard flashcard"
+    },
     "%@, words: %lld" : {
       "localizations" : {
         "en" : {
@@ -68,6 +85,59 @@
         }
       },
       "comment" : "A bare number"
+    },
+    "%lld d" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld days"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld дн."
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld дн."
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld дн."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld дн."
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment" : "Grade button caption: next review in days"
     },
     "%lld folders" : {
       "comment" : "Folder count",
@@ -122,6 +192,59 @@
         }
       }
     },
+    "%lld min" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld min"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld min"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld мин"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld мин"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld мин"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld мин"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment" : "Grade button caption: next review in minutes"
+    },
     "%lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -138,6 +261,23 @@
         }
       },
       "comment" : "Progress: completed of total"
+    },
+    "%lld of %lld learned" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld learned"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выучено %lld из %lld"
+          }
+        }
+      },
+      "comment" : "Folder progress"
     },
     "%lld of %lld unlocked" : {
       "localizations" : {
@@ -2181,6 +2321,59 @@
         }
       }
     },
+    "Forgotten at least %lld times" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Forgotten at least %lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Forgotten at least %lld times"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Забыты %lld раз и больше"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Забыты %lld раза и больше"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Забыты %lld раз и больше"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Забыты %lld раза и больше"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment" : "Hard-word rule"
+    },
     "Free practice" : {
       "localizations" : {
         "en" : {
@@ -2340,6 +2533,39 @@
           }
         }
       }
+    },
+    "Hard word" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hard word"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Трудное слово"
+          }
+        }
+      }
+    },
+    "Hard words" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hard words"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Трудные слова"
+          }
+        }
+      },
+      "comment" : "Words forgotten many times"
     },
     "Health" : {
       "localizations" : {
@@ -2889,6 +3115,112 @@
         }
       }
     },
+    "Next review in %lld days" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Next review in %lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Next review in %lld days"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld день"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld дня"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld дней"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld дня"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment" : "Accessibility value of a grade button"
+    },
+    "Next review in %lld minutes" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Next review in %lld minute"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Next review in %lld minutes"
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld минуту"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld минуты"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld минут"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Следующий показ через %lld минуты"
+                }
+              }
+            }
+          }
+        }
+      },
+      "comment" : "Accessibility value of a grade button"
+    },
     "No email" : {
       "localizations" : {
         "en" : {
@@ -3273,6 +3605,22 @@
         }
       }
     },
+    "Practice only the hard words" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Practice only the hard words"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тренировать только трудные слова"
+          }
+        }
+      }
+    },
     "Practice progress" : {
       "localizations" : {
         "en" : {
@@ -3320,6 +3668,23 @@
           }
         }
       }
+    },
+    "Progress" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прогресс"
+          }
+        }
+      },
+      "comment" : "Practice: learning progress card title"
     },
     "Pronounce: %@" : {
       "localizations" : {
@@ -3703,6 +4068,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сканирование"
+          }
+        }
+      }
+    },
+    "Scheduled reviews" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scheduled reviews"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторения по расписанию"
           }
         }
       }
@@ -4519,6 +4900,40 @@
           }
         }
       }
+    },
+    "Tomorrow %lld · this week %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow %lld · this week %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завтра %lld · за неделю %lld"
+          }
+        }
+      },
+      "comment" : "Review forecast"
+    },
+    "Tomorrow: %lld, this week: %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow: %lld, this week: %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завтра: %lld, за неделю: %lld"
+          }
+        }
+      },
+      "comment" : "Accessibility value of the review forecast"
     },
     "Topic: %@" : {
       "localizations" : {
@@ -6114,6 +6529,74 @@
       },
       "comment" : "Placeholder of the answer field: '<language> word'"
     },
+    "learned" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "learned"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выучено"
+          }
+        }
+      },
+      "comment" : "Progress legend: words learned"
+    },
+    "learned %lld, learning %lld, new %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "learned %lld, learning %lld, new %lld of %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выучено %lld, учу %lld, новые %lld из %lld"
+          }
+        }
+      },
+      "comment" : "Accessibility value of the progress bar"
+    },
+    "learning" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "learning"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "учу"
+          }
+        }
+      },
+      "comment" : "Progress legend: words being learned"
+    },
+    "new" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "new"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "новые"
+          }
+        }
+      },
+      "comment" : "Progress legend: words never reviewed"
+    },
     "plus %lld points" : {
       "localizations" : {
         "en" : {
@@ -6229,6 +6712,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Świetnie! Идеально!"
+          }
+        }
+      }
+    },
+    "“Learned”: the word is reviewed every 21 days or less often. Intervals grow to at most 30 days, so learned words come back once a month." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Learned”: the word is reviewed every 21 days or less often. Intervals grow to at most 30 days, so learned words come back once a month."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Выучено»: слово повторяется раз в 21 день и реже. Интервалы растут не дальше 30 дней, поэтому выученные слова возвращаются раз в месяц."
           }
         }
       }

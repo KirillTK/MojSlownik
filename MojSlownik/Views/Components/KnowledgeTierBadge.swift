@@ -35,7 +35,7 @@ struct KnowledgeTierBadge: View {
         switch min(max(level, 0), 3) {
         case 0: Presentation(filledMarks: 1, levelName: String(localized: "Again"), color: .error)
         case 1: Presentation(filledMarks: 2, levelName: String(localized: "Hard"), color: .warning)
-        case 2: Presentation(filledMarks: 3, levelName: String(localized: "Good"), color: .accent)
+        case 2: Presentation(filledMarks: 3, levelName: String(localized: "Good"), color: .learning)
         default: Presentation(filledMarks: 4, levelName: String(localized: "Easy"), color: .mastery)
         }
     }
@@ -56,13 +56,13 @@ struct KnowledgeTierBadge: View {
     }
 
     enum IndicatorColor: Equatable {
-        case error, warning, accent, mastery
+        case error, warning, learning, mastery
 
         var color: Color {
             switch self {
             case .error: .appError
             case .warning: .appCaution
-            case .accent: .appAccentText
+            case .learning: .appLearning
             case .mastery: .appMastery
             }
         }
