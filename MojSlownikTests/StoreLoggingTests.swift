@@ -132,13 +132,19 @@ final class StoreLoggingTests: XCTestCase {
         container.mainContext.insert(word)
         try container.mainContext.save()
 
-        try store.recordQuizAnswer(wordID: word.persistentModelID, isCorrect: false, now: now)
+        try store.recordPracticeAnswer(word: word, answer: .choice(isCorrect: false),
+                                       context: container.mainContext, mode: .quiz, now: now)
         try store.record(wordID: word.persistentModelID, grade: .easy, now: now)
         XCTAssertEqual(spy.entries.map(\.properties[.mode]), [.name("quiz"), .name("flashcards")])
 
         repository.prepareError = UserTextError(text: "кот")
         XCTAssertThrowsError(try store.review(.good, to: word, context: container.mainContext, now: now))
-        XCTAssertThrowsError(try store.recordQuizAnswer(wordID: word.persistentModelID, isCorrect: true, now: now))
+        let beforeSRS = SRSState(word: word)
+        let beforeTier = word.knowledgeTier
+        XCTAssertThrowsError(try store.recordPracticeAnswer(word: word, answer: .choice(isCorrect: true),
+                                                            context: container.mainContext, mode: .quiz, now: now))
+        XCTAssertEqual(SRSState(word: word), beforeSRS, "a failed activity encode must not touch the schedule")
+        XCTAssertEqual(word.knowledgeTier, beforeTier)
         XCTAssertEqual(spy.events.suffix(2), [.storageFailed, .storageFailed])
         XCTAssertEqual(spy.entries.last?.properties[.operation], .name("daily_activity.prepare_save"))
     }

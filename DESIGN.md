@@ -36,6 +36,7 @@ camera-overlay colours in ScannerView and shadow colours of floating elements).
 | `appWarning` | warning text | #7C4C17 | #F4C787 |
 | `appWarningSurface` | warning surface | #FBEFDB | #43311D |
 | `appCaution` | amber, graphics only (Трудно ring arc), never text | #C77700 | #FFA94D |
+| `appLearning` | learning bucket (Progress bar, legend dot, folder mini-bar) and knowledge ring tier 2; graphics only, never text | #B8860B | #FFD43B |
 | `appSuccess` | alias of `appMastery` (never the brand yellow) | — | — |
 
 Dynamic pairs are defined as `Palette` `UIColor` constants; `Color` statics wrap them.
@@ -53,6 +54,8 @@ Dynamic pairs are defined as `Palette` `UIColor` constants; `Color` statics wrap
 | error #B3261E on white | 6.54 | error text |
 | mastery #25704C on paper / masterySurface / secondarySurface | 5.65 / 5.15 / 5.08 | success text |
 | amber #C77700 on paper | 3.26 | ring graphic only, never text |
+| honey #B8860B on card / paper | 3.25 / 3.06 | learning graphics only, never text |
+| dark: honey #FFD43B on card | 11.7 | learning graphics |
 
 Text pairs must reach 4.5:1, graphics 3:1 (ring track and inverse edge 1.5:1), in both appearances.
 Ochre on `appSecondarySurface` is below 4.5: icons and large text only.
@@ -65,9 +68,9 @@ Ochre on `appSecondarySurface` is below 4.5: icons and large text only.
 4. Controls, progress fills, checkmarks and tab selection use `appAccentStrong`.
 5. One accent. At most one `appAccent` primary button per screen state; selected chips and the FAB are selection/floating actions. Content text stays ink.
 6. State is never colour-only: ring fill amount, ✓/✕ icons and text, lock glyph and "Получено", `.isSelected` trait and weight.
-7. `appCaution` only for the ring arc. Semantic colours keep their meaning everywhere; success is `appMastery`, never the brand yellow.
+7. `appCaution` only for the ring arc; `appLearning` graphics only (its light value is 3.06–3.25:1, so never text). The `appRingTrack` "new" segment of the Progress bar is a track-like graphic: the counts beside it are text. Semantic colours keep their meaning everywhere; success is `appMastery`, never the brand yellow.
 
-Forbidden pairs: `appAccent` as text/icon on paper or card; `appInk` or `subtleText` on `appAccent` in dark mode (use `appOnAccent`); `appCaution` as text.
+Forbidden pairs: `appAccent` as text/icon on paper or card; `appInk` or `subtleText` on `appAccent` in dark mode (use `appOnAccent`); `appCaution` or `appLearning` as text.
 
 ## 3. Typography
 
@@ -114,14 +117,19 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 | Chip | `chipStyle(isSelected:)`: padding 14, visible capsule min height 36, 44 pt hit frame. Selected yellow + `appOnAccent`, else `appSecondarySurface` + `appInk`. Callers set no colours on the label |
 | Progress bar | `MarkerProgressBar(value:track:fill:height:)`: capsule, value clamped 0…1, `.snappy` change (none with Reduce Motion), hidden from accessibility; callers supply label/value |
 | Card | `cardStyle()` |
+| Segmented progress bar | `ProgressSegmentsBar(segments:track:height:spacing:)`: non-zero segments in an `HStack` (spacing 2), width proportional to value, clipped to a capsule over an `appSecondarySurface` track; `.snappy(0.3)` change (none with Reduce Motion), hidden from accessibility; callers supply label/value |
+| Progress card | Practice, between Modes and Achievements; section header «ПРОГРЕСС», then one `cardStyle()` card (padding `AppSpacing.m`). Segmented bar (12 pt `@ScaledMetric`: learned `appMastery`, learning `appLearning`, new `appRingTrack`), legend of three columns (count `.title2.heavy` monospaced `numericText`, 8 pt dot, `.footnote` `subtleText` label «выучено / учу / новые»; stacks as rows at AX), 1 pt `appBorder` hairlines, forecast row (32 pt `appAccentSoft` tile with ink `calendar`, «Завтра N · за неделю M» `.body`, «Повторения по расписанию» `.footnote`; not interactive) and, when N > 0, a hard-words row (`appWarningSurface` tile with `appWarning` `exclamationmark.triangle`, «Трудные слова», «Забыты 6 раз и больше», trailing N and `chevron.right`; `NavigationLink` with `TileButtonStyle`, min height 44). Bar + legend are one VoiceOver element; hidden when the scope has no words |
+| Folder progress row | Practice folder sheet only: name `.body`, «выучено 18 из 40» (`.footnote` `subtleText`, monospaced) and a 4 pt `ProgressSegmentsBar` (learned `appMastery`, learning `appLearning`, track = new); section footer explains «Выучено»; `.accessibilityValue` carries the count |
+| Hard-word pill | Flashcard face header, after the knowledge ring: `Label` «Трудное слово» with `exclamationmark.triangle`, `.caption.semibold`, `appWarning` on an `appWarningSurface` capsule (padding 8 / 4); hidden from VoiceOver (the card value says «трудное слово») |
+| Flashcard word | `WholeWordText`: picks the first of five scales (1.0 … 0.4) at which the longest word fits on one line, so a word is never split mid-word and phrases wrap between words; the smallest scale adds `minimumScaleFactor(0.8)` |
 | Today hero | yellow fill, radius hero, content `appOnAccent`: kicker, big "N из M", status line (`appOnAccent` 0.75), progress, inverse CTA, ✓/✕ badges, "Ответов" caption |
 | Mode tile | `cardStyle()`, min height 96, 36 pt `appAccentSoft` icon tile with ink glyph; disabled dims only icon tile and title |
 | Achievements entry row | card, 40 pt soft tile with ink `trophy`, points and streak subtitle, "N из M", chevron |
 | List row | line 1: Polish word (`.title3.bold`, at least 160 pt), ring, pronounce; line 2: translation, category capsule, folder menu |
-| Knowledge ring | `@ScaledMetric` 22, line width 0.2x size, `appRingTrack` track, arc filled 25/50/75/100 % for tiers 0–3 in error / `appCaution` / `appAccentText` / `appMastery`; labels unchanged |
+| Knowledge ring | `@ScaledMetric` 22, line width 0.2x size, `appRingTrack` track, arc filled 25/50/75/100 % for tiers 0–3 in error / `appCaution` / `appLearning` / `appMastery`; labels unchanged |
 | Achievement tile | unlocked: yellow + `appOnAccent` filled glyph; locked: `appSecondarySurface` + `subtleText` outline glyph + `lock`; radius 0.32x size, default 40 |
 | Banner | always `appInverseSurface` in both themes, radius 20, 1 pt `appInverseEdge`, `appOnInverse` text, yellow badge and "+N" pill, shadow black 0.25 r15 y6 |
-| Rating buttons | `cardBackground` + `appBorder`, radius control, min height 50; only Не помню is red text and Легко a yellow fill; 2x2 grid, one column at AX |
+| Rating buttons | `cardBackground` + `appBorder`, radius control, min height 50; two-line label: title `.body.semibold`, next-interval caption (`.footnote.medium`, monospaced, `subtleText`, `appOnAccent` 0.75 on Легко: «10 мин / 1 дн. / 3 дн. / 4 дн.»), VoiceOver value «Следующий показ через 3 дня»; only Не помню is red text and Легко a yellow fill; 2x2 grid, one column at AX |
 | Search field | native `.searchable` |
 | Floating add/scan | bottom-trailing pair; add = yellow, scan = card; size scaled, capped at 72 |
 | Pronounce button | 44 pt circle, `appSecondarySurface`, ink `speaker.wave.2` |
@@ -164,6 +172,8 @@ Mode and achievements icons sit on `appAccentSoft` tiles with an ink glyph.
 | Category | `tag` |
 | Flashcards / Quiz / Listening | `rectangle.on.rectangle` / `checklist` / `ear` |
 | Achievements / Streak / Locked | `trophy` / `flame` / `lock` |
+| Review forecast | `calendar` |
+| Hard words (row, pill) | `exclamationmark.triangle` |
 | Correct / wrong badges | `checkmark` / `xmark` |
 | Correct / wrong answer state | `checkmark.circle.fill` / `xmark.circle.fill` |
 | Session result | `flag.checkered` (perfect: `trophy`) |

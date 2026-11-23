@@ -6,7 +6,7 @@ import XCTest
 class E2ETestCase: XCTestCase {
     /// Mirrors the app-side `UITestFixture` (names are pinned by a unit test).
     enum Fixture: String {
-        case empty, basicVocabulary, dueForReview, foldersOrdered, freshInstall, multiWorkspace, sameScriptWorkspace, syncedVocabulary
+        case empty, basicVocabulary, dueForReview, foldersOrdered, freshInstall, multiWorkspace, sameScriptWorkspace, syncedVocabulary, studyProgress
     }
 
     /// Mirrors the app-side `UITestAuthState` (a network-free auth backend).

@@ -53,7 +53,8 @@ final class DailyStudyStore {
         repository.clear()
     }
 
-    /// A quiz success completes today's practice without changing the SRS schedule.
+    /// A correct quiz answer completes today's practice. On a due word it also schedules like Good;
+    /// on a not-due word the schedule is left alone (it would only inflate the interval).
     func progress(for words: [Word], now: Date = .now) -> Summary {
         let words = words.filter(\.isActive)
         let completedIDs = calendar.isDate(activity.day, inSameDayAs: now) ? activity.completedIDs : []
@@ -86,14 +87,6 @@ final class DailyStudyStore {
         return AnswerTotals(correct: correct, incorrect: answers.count - correct)
     }
 
-    func recordQuizAnswer(wordID: PersistentIdentifier, isCorrect: Bool, now: Date = .now) throws {
-        let next = nextActivity(wordID: wordID, isCorrect: isCorrect, isQuiz: true, now: now)
-        let commit = try repository.prepareSave(next)
-        activity = next
-        commit()
-        logAnswer(.quiz, isCorrect: isCorrect)
-    }
-
     @discardableResult
     func recordPracticeAnswer(word: Word, answer: KnowledgeAnswer, context: ModelContext,
                               mode: PracticeMode,
@@ -104,13 +97,19 @@ final class DailyStudyStore {
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: isCorrect, isQuiz: isQuiz, now: now)
         let commit = try repository.prepareSave(next)
         let previous = (word.knowledgeTier, word.consecutiveSoftMisses)
+        let previousSRS = SRSState(word: word)
         let previousUpdatedAt = word.updatedAt
+        let isDue = word.dueDate <= now
         let assessment = KnowledgeProgressService.apply(answer, to: word)
+        if let grade = SRSEngine.practiceGrade(for: answer, isDue: isDue) {
+            SRSEngine.apply(grade, to: word, now: now)
+        }
         word.updatedAt = now
         do {
             try logger.logged("word_progress.save") { try context.save() }
         } catch {
             (word.knowledgeTier, word.consecutiveSoftMisses) = previous
+            previousSRS.write(to: word)
             word.updatedAt = previousUpdatedAt
             throw error
         }
@@ -134,7 +133,7 @@ final class DailyStudyStore {
         // Encoding is prepared first so a serialization failure cannot leave a half-recorded review.
         let next = nextActivity(wordID: word.persistentModelID, isCorrect: grade != .again, isQuiz: false, now: now)
         let commit = try repository.prepareSave(next)
-        let previous = (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue)
+        let previous = SRSState(word: word)
         let previousKnowledge = (word.knowledgeTier, word.consecutiveSoftMisses)
         let previousUpdatedAt = word.updatedAt
         KnowledgeProgressService.setTier(from: grade, on: word)
@@ -143,7 +142,7 @@ final class DailyStudyStore {
         do {
             try logger.logged("word_progress.save") { try context.save() }
         } catch {
-            (word.easeFactor, word.intervalDays, word.repetitions, word.dueDate, word.lastReviewGradeRawValue) = previous
+            previous.write(to: word)
             (word.knowledgeTier, word.consecutiveSoftMisses) = previousKnowledge
             word.updatedAt = previousUpdatedAt
             throw error

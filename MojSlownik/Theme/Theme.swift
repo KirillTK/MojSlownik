@@ -50,6 +50,8 @@ enum Palette {
     static let warning = pair(0x7C4C17, 0xF4C787)
     static let warningSurface = pair(0xFBEFDB, 0x43311D)
     static let caution = pair(0xC77700, 0xFFA94D)
+    /// Learning bucket and ring tier 2. Graphics only, never text (3.25:1 on card in light).
+    static let learning = pair(0xB8860B, 0xFFD43B)
 }
 
 extension Color {
@@ -76,6 +78,7 @@ extension Color {
     static let appWarning = Color(uiColor: Palette.warning)
     static let appWarningSurface = Color(uiColor: Palette.warningSurface)
     static let appCaution = Color(uiColor: Palette.caution)
+    static let appLearning = Color(uiColor: Palette.learning)
     /// Success feedback uses the mastery green, never the brand yellow.
     static let appSuccess = appMastery
 }

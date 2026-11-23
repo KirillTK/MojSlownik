@@ -254,7 +254,7 @@ final class InMemorySyncRemote: SyncRemote {
                 createdAt: row.createdAt, updatedAt: at, deletedAt: row.deletedAt,
                 easeFactor: row.easeFactor, intervalDays: row.intervalDays, repetitions: row.repetitions,
                 dueDate: row.dueDate, lastReviewGrade: row.lastReviewGrade, knowledgeTier: row.knowledgeTier,
-                consecutiveSoftMisses: row.consecutiveSoftMisses), at: at)
+                consecutiveSoftMisses: row.consecutiveSoftMisses, lapseCount: row.lapseCount), at: at)
             if let stored = word(id: row.id, userID: row.userID) {
                 acks.append(RemoteAck(id: stored.id, updatedAt: stored.updatedAt))
             }
@@ -320,7 +320,8 @@ extension RemoteWordRecord {
             createdAt: createdAt, updatedAt: updatedAt ?? self.updatedAt,
             deletedAt: deletedAt ?? self.deletedAt, easeFactor: easeFactor, intervalDays: intervalDays,
             repetitions: repetitions, dueDate: dueDate, lastReviewGrade: lastReviewGrade,
-            knowledgeTier: knowledgeTier, consecutiveSoftMisses: consecutiveSoftMisses)
+            knowledgeTier: knowledgeTier, consecutiveSoftMisses: consecutiveSoftMisses,
+            lapseCount: lapseCount)
     }
 }
 

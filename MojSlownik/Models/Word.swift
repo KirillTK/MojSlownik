@@ -33,6 +33,8 @@ final class Word {
     var lastReviewGradeRawValue: String? = nil
     var knowledgeTier: Int? = nil
     var consecutiveSoftMisses: Int = 0
+    /// Failures after a success; see the SRSEngine lapse rule.
+    var lapseCount: Int = 0
 
     /// A word entered on `entry.enteredSide` of `pair`; texts are stored in each side's stored form.
     init(entry: WordEntry, pair: LanguagePair, workspaceID: UUID?, createdAt: Date = .now,

@@ -15,6 +15,9 @@ enum UITestFixture: String, CaseIterable, Sendable {
     /// `basicVocabulary` with fixed uuids and rows already synced (clean): pairs with the
     /// `syncedThenRemoteChanges` server state.
     case syncedVocabulary
+    /// pl ← ru, folders "Lesson 1" (kot, dom, chleb) and "Lesson 2" (4 new words): 3 learned, 3 learning
+    /// (one hard word), 4 new; 5 due now, forecast tomorrow 1 / week 2.
+    case studyProgress
 
     static let lesson1ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F1")!
     static let lesson2ID = UUID(uuidString: "00000000-0000-0000-0000-0000000000F2")!
@@ -133,6 +136,50 @@ enum UITestFixture: String, CaseIterable, Sendable {
                      word("вода", "woda", .term), // l10n:data
                      word("яблоко", "jabłko", .translation, due: true), // l10n:data
                      word("окно", "okno", .term, due: true)] // l10n:data
+        case .studyProgress:
+            let created = now.addingTimeInterval(-86_400)
+            for (name, id, order) in [("Урок 1", Self.lesson1ID, 0), ("Урок 2", Self.lesson2ID, 1)] { // l10n:data
+                let folder = WordFolder(name: name)
+                folder.id = id
+                folder.sortOrder = order
+                folder.createdAt = created
+                folder.workspaceID = workspaceID
+                context.insert(folder)
+            }
+            let calendar = Calendar.autoupdatingCurrent
+            func days(_ count: Int) -> Date { calendar.date(byAdding: .day, value: count, to: now) ?? now }
+            func learning(_ item: Word, repetitions: Int, interval: Double, due: Date) -> Word {
+                item.repetitions = repetitions
+                item.intervalDays = interval
+                item.lastReviewGradeRawValue = ReviewGrade.good.rawValue
+                item.dueDate = due
+                return item
+            }
+            func fresh(_ item: Word) -> Word {
+                item.repetitions = 0
+                item.intervalDays = 0
+                item.dueDate = item.createdAt
+                return item
+            }
+            // Learned: interval 30, due +30 days (the helper's defaults).
+            let learned = [word("кот", "kot", .translation, folders: [Self.lesson1ID]), // l10n:data
+                           word("дом", "dom", .term, folders: [Self.lesson1ID]), // l10n:data
+                           word("вода", "woda", .term)] // l10n:data
+            learned.forEach { $0.dueDate = days(30) }
+            let hard = learning(word("привычка", "przyzwyczajenie", .translation), // l10n:data
+                                repetitions: 1, interval: 1, due: days(-1))
+            hard.easeFactor = 1.3
+            hard.lapseCount = 7
+            words = learned + [
+                learning(word("хлеб", "chleb", .translation, folders: [Self.lesson1ID]), // l10n:data
+                         repetitions: 2, interval: 3,
+                         due: calendar.date(byAdding: .hour, value: 12, to: now) ?? now),
+                learning(word("окно", "okno", .term), repetitions: 1, interval: 1, due: days(3)), // l10n:data
+                hard,
+                fresh(word("яблоко", "jabłko", .translation, folders: [Self.lesson2ID])), // l10n:data
+                fresh(word("молоко", "mleko", .translation, folders: [Self.lesson2ID])), // l10n:data
+                fresh(word("сыр", "ser", .translation, folders: [Self.lesson2ID])), // l10n:data
+                fresh(word("рыба", "ryba", .translation, folders: [Self.lesson2ID]))] // l10n:data
         case .foldersOrdered:
             let created = now.addingTimeInterval(-86_400)
             for (name, id, order) in [("Урок 3", Self.lesson3ID, 2), ("Урок 1", Self.lesson1ID, 0), // l10n:data

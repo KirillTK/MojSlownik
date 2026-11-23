@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning Progress Mockups</title>
+<style>
+:root{
+  --bg:#FAF8F2;--card:#FFFFFF;--ink:#1C1B17;--subtle:#6B675C;--border:#E7E2D5;--surface2:#F0ECE1;
+  --accent:#FFD43B;--onAccent:#1C1B17;--accentText:#8A6A00;--accentStrong:#1C1B17;--accentSoft:#FFF3BF;
+  --inverse:#1C1B17;--onInverse:#F4F1E8;--ringTrack:#CDC5B0;--mastery:#25704C;--masterySurf:#E3F1E8;
+  --error:#B3261E;--errorSurf:#FCE8E6;--warning:#7C4C17;--warningSurf:#FBEFDB;--caution:#C77700;
+  --page:#ECE8DD;--learn:#C77700;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141310;--card:#1F1E1A;--ink:#F4F1E8;--subtle:#A8A293;--border:#2E2C26;--surface2:#2A2823;
+  --accentText:#FFD43B;--accentStrong:#FFD43B;--accentSoft:#3A3318;--ringTrack:#46423A;
+  --mastery:#8BD3A8;--masterySurf:#1C3125;--error:#FF8A80;--errorSurf:#3B1D1A;--warning:#F4C787;--warningSurf:#43311D;--caution:#FFA94D;--page:#0B0A08;--learn:#FFD43B !important;
+}}
+:root[data-theme="dark"]{
+  --bg:#141310;--card:#1F1E1A;--ink:#F4F1E8;--subtle:#A8A293;--border:#2E2C26;--surface2:#2A2823;
+  --accentText:#FFD43B;--accentStrong:#FFD43B;--accentSoft:#3A3318;--ringTrack:#46423A;
+  --mastery:#8BD3A8;--masterySurf:#1C3125;--error:#FF8A80;--errorSurf:#3B1D1A;--warning:#F4C787;--warningSurf:#43311D;--caution:#FFA94D;--page:#0B0A08;--learn:#FFD43B !important;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+header{max-width:1200px;margin:0 auto;padding:24px 16px 8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:22px;margin:0;flex:1 1 300px}
+header p{margin:4px 0 0;color:var(--subtle);font-size:14px}
+button.toggle{border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer}
+.dir{max-width:1200px;margin:0 auto;padding:16px}
+.dir h2{font-size:18px;margin:16px 0 4px}
+.dir .why{color:var(--subtle);margin:0 0 12px;font-size:14px;max-width:760px}
+.row{display:flex;gap:20px;flex-wrap:wrap}
+.phone{width:340px;max-width:100%;background:var(--bg);border-radius:36px;border:1px solid var(--border);padding:14px 16px 20px;overflow:hidden}
+.cap{font-size:12px;color:var(--subtle);text-align:center;margin:6px 0 0}
+.nav{display:flex;justify-content:center;font-weight:600;font-size:15px;padding:6px 0 10px}
+.picker{display:inline-flex;gap:6px;align-items:center;font-size:15px;color:var(--accentText);font-weight:500;margin-bottom:12px}
+.sh{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--subtle);margin:16px 0 6px}
+.hero{background:var(--accent);color:var(--onAccent);border-radius:24px;padding:16px}
+.hero .k{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;opacity:.75}
+.hero .n{font-size:40px;font-weight:900;font-variant-numeric:tabular-nums}
+.hero .n small{font-size:20px;font-weight:600;opacity:.75}
+.hero .line{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.hero .st{font-size:14px;opacity:.75}
+.bar{height:8px;border-radius:99px;background:rgba(28,27,23,.12);overflow:hidden;margin:10px 0}
+.bar i{display:block;height:100%;background:var(--onAccent);border-radius:99px}
+.cta{background:var(--inverse);color:var(--accent);text-align:center;border-radius:16px;padding:14px;font-weight:700;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px}
+.seg{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--surface2);gap:2px}
+.seg .l{background:var(--mastery)}.seg .m{background:var(--learn)}.seg .n0{background:var(--ringTrack)}
+.legend{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+.legend div{flex:1 1 0;min-width:80px}
+.legend b{display:block;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.legend span{font-size:13px;color:var(--subtle);display:flex;gap:5px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.rowline{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border);font-size:15px}
+.rowline:first-child{border-top:0}
+.rowline .ic{width:32px;height:32px;border-radius:12px;background:var(--accentSoft);display:grid;place-items:center;font-size:15px}
+.rowline .t{flex:1}
+.rowline .t small{display:block;color:var(--subtle);font-size:13px}
+.rowline .v{font-weight:700;font-variant-numeric:tabular-nums}
+.chev{color:var(--subtle)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:12px;min-height:80px}
+.tile .ic{width:32px;height:32px;border-radius:12px;background:var(--accentSoft);display:grid;place-items:center;margin-bottom:6px}
+.tile b{display:block;font-size:15px}.tile small{color:var(--subtle);font-size:13px}
+.week{display:flex;align-items:flex-end;gap:6px;height:90px;margin-top:8px}
+.week div{flex:1;text-align:center;font-size:11px;color:var(--subtle)}
+.week i{display:block;background:var(--accent);border-radius:4px 4px 2px 2px;margin-bottom:4px;box-shadow:inset 0 0 0 1px rgba(28,27,23,.18)}
+.week em{display:block;font-style:normal;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;margin-bottom:2px}
+.donutwrap{display:flex;gap:16px;align-items:center}
+.sheet{background:var(--bg);border-radius:20px}
+.frow{display:flex;gap:10px;align-items:center;padding:12px 14px;background:var(--card);border-top:1px solid var(--border)}
+.frow:first-child{border-top:0;border-radius:18px 18px 0 0}.frow:last-child{border-radius:0 0 18px 18px}
+.frow .t{flex:1}.frow .t small{display:block;color:var(--subtle);font-size:13px;font-variant-numeric:tabular-nums}
+.mini{height:4px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-top:5px;display:flex}
+.mini .l{background:var(--mastery)}.mini .m{background:var(--learn)}
+.flash{background:var(--card);border:1px solid var(--border);border-radius:28px;padding:20px;text-align:center;min-height:210px;position:relative}
+.flash .w{font-size:34px;font-weight:900;margin:34px 0 6px}
+.flash .tr{color:var(--subtle)}
+.pill{display:inline-flex;gap:4px;align-items:center;border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600}
+.pill.warn{background:var(--warningSurf);color:var(--warning)}
+.grades{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.grades div{background:var(--card);border:1px solid var(--border);border-radius:12px;min-height:50px;display:grid;place-items:center;font-weight:700;text-align:center;padding:6px}
+.grades small{display:block;font-weight:500;color:var(--subtle);font-size:12px}
+.grades .ag{color:var(--error)}.grades .ez{background:var(--accent);color:var(--onAccent);border-color:var(--accent)}
+.grades .ez small{color:var(--onAccent);opacity:.75}
+.note{background:var(--card);border:1px dashed var(--border);border-radius:14px;padding:10px 12px;font-size:13px;color:var(--subtle);margin-top:10px}
+.opt{--learn:var(--learnLight)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .opt{--learn:#FFD43B}}
+:root[data-theme="dark"] .opt{--learn:#FFD43B}
+.optgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.opt h3{margin:0 0 2px;font-size:16px}.opt .meta{font-size:12px;color:var(--subtle);margin-bottom:10px}
+.rings{display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.rings div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--subtle)}
+</style>
+</head>
+<body>
+<header>
+  <div style="flex:1 1 300px">
+    <h1>Progress, forecast and hard words: three directions</h1>
+    <p>The Практика screen scoped by the folder picker («Все папки» or a folder). Маркер tokens, real copy.</p>
+  </div>
+  <button class="toggle" id="t">Светлая / тёмная</button>
+</header>
+
+<section class="dir"><h2>Сравнение цвета «учу» (светлая тема; в тёмной всегда жёлтый)</h2>
+<p class="why">Каждая карточка: полоса прогресса, строка папки и кольцо знания. «Учу» = интервал 1–20 дней; это не тир кольца, поэтому слово из «учу» может иметь любой тир 0–3. Тир 2 кольца берёт цвет «учу».</p>
+<div class="optgrid"><div class="card opt" style="--learnLight:#3B6FD4"><h3>Синий #3B6FD4</h3><div class="meta">4.8:1 · рекомендую</div>
+<div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+<div class="legend"><div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div><div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div><div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div></div>
+<div style="margin-top:12px;font-size:15px">Еда<div style="font-size:13px;color:var(--subtle)">выучено 18 из 40</div><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div>
+<div class="rings"><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--error)" stroke-width="4.4" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90 11 11)"/></svg>тир 0</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--caution)" stroke-width="4.4" pathLength="100" stroke-dasharray="50 100" transform="rotate(-90 11 11)"/></svg>тир 1</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--learn)" stroke-width="4.4" pathLength="100" stroke-dasharray="75 100" transform="rotate(-90 11 11)"/></svg>тир 2</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--mastery)" stroke-width="4.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 11 11)"/></svg>тир 3</div></div></div><div class="card opt" style="--learnLight:#1E8A8A"><h3>Бирюза #1E8A8A</h3><div class="meta">4.2:1</div>
+<div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+<div class="legend"><div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div><div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div><div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div></div>
+<div style="margin-top:12px;font-size:15px">Еда<div style="font-size:13px;color:var(--subtle)">выучено 18 из 40</div><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div>
+<div class="rings"><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--error)" stroke-width="4.4" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90 11 11)"/></svg>тир 0</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--caution)" stroke-width="4.4" pathLength="100" stroke-dasharray="50 100" transform="rotate(-90 11 11)"/></svg>тир 1</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--learn)" stroke-width="4.4" pathLength="100" stroke-dasharray="75 100" transform="rotate(-90 11 11)"/></svg>тир 2</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--mastery)" stroke-width="4.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 11 11)"/></svg>тир 3</div></div></div><div class="card opt" style="--learnLight:#7A5AF8"><h3>Фиолетовый #7A5AF8</h3><div class="meta">4.5:1</div>
+<div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+<div class="legend"><div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div><div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div><div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div></div>
+<div style="margin-top:12px;font-size:15px">Еда<div style="font-size:13px;color:var(--subtle)">выучено 18 из 40</div><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div>
+<div class="rings"><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--error)" stroke-width="4.4" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90 11 11)"/></svg>тир 0</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--caution)" stroke-width="4.4" pathLength="100" stroke-dasharray="50 100" transform="rotate(-90 11 11)"/></svg>тир 1</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--learn)" stroke-width="4.4" pathLength="100" stroke-dasharray="75 100" transform="rotate(-90 11 11)"/></svg>тир 2</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--mastery)" stroke-width="4.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 11 11)"/></svg>тир 3</div></div></div><div class="card opt" style="--learnLight:#B8860B"><h3>Мёд #B8860B</h3><div class="meta">3.3:1 · рядом с янтарём тира 1</div>
+<div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+<div class="legend"><div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div><div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div><div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div></div>
+<div style="margin-top:12px;font-size:15px">Еда<div style="font-size:13px;color:var(--subtle)">выучено 18 из 40</div><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div>
+<div class="rings"><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--error)" stroke-width="4.4" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90 11 11)"/></svg>тир 0</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--caution)" stroke-width="4.4" pathLength="100" stroke-dasharray="50 100" transform="rotate(-90 11 11)"/></svg>тир 1</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--learn)" stroke-width="4.4" pathLength="100" stroke-dasharray="75 100" transform="rotate(-90 11 11)"/></svg>тир 2</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--mastery)" stroke-width="4.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 11 11)"/></svg>тир 3</div></div></div><div class="card opt" style="--learnLight:#C77700"><h3>Янтарь = тир 1 #C77700</h3><div class="meta">3.5:1 · «учу» и «Трудно» одного цвета</div>
+<div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+<div class="legend"><div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div><div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div><div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div></div>
+<div style="margin-top:12px;font-size:15px">Еда<div style="font-size:13px;color:var(--subtle)">выучено 18 из 40</div><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div>
+<div class="rings"><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--error)" stroke-width="4.4" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90 11 11)"/></svg>тир 0</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--caution)" stroke-width="4.4" pathLength="100" stroke-dasharray="50 100" transform="rotate(-90 11 11)"/></svg>тир 1</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--learn)" stroke-width="4.4" pathLength="100" stroke-dasharray="75 100" transform="rotate(-90 11 11)"/></svg>тир 2</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--mastery)" stroke-width="4.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 11 11)"/></svg>тир 3</div></div></div><div class="card opt" style="--learnLight:#8A6A00"><h3>Охра (сейчас) #8A6A00</h3><div class="meta">5.1:1 · почти как зелёный по яркости</div>
+<div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+<div class="legend"><div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div><div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div><div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div></div>
+<div style="margin-top:12px;font-size:15px">Еда<div style="font-size:13px;color:var(--subtle)">выучено 18 из 40</div><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div>
+<div class="rings"><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--error)" stroke-width="4.4" pathLength="100" stroke-dasharray="25 100" transform="rotate(-90 11 11)"/></svg>тир 0</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--caution)" stroke-width="4.4" pathLength="100" stroke-dasharray="50 100" transform="rotate(-90 11 11)"/></svg>тир 1</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--learn)" stroke-width="4.4" pathLength="100" stroke-dasharray="75 100" transform="rotate(-90 11 11)"/></svg>тир 2</div><div><svg width="34" height="34" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--ringTrack)" stroke-width="4.4"/><circle cx="11" cy="11" r="8.8" fill="none" stroke="var(--mastery)" stroke-width="4.4" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 11 11)"/></svg>тир 3</div></div></div></div></section>
+<!-- ===== A ===== -->
+<section class="dir">
+  <h2>A · A «Прогресс» card under the hero (recommended)</h2>
+  <p class="why">The Today hero stays as it is. Below the modes, one calm card: a segmented bar (выучено / учу / новые) with counts, then two rows for the forecast and hard words. Folder sheet rows get «выучено 18 из 40» and a thin bar. The fewest new visual decisions, and the counts are text, not just colour.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="nav">🇵🇱 Польский ▾</div>
+        <div class="picker">📁 Все папки ⌄</div>
+        <div class="hero">
+          <div class="line"><div><div class="k">Сегодня</div><div class="n">3 <small>из 12</small></div></div><div class="st">Осталось 9</div></div>
+          <div class="bar"><i style="width:25%"></i></div>
+          <div class="cta">Продолжить · 9</div>
+        </div>
+        <div class="sh">Прогресс</div>
+        <div class="card">
+          <div class="seg"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span><span class="n0" style="width:17%"></span></div>
+          <div class="legend">
+            <div><b>48</b><span><i class="dot" style="background:var(--mastery)"></i>выучено</span></div>
+            <div><b>54</b><span><i class="dot" style="background:var(--learn)"></i>учу</span></div>
+            <div><b>21</b><span><i class="dot" style="background:var(--ringTrack)"></i>новые</span></div>
+          </div>
+          <div style="margin-top:12px">
+            <div class="rowline"><div class="ic">🗓</div><div class="t">Завтра 14 · за неделю 63<small>Повторений по расписанию</small></div></div>
+            <div class="rowline"><div class="ic">⚠︎</div><div class="t">Трудные слова<small>Забыты 6 раз и больше</small></div><div class="v">5</div><div class="chev">›</div></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">Практика · «Все папки»</p>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="nav">Папки</div>
+        <div class="sheet">
+          <div class="frow"><div class="t">Все папки<small>выучено 48 из 123</small><div class="mini"><span class="l" style="width:39%"></span><span class="m" style="width:44%"></span></div></div><span>✓</span></div>
+          <div class="frow"><div class="t">Еда<small>выучено 18 из 40</small><div class="mini"><span class="l" style="width:45%"></span><span class="m" style="width:40%"></span></div></div></div>
+          <div class="frow"><div class="t">Работа<small>выучено 6 из 31</small><div class="mini"><span class="l" style="width:19%"></span><span class="m" style="width:55%"></span></div></div></div>
+          <div class="frow"><div class="t">Скан 14 ноября<small>выучено 0 из 12</small><div class="mini"><span class="l" style="width:0"></span><span class="m" style="width:25%"></span></div></div></div>
+        </div>
+        <div class="note">«Выучено»: интервал повторения ≥ 21 дня. Такие слова возвращаются раз в 30, затем в 60 дней.</div>
+      </div>
+      <p class="cap">Folder sheet (FolderPicker)</p>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="nav">Карточки · 4 из 9</div>
+        <div class="flash">
+          <span class="pill warn">⚠︎ Трудное слово</span>
+          <div class="w">przyzwyczajenie</div>
+          <div class="tr">привычка</div>
+        </div>
+        <div class="grades">
+          <div class="ag">Не помню<small>10 мин</small></div><div>Трудно<small>2 дн.</small></div>
+          <div>Помню<small>7 дн.</small></div><div class="ez">Легко<small>14 дн.</small></div>
+        </div>
+      </div>
+      <p class="cap">Flashcard: hard-word tag (A and B)</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== B ===== -->
+<section class="dir">
+  <h2>B · Progress inside the hero, forecast as a tile</h2>
+  <p class="why">The yellow hero gains a second line, «Выучено 48 из 123», with a thin bar. The forecast and hard words become two half-width tiles next to the modes. Compact, but the hero gets busier: two progress bars on one yellow surface.</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="nav">🇵🇱 Польский ▾</div>
+        <div class="picker">📁 Еда ⌄</div>
+        <div class="hero">
+          <div class="line"><div><div class="k">Сегодня</div><div class="n">3 <small>из 12</small></div></div><div class="st">Осталось 9</div></div>
+          <div class="bar"><i style="width:25%"></i></div>
+          <div class="cta">Продолжить · 9</div>
+          <div style="margin-top:12px;font-size:14px;display:flex;justify-content:space-between"><span style="opacity:.75">Выучено</span><b>18 из 40</b></div>
+          <div class="bar" style="height:4px;margin:6px 0 0"><i style="width:45%"></i></div>
+        </div>
+        <div class="sh">Режимы</div>
+        <div class="tiles">
+          <div class="tile"><div class="ic">🗓</div><b>Завтра 4</b><small>за неделю 17</small></div>
+          <div class="tile"><div class="ic">⚠︎</div><b>Трудные · 2</b><small>Забыты 6+ раз</small></div>
+        </div>
+      </div>
+      <p class="cap">Практика · folder «Еда»</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== C ===== -->
+<section class="dir">
+  <h2>C · A «Статистика» card with a 7-day chart</h2>
+  <p class="why">A richer card: a 7-day bar forecast (Anki-style) and a ring with three numbers. The most informative, but it brings a new chart component and needs extra accessibility work (Swift Charts with an audio graph).</p>
+  <div class="row">
+    <div>
+      <div class="phone">
+        <div class="nav">🇵🇱 Польский ▾</div>
+        <div class="picker">📁 Все папки ⌄</div>
+        <div class="sh">Статистика</div>
+        <div class="card">
+          <div class="donutwrap">
+            <svg width="84" height="84" viewBox="0 0 42 42" aria-hidden="true">
+              <circle cx="21" cy="21" r="16" fill="none" stroke="var(--ringTrack)" stroke-width="6"/>
+              <circle cx="21" cy="21" r="16" fill="none" stroke="var(--mastery)" stroke-width="6" stroke-dasharray="39 100" transform="rotate(-90 21 21)" pathLength="100"/>
+              <circle cx="21" cy="21" r="16" fill="none" stroke="var(--learn)" stroke-width="6" stroke-dasharray="44 100" stroke-dashoffset="-39" transform="rotate(-90 21 21)" pathLength="100"/>
+            </svg>
+            <div class="legend" style="flex-direction:column;gap:4px;margin:0">
+              <span><i class="dot" style="background:var(--mastery)"></i><b style="font-size:15px;display:inline">48</b> выучено</span>
+              <span><i class="dot" style="background:var(--learn)"></i><b style="font-size:15px;display:inline">54</b> учу</span>
+              <span><i class="dot" style="background:var(--ringTrack)"></i><b style="font-size:15px;display:inline">21</b> новые</span>
+            </div>
+          </div>
+          <div class="sh" style="margin-top:14px">Повторения на 7 дней</div>
+          <div class="week">
+            <div><em>8</em><i style="height:30px"></i>пн</div><div><em>12</em><i style="height:44px"></i>вт</div><div><em>3</em><i style="height:12px"></i>ср</div>
+            <div><em>5</em><i style="height:20px"></i>чт</div><div><em>2</em><i style="height:8px"></i>пт</div><div><em>10</em><i style="height:36px"></i>сб</div><div><em>4</em><i style="height:16px"></i>вс</div>
+          </div>
+          <div class="rowline" style="margin-top:8px"><div class="ic">⚠︎</div><div class="t">Трудные слова</div><div class="v">5</div><div class="chev">›</div></div>
+        </div>
+      </div>
+      <p class="cap">Практика · «Все папки»</p>
+    </div>
+  </div>
+</section>
+<script>
+const b=document.getElementById('t'),r=document.documentElement;
+b.onclick=()=>{const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark'};
+</script>
+</body>
+</html>

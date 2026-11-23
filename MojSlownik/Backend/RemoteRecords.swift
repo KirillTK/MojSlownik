@@ -70,6 +70,8 @@ struct RemoteWordRecord: Decodable, Equatable, Sendable {
     let lastReviewGrade: String?
     let knowledgeTier: Int?
     let consecutiveSoftMisses: Int
+    /// Absent on rows from before the `lapse_count` column; read as 0.
+    var lapseCount: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, term, translation, category, repetitions
@@ -85,6 +87,7 @@ struct RemoteWordRecord: Decodable, Equatable, Sendable {
         case lastReviewGrade = "last_review_grade"
         case knowledgeTier = "knowledge_tier"
         case consecutiveSoftMisses = "consecutive_soft_misses"
+        case lapseCount = "lapse_count"
     }
 }
 
@@ -159,6 +162,7 @@ struct ValidatedRemoteWord: Equatable, Sendable {
     let lastReviewGrade: ReviewGrade?
     let knowledgeTier: Int?
     let consecutiveSoftMisses: Int
+    var lapseCount: Int = 0
 }
 
 struct ValidatedRemoteFolder: Equatable, Sendable {
@@ -229,6 +233,8 @@ enum RemoteRecordValidator {
     // Same bounds as SRSEngine, so every locally produced schedule passes.
     static let maxIntervalDays = SRSEngine.maxIntervalDays
     static let maxEaseFactor = SRSEngine.maxEaseFactor
+    /// Plausibility bound for `lapse_count` (a counter that only grows by one per forgotten review).
+    static let maxLapseCount = 10_000
 
     static func validate(_ record: RemoteWorkspaceRecord, ownerID: UUID, now: Date) throws -> ValidatedRemoteWorkspace {
         try validateIdentity(id: record.id, userID: record.userID, ownerID: ownerID)
@@ -267,7 +273,7 @@ enum RemoteRecordValidator {
             .addingTimeInterval(maxIntervalDays * 86_400 + allowedClockSkew)
         guard record.easeFactor.isFinite, (SRSEngine.minEaseFactor...maxEaseFactor).contains(record.easeFactor),
               record.intervalDays.isFinite, (0...maxIntervalDays).contains(record.intervalDays),
-              record.repetitions >= 0, record.consecutiveSoftMisses >= 0,
+              record.repetitions >= 0, record.consecutiveSoftMisses >= 0, (0...maxLapseCount).contains(record.lapseCount ?? 0),
               record.dueDate >= earliestDate, record.dueDate <= latestDueDate else {
             throw RemoteRecordError.invalidSchedule
         }
@@ -292,7 +298,8 @@ enum RemoteRecordValidator {
             createdAt: record.createdAt, updatedAt: record.updatedAt, deletedAt: record.deletedAt,
             easeFactor: record.easeFactor, intervalDays: record.intervalDays,
             repetitions: record.repetitions, dueDate: record.dueDate, lastReviewGrade: grade,
-            knowledgeTier: record.knowledgeTier, consecutiveSoftMisses: record.consecutiveSoftMisses)
+            knowledgeTier: record.knowledgeTier, consecutiveSoftMisses: record.consecutiveSoftMisses,
+            lapseCount: record.lapseCount ?? 0)
     }
 
     static func validate(_ record: RemoteFolderRecord, ownerID: UUID, known: KnownRemoteIDs,
@@ -437,10 +444,11 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
     let lastReviewGrade: String?
     let knowledgeTier: Int?
     let consecutiveSoftMisses: Int
+    var lapseCount: Int = 0
 
     static let selectColumns = "id,user_id,workspace_id,term,translation,entered_side,category,created_at,"
         + "updated_at,deleted_at,ease_factor,interval_days,repetitions,due_date,last_review_grade,"
-        + "knowledge_tier,consecutive_soft_misses"
+        + "knowledge_tier,consecutive_soft_misses,lapse_count"
 
     enum CodingKeys: String, CodingKey {
         case id, term, translation, category, repetitions
@@ -455,6 +463,7 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
         case lastReviewGrade = "last_review_grade"
         case knowledgeTier = "knowledge_tier"
         case consecutiveSoftMisses = "consecutive_soft_misses"
+        case lapseCount = "lapse_count"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -475,6 +484,7 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
         try container.encode(lastReviewGrade, forKey: .lastReviewGrade)
         try container.encode(knowledgeTier, forKey: .knowledgeTier)
         try container.encode(consecutiveSoftMisses, forKey: .consecutiveSoftMisses)
+        try container.encode(lapseCount, forKey: .lapseCount)
     }
 }
 

@@ -108,12 +108,13 @@ final class SupabaseAdapterTests: XCTestCase {
             enteredSide: "translation", category: "other",
             createdAt: Date(timeIntervalSince1970: 1_800_000_000), deletedAt: nil, easeFactor: 2.5,
             intervalDays: 0, repetitions: 0, dueDate: Date(timeIntervalSince1970: 1_800_000_000),
-            lastReviewGrade: nil, knowledgeTier: nil, consecutiveSoftMisses: 0)
+            lastReviewGrade: nil, knowledgeTier: nil, consecutiveSoftMisses: 0, lapseCount: 3)
         let object = try jsonObject(word)
+        XCTAssertEqual(object["lapse_count"] as? Int, 3)
         XCTAssertEqual(Set(object.keys),
                        ["id", "user_id", "workspace_id", "term", "translation", "entered_side", "category",
                         "created_at", "deleted_at", "ease_factor", "interval_days", "repetitions", "due_date",
-                        "last_review_grade", "knowledge_tier", "consecutive_soft_misses"])
+                        "last_review_grade", "knowledge_tier", "consecutive_soft_misses", "lapse_count"])
         for legacy in ["term_language", "translation_language", "entered_language", "folder_ids"] {
             XCTAssertFalse(object.keys.contains(legacy), "\(legacy) no longer exists on the server")
         }

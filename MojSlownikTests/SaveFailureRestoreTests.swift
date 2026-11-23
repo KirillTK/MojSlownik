@@ -55,6 +55,48 @@ final class SaveFailureRestoreTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: "dailyStudyActivity.v1"))
     }
 
+    func testReviewRestoresLapseCountWhenSaveFails() throws {
+        let container = try readOnlyContainer()
+        let word = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Word>()).first)
+        word.repetitions = 3
+        word.intervalDays = 8
+        word.lapseCount = 2
+        let before = SRSState(word: word)
+        let suite = "SaveFailureRestoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DailyStudyStore(defaults: defaults, now: t0)
+
+        XCTAssertThrowsError(try store.review(.again, to: word, context: container.mainContext,
+                                              now: t0.addingTimeInterval(60)))
+
+        XCTAssertEqual(SRSState(word: word), before)
+        XCTAssertEqual(word.lapseCount, 2)
+    }
+
+    func testPracticeAnswerRestoresScheduleLapseAndTierWhenSaveFails() throws {
+        let container = try readOnlyContainer()
+        let word = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Word>()).first)
+        word.repetitions = 3
+        word.intervalDays = 8
+        word.dueDate = t0
+        word.lapseCount = 2
+        word.knowledgeTier = 2
+        let before = SRSState(word: word)
+        let updatedAt = word.updatedAt
+        let repository = InMemoryDailyActivityRepository()
+        let store = DailyStudyStore(repository: repository, now: t0)
+
+        XCTAssertThrowsError(try store.recordPracticeAnswer(
+            word: word, answer: .choice(isCorrect: false), context: container.mainContext, mode: .quiz,
+            now: t0.addingTimeInterval(60)))
+
+        XCTAssertEqual(SRSState(word: word), before)
+        XCTAssertEqual(word.knowledgeTier, 2)
+        XCTAssertEqual(word.updatedAt, updatedAt)
+        XCTAssertNil(repository.stored, "no activity is published when the save fails")
+    }
+
     func testSetCategoryRestoresCategoryAndUpdatedAtWhenSaveFails() throws {
         let container = try readOnlyContainer()
         let word = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Word>()).first)

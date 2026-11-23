@@ -30,7 +30,7 @@ final class UITestSupportTests: XCTestCase {
         // The UI-test E2ETestCase.Fixture enum mirrors these raw values.
         XCTAssertEqual(UITestFixture.allCases.map(\.rawValue),
                        ["empty", "basicVocabulary", "dueForReview", "foldersOrdered", "freshInstall",
-                        "multiWorkspace", "sameScriptWorkspace", "syncedVocabulary"])
+                        "multiWorkspace", "sameScriptWorkspace", "syncedVocabulary", "studyProgress"])
         XCTAssertEqual(UITestSyncState.allCases.map(\.rawValue),
                        ["empty", "remoteVocabulary", "failsOnce", "linkedToOtherAccount", "syncedThenRemoteChanges",
                         "remoteWorkspaces"])
@@ -55,6 +55,29 @@ final class UITestSupportTests: XCTestCase {
         let all = try words(container)
         XCTAssertEqual(all.count, 5)
         XCTAssertEqual(Set(all.filter { $0.dueDate <= now }.map(\.polish)), ["jabłko", "okno"])
+    }
+
+    func testStudyProgressBucketsForecastAndHardWordsPerScope() throws {
+        let container = try seeded(.studyProgress)
+        let all = try words(container)
+        let memberships = MembershipIndex(try container.mainContext.fetch(FetchDescriptor<FolderMembership>()))
+        let calendar = Calendar.autoupdatingCurrent
+
+        XCTAssertEqual(all.count, 10)
+        XCTAssertEqual(StudyProgress.breakdown(all), .init(new: 4, learning: 3, learned: 3))
+        XCTAssertEqual(StudyProgress.forecast(all, now: now, calendar: calendar), .init(tomorrow: 1, week: 2))
+        XCTAssertEqual(StudyProgress.hardWords(all).map(\.polish), ["przyzwyczajenie"])
+        XCTAssertEqual(all.filter { $0.dueDate <= now }.count, 5)
+
+        let lesson1 = FolderStore.words(all, in: UITestFixture.lesson1ID, memberships: memberships)
+        XCTAssertEqual(Set(lesson1.map(\.polish)), ["kot", "dom", "chleb"])
+        XCTAssertEqual(StudyProgress.breakdown(lesson1), .init(new: 0, learning: 1, learned: 2))
+        XCTAssertTrue(StudyProgress.hardWords(lesson1).isEmpty)
+        let lesson2 = FolderStore.words(all, in: UITestFixture.lesson2ID, memberships: memberships)
+        XCTAssertEqual(Set(lesson2.map(\.polish)), ["jabłko", "mleko", "ser", "ryba"])
+        XCTAssertEqual(StudyProgress.breakdown(lesson2), .init(new: 4, learning: 0, learned: 0))
+        XCTAssertEqual(try container.mainContext.fetch(FetchDescriptor<WordFolder>()).map(\.name).sorted(),
+                       ["Урок 1", "Урок 2"])
     }
 
     func testFoldersOrderedSortsByOrderAndAssignsMemberships() throws {

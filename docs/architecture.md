@@ -124,19 +124,29 @@ self-ratings set the tier directly. Existing records derive an initial tier from
 their saved card grade or SRS state. `DailyStudyStore.review`
 restores only that word's prior SRS fields if saving fails; the screen reports the
 failure and does not advance. Each quiz question carries its source word's stable
-identifier. Quiz/listening answers update confidence and daily activity together,
-without changing SM-2 scheduling. A failed save restores the word's prior
-confidence state. Selecting an answer persists activity before local feedback;
+identifier. Quiz/listening answers update confidence and daily activity together.
+They also schedule due words (`SRSEngine.practiceGrade`): a correct answer on a due
+word schedules like Good, a wrong one like Again (with the lapse rule), a typed soft
+miss changes nothing, and a not-due word's schedule and `lapseCount` are never changed
+(a wrong answer still makes it pending, so the flashcard self-grade decides). A failed
+save restores the word's prior confidence, SRS and lapse state. Selecting an answer persists activity before local feedback;
 Back retains accepted answers even in an unfinished quiz.
 The 0.9-second transition is cancellable when leaving the screen. Quiz questions,
-position and score remain session state; quiz answers do not change SRS fields.
+position and score remain session state.
+
+**Study progress:** `Services/Practice/StudyProgress.swift` (pure) turns a scoped word list into
+the Practice «Прогресс» card: learned (`intervalDays >= 21`) / learning / new (never graded)
+counts, a forecast of not-due words (tomorrow = due before the end of tomorrow, week = before the
+start of day 8) and the hard words (`lapseCount >= 6` and not yet learned). Every count starts from
+`WorkspaceScope.words(...)` and `FolderStore.words(...)`. Hard words open a flashcard session
+(`FlashcardSession.hardWords`); the Practice folder sheet shows learned/total per folder.
 
 **Daily progress:** the app-scoped observable `DailyStudyStore` stores the local day
 and unique completed/pending `PersistentIdentifier` collections, today's quiz successes,
 and answer events as Codable data in UserDefaults. Successful flashcard and quiz
 answers add unique daily completion. A quiz success exempts that word from today's
-remaining practice without altering its SRS due date; the exemption ends at local
-midnight. A later wrong quiz answer or "Не помню" removes all completion/exemption
+remaining practice; on a due word the answer already moved its SRS due date, so the
+exemption only matters for not-due words. It ends at local midnight. A later wrong quiz answer or "Не помню" removes all completion/exemption
 and keeps the word pending. A later success clears pending; a flashcard success
 returns the word to ordinary SRS-based due handling. The flashcard session also
 appends "Не помню" words for another attempt during its ten-minute SRS delay.
@@ -211,6 +221,10 @@ Achievements stay global.
 - **Fixtures.** `freshInstall`, `multiWorkspace`, `sameScriptWorkspace`; sync state `remoteWorkspaces`.
 
 ## Sync
+
+`public.words.lapse_count` (migration `20261122120000_words_lapse_count.sql`, defaulted, CHECK >= 0)
+syncs `Word.lapseCount`; apply it to Supabase before a build that syncs (the select list names the
+column). Old clients upsert without it and keep the stored value.
 
 Workspaces, folders, words and memberships (with SRS state) sync with `public.workspaces`, `public.folders`,
 `public.words` and `public.word_folders`;
@@ -355,7 +369,8 @@ quiz distractors. Empty folders never fall back to global vocabulary.
 ## Reusable Views
 
 `Views/Components/` contains FolderPicker, CategoryMenu, PronounceButton,
-SessionProgress, PrimaryButtonStyle, chipStyle, MarkerProgressBar, KnowledgeTierBadge
+SessionProgress, PrimaryButtonStyle, chipStyle, MarkerProgressBar, ProgressSegmentsBar
+(learned/learning/new bar), KnowledgeTierBadge
 (ring), AchievementBadge, AchievementBanner, the achievementBanner() modifier and the
 errorAlert modifier. CategoryMenu shares available choices
 and selected-state behavior while callers supply their label and persistence action.
@@ -410,8 +425,20 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 - Due words and search results are filtered in memory after `@Query`. Flashcards
   use all due words, or up to 10 random words if none are due. Again sets `dueDate`
   to 10 minutes later and also appends the word to the current session.
-- SRS intervals use days × 86,400 seconds, not calendar days. Learned statistics
-  mean `repetitions >= 3`; Again resets that counter.
+- SRS intervals use days × 86,400 seconds, not calendar days. Achievements' learned
+  statistic means `repetitions >= 3` (Again resets that counter); the Progress card's
+  "learned" means `intervalDays >= 21`.
+- Intervals are capped at 30 days (`SRSEngine.maxScheduledIntervalDays`), so learned words return
+  about monthly. Grades are monotonic (`SRSEngine.next`): Hard <= Good < Easy below the cap, and
+  Hard < Good once a word has an interval. The validator and the outgoing clamp still accept 36,500
+  days (`maxIntervalDays`), because server rows from older versions may hold long intervals.
+- `ScheduleNormalizer` clamps longer schedules at launch and, via `SwiftDataSyncStore.apply`, on
+  pull. It is local-only: it rewrites SRS fields but never `updatedAt`/`serverUpdatedAt`, so rows
+  stay clean. A dirty normalized row would win the merge over a newer remote edit and overwrite
+  the server. Already-overdue words keep their due date; words whose clamped due date falls in
+  the past are spread over the next 7 days by a stable per-word offset.
+- A lapse is a failure (`.again`) on a word whose `repetitions > 0`; repeated Again or Again on a
+  never-learned word does not count. A hard word has `lapseCount >= 6` and `intervalDays < 21`.
 - Quiz requires at least 4 records and generates **up to** 10 questions. Options
   are deduplicated by exact text, so duplicate translations may yield fewer than
   four choices; questions without distractors are skipped.
@@ -477,6 +504,8 @@ lookup, so its duplicate-comparison rules are tested outside SwiftUI.
 Run the isolated `MojSlownikUnitTests` scheme (see AGENTS.md); it does not include
 `MojSlownikUITests`. New or changed nontrivial logic requires committed unit tests.
 Network translation and physical-camera behavior are not exercised by these tests.
+
+Follow-up (not implemented): an FSRS scheduler with a per-user retention target.
 
 E2E: `MojSlownikUITests/` holds XCUITest classes (AddWordFlow, EditTranslationFlow,
 FlashcardsFlow, QuizFlow, FoldersFlow, AccountFlow, SyncFlow, LocalizationFlow) on the shared `E2ETestCase`, each launching a
