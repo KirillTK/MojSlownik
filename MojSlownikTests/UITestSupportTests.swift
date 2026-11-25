@@ -67,6 +67,11 @@ final class UITestSupportTests: XCTestCase {
         XCTAssertEqual(StudyProgress.breakdown(all), .init(new: 4, learning: 3, learned: 3))
         XCTAssertEqual(StudyProgress.forecast(all, now: now, calendar: calendar), .init(tomorrow: 1, week: 2))
         XCTAssertEqual(StudyProgress.hardWords(all).map(\.polish), ["przyzwyczajenie"])
+        let hard = try XCTUnwrap(all.first { $0.polish == "przyzwyczajenie" })
+        XCTAssertEqual(hard.dueDate, now.addingTimeInterval(-86_400), "exactly one day overdue")
+        XCTAssertEqual(SRSEngine.preview(.hard, for: hard, now: now), .days(2))
+        XCTAssertEqual(SRSEngine.preview(.good, for: hard, now: now), .days(3))
+        XCTAssertEqual(SRSEngine.preview(.easy, for: hard, now: now), .days(4))
         XCTAssertEqual(all.filter { $0.dueDate <= now }.count, 5)
 
         let lesson1 = FolderStore.words(all, in: UITestFixture.lesson1ID, memberships: memberships)

@@ -102,6 +102,7 @@ struct AppResources {
         WordIdentityBackfill.run(container: container)
         WorkspaceBackfill.run(container: container, defaults: defaults, now: now)
         ScheduleNormalizer.run(container: container, now: now)
+        FSRSMigration.run(container: container, now: now)
         // PersistentIdentifier decoding requires Word's schema to be registered first.
         let changeSignal = LocalChangeSignal()
         dailyStudy = DailyStudyStore(repository: UserDefaultsDailyActivityRepository(defaults: defaults),

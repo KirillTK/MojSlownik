@@ -25,27 +25,59 @@ enum ReviewGrade: String, CaseIterable {
 
 /// The scheduling fields of a word as a value, so the next state can be computed without mutating.
 struct SRSState: Equatable {
+    /// Legacy SM-2 ease: no longer written, read by the FSRS conversion.
     var easeFactor: Double
     var intervalDays: Double
     var repetitions: Int
     var dueDate: Date
     var lastReviewGradeRawValue: String?
     var lapseCount: Int
+    var fsrsState: Int?
+    var fsrsStability: Double?
+    var fsrsDifficulty: Double?
+    var fsrsLearningStep: Int
+    var fsrsLastReviewedAt: Date?
 
     init(easeFactor: Double, intervalDays: Double, repetitions: Int, dueDate: Date,
-         lastReviewGradeRawValue: String?, lapseCount: Int) {
+         lastReviewGradeRawValue: String?, lapseCount: Int, fsrsState: Int? = nil,
+         fsrsStability: Double? = nil, fsrsDifficulty: Double? = nil, fsrsLearningStep: Int = 0,
+         fsrsLastReviewedAt: Date? = nil) {
         self.easeFactor = easeFactor
         self.intervalDays = intervalDays
         self.repetitions = repetitions
         self.dueDate = dueDate
         self.lastReviewGradeRawValue = lastReviewGradeRawValue
         self.lapseCount = lapseCount
+        self.fsrsState = fsrsState
+        self.fsrsStability = fsrsStability
+        self.fsrsDifficulty = fsrsDifficulty
+        self.fsrsLearningStep = fsrsLearningStep
+        self.fsrsLastReviewedAt = fsrsLastReviewedAt
     }
 
     init(word: Word) {
         self.init(easeFactor: word.easeFactor, intervalDays: word.intervalDays,
                   repetitions: word.repetitions, dueDate: word.dueDate,
-                  lastReviewGradeRawValue: word.lastReviewGradeRawValue, lapseCount: word.lapseCount)
+                  lastReviewGradeRawValue: word.lastReviewGradeRawValue, lapseCount: word.lapseCount,
+                  fsrsState: word.fsrsStateRawValue, fsrsStability: word.fsrsStability,
+                  fsrsDifficulty: word.fsrsDifficulty, fsrsLearningStep: word.fsrsLearningStep,
+                  fsrsLastReviewedAt: word.fsrsLastReviewedAt)
+    }
+
+    /// The stored FSRS memory, nil when the block is incomplete (it still has to be derived).
+    var memory: FSRSMemory? {
+        get {
+            guard let fsrsState, let fsrsStability, let fsrsDifficulty else { return nil }
+            return FSRSMemory(state: fsrsState, stability: fsrsStability, difficulty: fsrsDifficulty,
+                              learningStep: fsrsLearningStep, lastReviewedAt: fsrsLastReviewedAt)
+        }
+        set {
+            fsrsState = newValue?.state
+            fsrsStability = newValue?.stability
+            fsrsDifficulty = newValue?.difficulty
+            fsrsLearningStep = newValue?.learningStep ?? 0
+            fsrsLastReviewedAt = newValue?.lastReviewedAt
+        }
     }
 
     func write(to word: Word) {
@@ -55,7 +87,27 @@ struct SRSState: Equatable {
         word.dueDate = dueDate
         word.lastReviewGradeRawValue = lastReviewGradeRawValue
         word.lapseCount = lapseCount
+        writeFSRS(to: word)
     }
+
+    /// Only the FSRS block (the conversion and the pull use it; schedule fields stay).
+    func writeFSRS(to word: Word) {
+        word.fsrsStateRawValue = fsrsState
+        word.fsrsStability = fsrsStability
+        word.fsrsDifficulty = fsrsDifficulty
+        word.fsrsLearningStep = fsrsLearningStep
+        word.fsrsLastReviewedAt = fsrsLastReviewedAt
+    }
+}
+
+/// One review as a value: the schedule before and after, the FSRS memory on both sides and the
+/// whole UTC days since the previous review. The review log is built from it.
+struct ReviewTransition: Equatable {
+    let before: SRSState
+    let after: SRSState
+    let beforeMemory: FSRSMemory
+    let afterMemory: FSRSMemory
+    let elapsedDays: Double
 }
 
 /// The delay until the next review, for the grade buttons.
@@ -82,17 +134,24 @@ extension ScheduleDelay {
     }
 }
 
-/// Simplified SM-2 (as in Anki): every answer moves the interval and the next review date.
-/// Intervals are clamped to `maxScheduledIntervalDays`, so learned words return about monthly.
+/// FSRS scheduling through `FSRSScheduler` (the package is never called from anywhere else).
+/// After each review the fields the app still reads are written: `dueDate`, `intervalDays` (the
+/// package's scheduled days, 0 while (re)learning), `repetitions` (0 after Again, else +1),
+/// `lastReviewGradeRawValue`, `lapseCount` (FSRS lapses) and the FSRS memory. `easeFactor` is no
+/// longer written.
 enum SRSEngine {
     static let minEaseFactor = 1.3
     /// Upper bounds keep every schedule representable and inside what sync accepts
     /// (Backend/RemoteRecords.swift validates against these).
     static let maxEaseFactor = 10.0
-    /// Storage/sync acceptance bound (server rows from older versions may hold long intervals).
+    /// Storage/sync acceptance bound.
     static let maxIntervalDays = 36_500.0
-    /// The longest interval this app schedules.
+    /// The 30-day max-interval setting, passed to FSRS as `maximumInterval`.
     static let maxScheduledIntervalDays = 30.0
+    /// The longest interval the package can return with that setting: it applies the maximum
+    /// before keeping Good above Hard and Easy above Good.
+    static let maxLibraryIntervalDays = maxScheduledIntervalDays + 2
+    /// The first (re)learning step, 10 minutes; equals `FSRSScheduler.learningSteps`.
     static let againDelay: TimeInterval = 600
 
     static func apply(_ grade: ReviewGrade, to word: Word, now: Date = .now) {
@@ -102,54 +161,53 @@ enum SRSEngine {
     /// What the next review delay would be; nothing is mutated.
     static func preview(_ grade: ReviewGrade, for word: Word, now: Date = .now) -> ScheduleDelay {
         let state = next(grade, from: SRSState(word: word), now: now)
-        if state.intervalDays == 0 { return .minutes(Int((againDelay / 60).rounded())) }
+        if state.intervalDays == 0 {
+            return .minutes(Int((state.dueDate.timeIntervalSince(now) / 60).rounded()))
+        }
         return .days(Int(state.intervalDays))
     }
 
-    /// Pure scheduling. Hard <= Good < Easy below the cap, and Hard < Good once the word has an
-    /// interval, so a better answer never schedules sooner.
+    /// Pure scheduling: the state after answering with `grade`.
     static func next(_ grade: ReviewGrade, from state: SRSState, now: Date) -> SRSState {
-        var result = state
-        result.lastReviewGradeRawValue = grade.rawValue
-        let interval = state.intervalDays
-        let ease = state.easeFactor
+        transition(grade, from: state, now: now).after
+    }
 
-        if grade == .again {
-            // A lapse is a failure after a success since the last failure.
-            if state.repetitions > 0 { result.lapseCount = min(state.lapseCount, 9_999) + 1 }
-            result.repetitions = 0
-            result.easeFactor = min(maxEaseFactor, max(minEaseFactor, ease - 0.2))
-            result.intervalDays = 0
-            result.dueDate = now.addingTimeInterval(againDelay)
-            return result
-        }
+    /// Pure scheduling plus the FSRS memory on both sides, for the review log.
+    static func transition(_ grade: ReviewGrade, from state: SRSState, now: Date) -> ReviewTransition {
+        let beforeMemory = FSRSMigration.effective(state, now: now)
+        let lapses = min(max(state.lapseCount, 0), 9_999)
+        let outcome = FSRSScheduler.review(memory: beforeMemory, due: state.dueDate,
+                                           intervalDays: state.intervalDays.isFinite ? state.intervalDays : 0,
+                                           lapses: lapses, grade: grade, now: now)
+        var after = state
+        after.lastReviewGradeRawValue = grade.rawValue
+        after.repetitions = grade == .again ? 0 : state.repetitions + 1
+        after.lapseCount = lapses + max(0, outcome.lapses - lapses)
+        after.intervalDays = outcome.scheduledDays
+        after.dueDate = outcome.due
+        after.memory = outcome.memory
+        return ReviewTransition(before: state, after: after, beforeMemory: beforeMemory,
+                                afterMemory: outcome.memory, elapsedDays: outcome.elapsedDays)
+    }
 
-        let hard = max(1, (interval * 1.2).rounded())
-        let goodStep: Double = switch state.repetitions + 1 {
-        case 1: 1
-        case 2: 3
-        default: (interval * ease).rounded()
-        }
-        let good = max(goodStep, (interval * ease).rounded(), interval >= 1 ? hard + 1 : hard)
-        let easy = max(2, ((interval == 0 ? 2 : interval) * (ease + 0.15) * 1.3).rounded(), good + 1)
+    /// An answer that leaves the schedule alone: both sides are the current state.
+    static func observation(_ state: SRSState, now: Date) -> ReviewTransition {
+        let memory = FSRSMigration.effective(state, now: now)
+        return ReviewTransition(before: state, after: state, beforeMemory: memory, afterMemory: memory,
+                                elapsedDays: FSRSScheduler.elapsedDays(since: memory.lastReviewedAt, now: now))
+    }
 
-        result.repetitions += 1
-        switch grade {
-        case .again:
-            break // handled by the early return above; kept for exhaustiveness
-        case .hard:
-            result.easeFactor = max(minEaseFactor, ease - 0.15)
-            result.intervalDays = hard
-        case .good:
-            result.intervalDays = good
-        case .easy:
-            result.easeFactor = ease + 0.15
-            result.intervalDays = easy
+    /// The grade a quiz/listening answer is logged as when it does not schedule: correct = good,
+    /// wrong = again, a typed soft miss = hard.
+    static func wouldBeGrade(for answer: KnowledgeAnswer) -> ReviewGrade {
+        switch answer {
+        case .choice(let isCorrect):
+            return isCorrect ? .good : .again
+        case .typed(let expected, let submitted):
+            let score = KnowledgeProgressService.similarity(expected: expected, submitted: submitted)
+            if score == 1 { return .good }
+            return score < KnowledgeProgressService.softMatchThreshold ? .again : .hard
         }
-        result.easeFactor = min(maxEaseFactor, max(minEaseFactor, result.easeFactor))
-        result.intervalDays = min(maxScheduledIntervalDays, result.intervalDays)
-        result.dueDate = now.addingTimeInterval(result.intervalDays * 86_400)
-        return result
     }
 
     /// The grade a quiz/listening answer schedules as, or nil to leave the schedule alone.

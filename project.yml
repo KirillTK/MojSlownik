@@ -21,6 +21,9 @@ packages:
   Supabase:
     url: https://github.com/supabase/supabase-swift
     exactVersion: 2.55.7
+  FSRS:
+    url: https://github.com/open-spaced-repetition/swift-fsrs
+    exactVersion: 6.0.0
 targets:
   MojSlownik:
     type: application
@@ -30,6 +33,8 @@ targets:
     dependencies:
       - package: Supabase
         product: Supabase
+      - package: FSRS
+        product: FSRS
     info:
       path: MojSlownik/Info.plist
       properties:

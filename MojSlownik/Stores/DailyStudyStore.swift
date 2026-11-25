@@ -53,26 +53,33 @@ final class DailyStudyStore {
         repository.clear()
     }
 
-    /// A correct quiz answer completes today's practice. On a due word it also schedules like Good;
-    /// on a not-due word the schedule is left alone (it would only inflate the interval).
+    /// Today's practice. A word answered correctly today (a flashcard Hard/Good/Easy or a correct
+    /// quiz/listening answer) stays completed for the rest of the local day, even if FSRS makes it
+    /// due again sooner, so the bar never goes backwards. An "Again" (forgot) or wrong answer keeps the
+    /// word pending (remaining). A correct quiz answer on a due word also schedules like Good; on a
+    /// not-due word the schedule is left alone.
     func progress(for words: [Word], now: Date = .now) -> Summary {
         let words = words.filter(\.isActive)
-        let completedIDs = calendar.isDate(activity.day, inSameDayAs: now) ? activity.completedIDs : []
-        let existingIDs = Set(words.map(\.persistentModelID))
-        let dueIDs = Set(reviewWords(for: words, now: now).map(\.persistentModelID))
-        let completed = existingIDs.filter { completedIDs.contains($0) && !dueIDs.contains($0) }.count
-        return Summary(completed: completed, remaining: dueIDs.count)
+        let isToday = calendar.isDate(activity.day, inSameDayAs: now)
+        let completedIDs = isToday ? activity.completedIDs : []
+        let pendingIDs = isToday ? activity.pendingIDs : []
+        let remaining = reviewWords(for: words, now: now).count
+        let completed = words.filter {
+            completedIDs.contains($0.persistentModelID) && !pendingIDs.contains($0.persistentModelID)
+        }.count
+        return Summary(completed: completed, remaining: remaining)
     }
 
-    /// Keep "Again" retries visible even during their ten-minute SRS delay.
+    /// Pending words (kept visible during their ten-minute FSRS (re)learning step) plus due words
+    /// not already answered correctly today.
     func reviewWords(for words: [Word], now: Date = .now) -> [Word] {
         let words = words.filter(\.isActive)
         let isToday = calendar.isDate(activity.day, inSameDayAs: now)
         let pendingIDs = isToday ? activity.pendingIDs : []
-        let quizCompletedIDs = isToday ? activity.quizCompletedIDs ?? [] : []
+        let doneIDs = isToday ? Set(activity.completedIDs).union(activity.quizCompletedIDs ?? []) : []
         return words.filter {
             pendingIDs.contains($0.persistentModelID)
-                || ($0.dueDate <= now && !quizCompletedIDs.contains($0.persistentModelID))
+                || ($0.dueDate <= now && !doneIDs.contains($0.persistentModelID))
         }
     }
 
@@ -101,16 +108,26 @@ final class DailyStudyStore {
         let previousUpdatedAt = word.updatedAt
         let isDue = word.dueDate <= now
         let assessment = KnowledgeProgressService.apply(answer, to: word)
+        let entry: ReviewLogEntry?
         if let grade = SRSEngine.practiceGrade(for: answer, isDue: isDue) {
-            SRSEngine.apply(grade, to: word, now: now)
+            let transition = SRSEngine.transition(grade, from: previousSRS, now: now)
+            transition.after.write(to: word)
+            entry = makeLogEntry(for: word, mode: mode, transition: transition, rating: grade,
+                                 affectsSchedule: true, now: now)
+        } else {
+            entry = makeLogEntry(for: word, mode: mode,
+                                 transition: SRSEngine.observation(previousSRS, now: now),
+                                 rating: SRSEngine.wouldBeGrade(for: answer), affectsSchedule: false, now: now)
         }
         word.updatedAt = now
+        if let entry { context.insert(entry) }
         do {
             try logger.logged("word_progress.save") { try context.save() }
         } catch {
             (word.knowledgeTier, word.consecutiveSoftMisses) = previous
             previousSRS.write(to: word)
             word.updatedAt = previousUpdatedAt
+            if let entry { discard(entry, in: context) }
             throw error
         }
         activity = next
@@ -137,20 +154,43 @@ final class DailyStudyStore {
         let previousKnowledge = (word.knowledgeTier, word.consecutiveSoftMisses)
         let previousUpdatedAt = word.updatedAt
         KnowledgeProgressService.setTier(from: grade, on: word)
-        SRSEngine.apply(grade, to: word, now: now)
+        let transition = SRSEngine.transition(grade, from: previous, now: now)
+        transition.after.write(to: word)
+        let entry = makeLogEntry(for: word, mode: .flashcards, transition: transition, rating: grade,
+                                 affectsSchedule: true, now: now)
         word.updatedAt = now
+        if let entry { context.insert(entry) }
         do {
             try logger.logged("word_progress.save") { try context.save() }
         } catch {
             previous.write(to: word)
             (word.knowledgeTier, word.consecutiveSoftMisses) = previousKnowledge
             word.updatedAt = previousUpdatedAt
+            if let entry { discard(entry, in: context) }
             throw error
         }
         activity = next
         commit()
         logAnswer(.flashcards, isCorrect: grade != .again, grade: grade)
         changeSignal?.notify()
+    }
+
+    /// Drops an entry whose save failed. Nothing was written to the store; the delete also takes
+    /// the pending insert out of the context so a later save cannot persist it. (On iOS 26 the
+    /// same context may still return the dropped object from a fetch until it is reloaded; other
+    /// contexts, which sync and the views use, never see it.)
+    private func discard(_ entry: ReviewLogEntry, in context: ModelContext) {
+        context.delete(entry)
+        context.processPendingChanges()
+    }
+
+    /// The review-log entry saved together with the word; nil for a word without a sync uuid.
+    private func makeLogEntry(for word: Word, mode: PracticeMode, transition: ReviewTransition,
+                              rating: ReviewGrade, affectsSchedule: Bool, now: Date) -> ReviewLogEntry? {
+        guard let wordID = word.uuid else { return nil }
+        return ReviewLogEntry(wordID: wordID, workspaceID: word.effectiveWorkspaceID, mode: mode,
+                              transition: transition, rating: rating, affectsSchedule: affectsSchedule,
+                              reviewedAt: now)
     }
 
     /// Practice screen and result only (never the word); listening also counts toward quiz completion.

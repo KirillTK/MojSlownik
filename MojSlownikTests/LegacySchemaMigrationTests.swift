@@ -352,6 +352,12 @@ final class LegacySchemaMigrationTests: XCTestCase {
 
         XCTAssertEqual(words.count, 2)
         XCTAssertTrue(words.allSatisfy { $0.lapseCount == 0 && $0.intervalDays == 12 && $0.repetitions == 4 })
+        // The FSRS fields are additive too: filled at launch from the SM-2 fields; no due date moves.
+        XCTAssertTrue(words.allSatisfy {
+            $0.fsrsStateRawValue == 2 && $0.fsrsStability == 12 && $0.fsrsDifficulty != nil
+                && $0.dueDate == created && $0.serverUpdatedAt == nil
+        })
+        XCTAssertTrue(try ModelContext(resources.container).fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
     }
 
     /// Sync adds `serverUpdatedAt` to both models: existing installs open with every row intact

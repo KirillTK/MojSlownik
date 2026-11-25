@@ -25,14 +25,14 @@ final class ScheduleNormalizerTests: XCTestCase {
         return word
     }
 
-    func testLongIntervalAndFarDueAreClampedToTheLastReviewPlusThirtyDays() throws {
+    func testLongIntervalAndFarDueAreClampedToTheLastReviewPlusTheLibraryCap() throws {
         let (container, context) = try makeContext()
         defer { _ = container }
         // Reviewed 10 days ago with a 400-day interval: due in 390 days.
         let word = insert(context, interval: 400, due: now.addingTimeInterval(390 * day))
         XCTAssertEqual(try ScheduleNormalizer.normalize(in: context, now: now), 1)
-        XCTAssertEqual(word.intervalDays, 30)
-        XCTAssertEqual(word.dueDate, now.addingTimeInterval(-10 * day + 30 * day))
+        XCTAssertEqual(word.intervalDays, SRSEngine.maxLibraryIntervalDays)
+        XCTAssertEqual(word.dueDate, now.addingTimeInterval(-10 * day + 32 * day))
     }
 
     func testAlreadyOverdueWordKeepsItsDueDate() throws {
@@ -41,7 +41,7 @@ final class ScheduleNormalizerTests: XCTestCase {
         let due = now.addingTimeInterval(-5 * day)
         let word = insert(context, interval: 400, due: due)
         XCTAssertEqual(try ScheduleNormalizer.normalize(in: context, now: now), 1)
-        XCTAssertEqual(word.intervalDays, 30)
+        XCTAssertEqual(word.intervalDays, 32)
         XCTAssertEqual(word.dueDate, due)
     }
 
@@ -84,7 +84,7 @@ final class ScheduleNormalizerTests: XCTestCase {
         XCTAssertEqual(ScheduleNormalizer.run(container: container, now: now), 1)
 
         let fresh = try XCTUnwrap(ModelContext(container).fetch(FetchDescriptor<Word>()).first)
-        XCTAssertEqual(fresh.intervalDays, 30)
+        XCTAssertEqual(fresh.intervalDays, 32)
         XCTAssertEqual(fresh.updatedAt, stamp)
         XCTAssertEqual(fresh.serverUpdatedAt, stamp)
         XCTAssertFalse(fresh.isSyncDirty)
@@ -108,6 +108,22 @@ final class ScheduleNormalizerTests: XCTestCase {
         let state = SRSState(easeFactor: 2.5, intervalDays: .infinity, repetitions: 5,
                              dueDate: now.addingTimeInterval(10 * day), lastReviewGradeRawValue: nil, lapseCount: 0)
         let fixed = ScheduleNormalizer.normalized(state, uuid: nil, now: now)
-        XCTAssertEqual(fixed?.intervalDays, 30)
+        XCTAssertEqual(fixed?.intervalDays, 32)
+    }
+
+    /// What FSRS produces with the 30-day setting (Good 31 d, Easy 32 d) is never shortened.
+    func testPackageProducedThirtyOneAndThirtyTwoDaySchedulesAreLeftUntouched() throws {
+        let (container, context) = try makeContext()
+        defer { _ = container }
+        let good = insert(context, interval: 31, due: now.addingTimeInterval(31 * day))
+        let easy = insert(context, interval: 32, due: now.addingTimeInterval(32 * day))
+        XCTAssertEqual(try ScheduleNormalizer.normalize(in: context, now: now), 0)
+        XCTAssertEqual(good.intervalDays, 31)
+        XCTAssertEqual(easy.intervalDays, 32)
+        XCTAssertEqual(easy.dueDate, now.addingTimeInterval(32 * day))
+        // One day past the library bound is clamped.
+        let over = insert(context, interval: 33, due: now.addingTimeInterval(33 * day))
+        XCTAssertEqual(try ScheduleNormalizer.normalize(in: context, now: now), 1)
+        XCTAssertEqual(over.intervalDays, 32)
     }
 }

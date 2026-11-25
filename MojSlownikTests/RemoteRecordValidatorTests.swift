@@ -16,14 +16,18 @@ final class RemoteRecordValidatorTests: XCTestCase {
                       createdAt: Date? = nil, updatedAt: Date? = nil, deletedAt: Date? = nil,
                       easeFactor: Double = 2.5, intervalDays: Double = 1, repetitions: Int = 1,
                       dueDate: Date? = nil, grade: String? = "good", tier: Int? = 2,
-                      softMisses: Int = 0, lapseCount: Int? = nil) -> RemoteWordRecord {
+                      softMisses: Int = 0, lapseCount: Int? = nil,
+                      fsrs: FSRSMemory? = nil) -> RemoteWordRecord {
         RemoteWordRecord(id: id, userID: userID ?? owner, workspaceID: workspaceID ?? workspace, term: term,
                          translation: translation, enteredSide: entered, category: category,
                          createdAt: createdAt ?? now.addingTimeInterval(-3_600),
                          updatedAt: updatedAt ?? now.addingTimeInterval(-60), deletedAt: deletedAt,
                          easeFactor: easeFactor, intervalDays: intervalDays, repetitions: repetitions,
                          dueDate: dueDate ?? now.addingTimeInterval(86_400), lastReviewGrade: grade,
-                         knowledgeTier: tier, consecutiveSoftMisses: softMisses, lapseCount: lapseCount)
+                         knowledgeTier: tier, consecutiveSoftMisses: softMisses, lapseCount: lapseCount,
+                         fsrsState: fsrs?.state, fsrsStability: fsrs?.stability,
+                         fsrsDifficulty: fsrs?.difficulty, fsrsLearningStep: fsrs.map(\.learningStep),
+                         fsrsLastReview: fsrs?.lastReviewedAt)
     }
 
     private func validate(_ record: RemoteWordRecord) throws -> ValidatedRemoteWord {
@@ -96,13 +100,110 @@ final class RemoteRecordValidatorTests: XCTestCase {
         for _ in 0..<80 { SRSEngine.apply(.easy, to: local, now: now) }
         let validated = try validate(word(easeFactor: local.easeFactor, intervalDays: local.intervalDays,
                                           repetitions: local.repetitions, dueDate: local.dueDate, grade: "easy"))
-        XCTAssertEqual(validated.intervalDays, SRSEngine.maxScheduledIntervalDays)
+        XCTAssertEqual(validated.intervalDays, SRSEngine.maxLibraryIntervalDays,
+                       "repeated Easy reaches the longest interval the package returns with the 30-day setting")
     }
 
     func testLegacyLongIntervalsAreStillAccepted() throws {
         let validated = try validate(word(intervalDays: SRSEngine.maxIntervalDays,
                                           dueDate: now.addingTimeInterval(36_000 * 86_400)))
         XCTAssertEqual(validated.intervalDays, 36_500)
+    }
+
+    // MARK: FSRS block
+
+    private var goodMemory: FSRSMemory {
+        FSRSMemory(state: 2, stability: 12, difficulty: 6, learningStep: 0,
+                   lastReviewedAt: now.addingTimeInterval(-3 * 86_400))
+    }
+
+    func testAValidFSRSBlockIsKept() throws {
+        XCTAssertEqual(try validate(word(fsrs: goodMemory)).fsrs, goodMemory)
+        let learning = FSRSMemory(state: 1, stability: 0, difficulty: 0, learningStep: 0,
+                                  lastReviewedAt: now.addingTimeInterval(-600))
+        XCTAssertEqual(try validate(word(fsrs: learning)).fsrs, learning)
+    }
+
+    func testAMissingOrInvalidBlockIsNilButTheRowIsStillAccepted() throws {
+        XCTAssertNil(try validate(word()).fsrs)
+        var partial = word(fsrs: goodMemory)
+        partial.fsrsDifficulty = nil
+        XCTAssertNil(try validate(partial).fsrs)
+        let invalid = [
+            FSRSMemory(state: 4, stability: 12, difficulty: 6, learningStep: 0, lastReviewedAt: nil),
+            FSRSMemory(state: 2, stability: -1, difficulty: 6, learningStep: 0, lastReviewedAt: nil),
+            FSRSMemory(state: 2, stability: 12, difficulty: 11, learningStep: 0, lastReviewedAt: nil),
+            FSRSMemory(state: 2, stability: 40_000, difficulty: 6, learningStep: 0, lastReviewedAt: nil),
+            FSRSMemory(state: 2, stability: 12, difficulty: 6, learningStep: -1, lastReviewedAt: nil),
+        ]
+        var undated = goodMemory
+        undated.lastReviewedAt = nil
+        XCTAssertNil(try validate(word(fsrs: undated)).fsrs, "a reviewed card without a last review is dropped")
+        for memory in invalid {
+            XCTAssertNil(try validate(word(fsrs: memory)).fsrs, "\(memory)")
+        }
+    }
+
+    func testALastReviewInTheFutureDropsTheBlock() throws {
+        var memory = goodMemory
+        memory.lastReviewedAt = now.addingTimeInterval(RemoteRecordValidator.allowedClockSkew + 60)
+        XCTAssertNil(try validate(word(fsrs: memory)).fsrs)
+        memory.lastReviewedAt = now.addingTimeInterval(RemoteRecordValidator.allowedClockSkew - 60)
+        XCTAssertNotNil(try validate(word(fsrs: memory)).fsrs)
+        memory.lastReviewedAt = Date(timeIntervalSince1970: 0)
+        XCTAssertNil(try validate(word(fsrs: memory)).fsrs)
+    }
+
+    func testAFarDueDateDoesNotAffectAValidBlock() throws {
+        let result = try validate(word(intervalDays: 20, dueDate: now.addingTimeInterval(20 * 86_400),
+                                       fsrs: goodMemory))
+        XCTAssertEqual(result.fsrs, goodMemory)
+        XCTAssertEqual(result.intervalDays, 20)
+    }
+
+    // MARK: Outgoing review logs
+
+    private func log(id: UUID = UUID(), user: UUID? = nil, rating: String = "good", mode: String = "flashcards",
+                     reviewedAt: Date? = nil, elapsed: Double = 0, interval: Double = 2, stability: Double = 2.3,
+                     difficulty: Double = 6, state: Int = 2, dueAfter: Date? = nil,
+                     lastReviewedBefore: Date? = nil) -> RemoteReviewLogInsert {
+        RemoteReviewLogInsert(
+            id: id, userID: user ?? owner, workspaceID: workspace, wordID: UUID(),
+            reviewedAt: reviewedAt ?? now, rating: rating, mode: mode, affectsSchedule: true,
+            elapsedDays: elapsed, intervalDaysBefore: 0, intervalDaysAfter: interval, dueBefore: now,
+            dueAfter: dueAfter ?? now.addingTimeInterval(2 * 86_400), stateBefore: 0, stateAfter: state,
+            stabilityBefore: 0, stabilityAfter: stability, difficultyBefore: 0, difficultyAfter: difficulty,
+            lastReviewedBefore: lastReviewedBefore)
+    }
+
+    private func assertLogRejects(_ row: RemoteReviewLogInsert, _ expected: RemoteRecordError,
+                                  file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertThrowsError(try RemoteRecordValidator.validate(row, ownerID: owner, now: now),
+                             file: file, line: line) { error in
+            XCTAssertEqual(error as? RemoteRecordError, expected, file: file, line: line)
+        }
+    }
+
+    func testReviewLogValidation() throws {
+        try RemoteRecordValidator.validate(log(), ownerID: owner, now: now)
+        try RemoteRecordValidator.validate(log(lastReviewedBefore: now.addingTimeInterval(-86_400)),
+                                           ownerID: owner, now: now)
+        let nilID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+        assertLogRejects(log(id: nilID), .invalidID)
+        assertLogRejects(log(user: UUID()), .invalidID)
+        assertLogRejects(log(rating: "perfect"), .invalidSchedule)
+        assertLogRejects(log(mode: "typing"), .invalidSchedule)
+        assertLogRejects(log(reviewedAt: now.addingTimeInterval(RemoteRecordValidator.allowedClockSkew + 60)),
+                         .invalidDate)
+        assertLogRejects(log(reviewedAt: Date(timeIntervalSince1970: 0)), .invalidDate)
+        assertLogRejects(log(dueAfter: Date(timeIntervalSince1970: 0)), .invalidDate)
+        assertLogRejects(log(lastReviewedBefore: Date(timeIntervalSince1970: 0)), .invalidDate)
+        assertLogRejects(log(elapsed: -1), .invalidSchedule)
+        assertLogRejects(log(elapsed: .nan), .invalidSchedule)
+        assertLogRejects(log(interval: 40_000), .invalidSchedule)
+        assertLogRejects(log(stability: -1), .invalidSchedule)
+        assertLogRejects(log(difficulty: 11), .invalidSchedule)
+        assertLogRejects(log(state: 4), .invalidSchedule)
     }
 
     func testMissingLapseCountReadsAsZeroAndNegativeIsRejected() throws {

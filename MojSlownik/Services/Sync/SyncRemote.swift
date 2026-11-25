@@ -89,4 +89,6 @@ protocol SyncRemote: AnyObject {
     func upsertFolders(_ rows: [RemoteFolderUpsert]) async throws -> [RemoteAck]
     func upsertWords(_ rows: [RemoteWordUpsert]) async throws -> [RemoteAck]
     func upsertMemberships(_ rows: [RemoteMembershipUpsert]) async throws -> [RemoteMembershipAck]
+    /// Insert-only: rows already on the server (same `user_id, id`) are ignored.
+    func insertReviewLogs(_ rows: [RemoteReviewLogInsert]) async throws
 }

@@ -4,80 +4,64 @@ import XCTest
 final class SRSEngineTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
-    func testGoodAnswersAdvanceFirstIntervalsAndScheduleFromProvidedTime() {
+    private let day: TimeInterval = 86_400
+
+    func testGoodAnswersFollowFSRSFromProvidedTime() {
         let word = Word(russian: "вода", polish: "woda", side: .term)
         SRSEngine.apply(.good, to: word, now: now)
         XCTAssertEqual(word.repetitions, 1)
-        XCTAssertEqual(word.intervalDays, 1)
-        XCTAssertEqual(word.dueDate, now.addingTimeInterval(86_400))
-        SRSEngine.apply(.good, to: word, now: now)
+        XCTAssertEqual(word.intervalDays, 2)
+        XCTAssertEqual(word.dueDate, now.addingTimeInterval(2 * day))
+        XCTAssertEqual(word.fsrsStateRawValue, 2)
+        XCTAssertEqual(word.fsrsLastReviewedAt, now)
+        let later = now.addingTimeInterval(2 * day)
+        SRSEngine.apply(.good, to: word, now: later)
         XCTAssertEqual(word.repetitions, 2)
-        XCTAssertEqual(word.intervalDays, 3)
-        SRSEngine.apply(.good, to: word, now: now)
-        XCTAssertEqual(word.intervalDays, 8)
-        XCTAssertEqual(word.dueDate, now.addingTimeInterval(8 * 86_400))
+        XCTAssertGreaterThan(word.intervalDays, 2)
+        XCTAssertEqual(word.dueDate, later.addingTimeInterval(word.intervalDays * day))
     }
 
-    func testAgainResetsProgressSchedulesTenMinutesAndFloorsEase() {
+    func testAgainResetsProgressSchedulesTenMinutesAndLeavesEaseAlone() {
         let word = Word(russian: "вода", polish: "woda", side: .term)
         word.repetitions = 4
         word.intervalDays = 20
-        word.easeFactor = 1.3
+        word.easeFactor = 1.7
         SRSEngine.apply(.again, to: word, now: now)
         XCTAssertEqual(word.repetitions, 0)
         XCTAssertEqual(word.intervalDays, 0)
-        XCTAssertEqual(word.easeFactor, 1.3)
+        XCTAssertEqual(word.easeFactor, 1.7, "ease is legacy and never written")
         XCTAssertEqual(word.dueDate, now.addingTimeInterval(600))
+        XCTAssertEqual(word.fsrsStateRawValue, 3)
+        XCTAssertEqual(word.lastReviewGradeRawValue, ReviewGrade.again.rawValue)
     }
 
-    func testHardHasAtLeastOneDayIntervalAndMinimumEase() {
+    func testHardOnANewWordStaysInTheLearningStep() {
         let word = Word(russian: "вода", polish: "woda", side: .term)
-        word.easeFactor = 1.3
         SRSEngine.apply(.hard, to: word, now: now)
         XCTAssertEqual(word.repetitions, 1)
-        XCTAssertEqual(word.intervalDays, 1)
-        XCTAssertEqual(word.easeFactor, 1.3)
-        XCTAssertEqual(word.dueDate, now.addingTimeInterval(86_400))
+        XCTAssertEqual(word.intervalDays, 0)
+        XCTAssertEqual(word.dueDate, now.addingTimeInterval(900))
+        XCTAssertEqual(word.fsrsStateRawValue, 1)
     }
 
-    func testEasyRewardsLongerIntervalThanGoodAndIncreasesEase() {
+    func testEasyRewardsLongerIntervalThanGoodAndEaseStaysFrozen() {
         let good = Word(russian: "вода", polish: "woda", side: .term)
         let easy = Word(russian: "вода", polish: "woda", side: .term)
         SRSEngine.apply(.good, to: good, now: now)
         SRSEngine.apply(.easy, to: easy, now: now)
         XCTAssertGreaterThan(easy.intervalDays, good.intervalDays)
-        XCTAssertGreaterThan(easy.easeFactor, good.easeFactor)
+        XCTAssertEqual(easy.easeFactor, 2.5)
         XCTAssertEqual(easy.repetitions, 1)
-        XCTAssertEqual(easy.dueDate, now.addingTimeInterval(easy.intervalDays * 86_400))
+        XCTAssertEqual(easy.dueDate, now.addingTimeInterval(easy.intervalDays * day))
     }
 
-    /// Intervals never exceed the 30-day scheduling cap, so learned words return about monthly.
-    func testRepeatedEasyStaysWithinTheThirtyDayCap() {
+    /// With the 30-day setting the package returns at most 32 days; nothing is clamped on top.
+    func testRepeatedEasyStaysWithinTheLibraryBound() {
         let word = Word(russian: "вода", polish: "woda", side: .term)
         for _ in 0..<80 { SRSEngine.apply(.easy, to: word, now: now) }
-        XCTAssertEqual(word.intervalDays, SRSEngine.maxScheduledIntervalDays)
-        XCTAssertEqual(word.easeFactor, SRSEngine.maxEaseFactor)
-        XCTAssertEqual(word.dueDate, now.addingTimeInterval(30 * 86_400))
-        SRSEngine.apply(.good, to: word, now: now)
-        XCTAssertEqual(word.intervalDays, 30, "good on a capped word stays capped")
-    }
-
-    func testComputedIntervalsOverTheCapAreClampedForEveryGrade() {
-        for grade in [ReviewGrade.hard, .good, .easy] {
-            let word = Word(russian: "вода", polish: "woda", side: .term)
-            word.repetitions = 5
-            word.intervalDays = 29
-            word.easeFactor = 2.5
-            SRSEngine.apply(grade, to: word, now: now)
-            XCTAssertEqual(word.intervalDays, 30, "\(grade)")
-            XCTAssertEqual(word.dueDate, now.addingTimeInterval(30 * 86_400))
-        }
-        let high = Word(russian: "вода", polish: "woda", side: .term)
-        high.repetitions = 9
-        high.intervalDays = 30
-        high.easeFactor = SRSEngine.maxEaseFactor
-        SRSEngine.apply(.good, to: high, now: now)
-        XCTAssertEqual(high.intervalDays, 30)
+        XCTAssertEqual(word.intervalDays, SRSEngine.maxLibraryIntervalDays)
+        XCTAssertEqual(word.easeFactor, 2.5)
+        XCTAssertEqual(word.dueDate, now.addingTimeInterval(32 * day))
     }
 
     func testAgainIsUnchangedAtTheCap() {
@@ -89,48 +73,64 @@ final class SRSEngineTests: XCTestCase {
         XCTAssertEqual(word.dueDate, now.addingTimeInterval(SRSEngine.againDelay))
     }
 
-    func testGradesAreMonotonicAcrossStates() {
-        let cap = SRSEngine.maxScheduledIntervalDays
-        for interval in [0.0, 1, 2, 3, 5, 8, 13, 21, 25, 30] {
+    /// The library's ordering: Hard < Good < Easy in review state; Again < Hard < Good <= Easy while
+    /// (re)learning; every interval within the longest the package can return.
+    func testLibraryOrderingAcrossStatesAndIntervals() {
+        for interval in [0.0, 1, 2, 3, 5, 8, 13, 21, 25, 30, 31, 32] {
             for ease in [1.3, 1.8, 2.5, 3.0] {
-                for repetitions in [0, 1, 2, 3, 5] {
-                    let state = SRSState(easeFactor: ease, intervalDays: interval, repetitions: repetitions,
-                                         dueDate: now, lastReviewGradeRawValue: nil, lapseCount: 0)
-                    let hard = SRSEngine.next(.hard, from: state, now: now).intervalDays
-                    let good = SRSEngine.next(.good, from: state, now: now).intervalDays
-                    let easy = SRSEngine.next(.easy, from: state, now: now).intervalDays
-                    let label = "I \(interval) E \(ease) R \(repetitions)"
-                    XCTAssertLessThanOrEqual(hard, good, label)
-                    XCTAssertLessThanOrEqual(good, easy, label)
-                    XCTAssertLessThanOrEqual(easy, cap, label)
-                    if good < cap { XCTAssertLessThan(good, easy, label) }
-                    if interval >= 1, good < cap { XCTAssertLessThan(hard, good, label) }
-                    if interval >= 1 {
-                        XCTAssertGreaterThanOrEqual(good, interval, label)
-                        XCTAssertGreaterThanOrEqual(hard, interval, label)
+                for repetitions in [0, 1, 3] {
+                    for elapsed in [0.0, 1, 10, 60] {
+                        let due = now.addingTimeInterval(interval * day - elapsed * day)
+                        let state = SRSState(easeFactor: ease, intervalDays: interval, repetitions: repetitions,
+                                             dueDate: due, lastReviewGradeRawValue: repetitions > 0 ? "good" : nil,
+                                             lapseCount: 0)
+                        let label = "I \(interval) E \(ease) R \(repetitions) elapsed \(elapsed)"
+                        let transitions = ReviewGrade.allCases.map { SRSEngine.transition($0, from: state, now: now) }
+                        let dues = transitions.map(\.after.dueDate)
+                        let intervals = transitions.map(\.after.intervalDays)
+                        XCTAssertTrue(intervals.allSatisfy { $0 <= SRSEngine.maxLibraryIntervalDays }, label)
+                        XCTAssertEqual(dues[0], now.addingTimeInterval(SRSEngine.againDelay), label)
+                        XCTAssertLessThan(dues[0], dues[1], label)
+                        XCTAssertLessThanOrEqual(dues[2], dues[3], label)
+                        if transitions[0].beforeMemory.state == 2 {
+                            XCTAssertLessThan(dues[1], dues[2], label)
+                            XCTAssertLessThan(dues[2], dues[3], label)
+                        } else {
+                            XCTAssertLessThan(dues[1], dues[2], label)
+                        }
                     }
                 }
             }
         }
     }
 
-    func testLeechExampleSchedulesOneThreeFourDays() {
+    func testLeechExampleSchedulesTenMinutesThenTwoThreeFourDays() {
         let word = Word(russian: "вода", polish: "woda", side: .term)
         word.repetitions = 1
         word.intervalDays = 1
         word.easeFactor = 1.3
+        word.dueDate = now.addingTimeInterval(-day)
         XCTAssertEqual(SRSEngine.preview(.again, for: word, now: now), .minutes(10))
-        XCTAssertEqual(SRSEngine.preview(.hard, for: word, now: now), .days(1))
+        XCTAssertEqual(SRSEngine.preview(.hard, for: word, now: now), .days(2))
         XCTAssertEqual(SRSEngine.preview(.good, for: word, now: now), .days(3))
         XCTAssertEqual(SRSEngine.preview(.easy, for: word, now: now), .days(4))
     }
 
-    func testPreviewMatchesApplyDoesNotMutateAndStaysWithinTheCap() {
+    func testNewWordCaptionsAreTenMinutesFifteenMinutesTwoAndEightDays() {
+        let word = Word(russian: "вода", polish: "woda", side: .term)
+        XCTAssertEqual(SRSEngine.preview(.again, for: word, now: now), .minutes(10))
+        XCTAssertEqual(SRSEngine.preview(.hard, for: word, now: now), .minutes(15))
+        XCTAssertEqual(SRSEngine.preview(.good, for: word, now: now), .days(2))
+        XCTAssertEqual(SRSEngine.preview(.easy, for: word, now: now), .days(8))
+    }
+
+    func testPreviewEqualsApplyAndDoesNotMutate() {
         for grade in ReviewGrade.allCases {
             let word = Word(russian: "вода", polish: "woda", side: .term)
             word.repetitions = 4
             word.intervalDays = 20
             word.easeFactor = 2.8
+            word.dueDate = now
             let before = SRSState(word: word)
             let preview = SRSEngine.preview(grade, for: word, now: now)
             XCTAssertEqual(SRSState(word: word), before)
@@ -138,27 +138,61 @@ final class SRSEngineTests: XCTestCase {
             switch preview {
             case .minutes(let minutes):
                 XCTAssertEqual(word.dueDate, now.addingTimeInterval(Double(minutes) * 60))
+                XCTAssertEqual(word.intervalDays, 0)
             case .days(let days):
-                XCTAssertLessThanOrEqual(days, 30)
+                XCTAssertLessThanOrEqual(Double(days), SRSEngine.maxLibraryIntervalDays)
                 XCTAssertEqual(word.intervalDays, Double(days))
-                XCTAssertEqual(word.dueDate, now.addingTimeInterval(Double(days) * 86_400))
+                XCTAssertEqual(word.dueDate, now.addingTimeInterval(Double(days) * day))
             }
         }
     }
 
-    func testLapseCountsOnlyAFailureAfterASuccess() {
+    func testTransitionCarriesMemoryAndElapsedDaysForTheLog() {
+        let word = Word(russian: "вода", polish: "woda", side: .term)
+        SRSEngine.apply(.good, to: word, now: now)
+        let later = now.addingTimeInterval(3 * day + 60)
+        let transition = SRSEngine.transition(.good, from: SRSState(word: word), now: later)
+        XCTAssertEqual(transition.beforeMemory.state, 2)
+        XCTAssertEqual(transition.beforeMemory.lastReviewedAt, now)
+        XCTAssertEqual(transition.afterMemory.lastReviewedAt, later)
+        XCTAssertEqual(transition.before.intervalDays, 2)
+        XCTAssertEqual(transition.after.intervalDays, transition.after.intervalDays.rounded())
+        XCTAssertEqual(transition.elapsedDays, FSRSScheduler.elapsedDays(since: now, now: later))
+        XCTAssertEqual(SRSEngine.next(.good, from: SRSState(word: word), now: later), transition.after)
+    }
+
+    func testObservationLeavesTheStateAlone() {
+        let word = Word(russian: "вода", polish: "woda", side: .term)
+        let state = SRSState(word: word)
+        let observation = SRSEngine.observation(state, now: now)
+        XCTAssertEqual(observation.before, state)
+        XCTAssertEqual(observation.after, state)
+        XCTAssertEqual(observation.beforeMemory, observation.afterMemory)
+        XCTAssertEqual(observation.beforeMemory, .new)
+    }
+
+    func testLapseCountsOnlyAnAgainFromReviewState() {
         let word = Word(russian: "вода", polish: "woda", side: .term)
         SRSEngine.apply(.again, to: word, now: now)
         XCTAssertEqual(word.lapseCount, 0, "a never-learned word is not forgotten")
-        SRSEngine.apply(.good, to: word, now: now)
+        SRSEngine.apply(.easy, to: word, now: now)
+        XCTAssertEqual(word.fsrsStateRawValue, 2)
         SRSEngine.apply(.again, to: word, now: now)
         XCTAssertEqual(word.lapseCount, 1)
         SRSEngine.apply(.again, to: word, now: now)
         SRSEngine.apply(.again, to: word, now: now)
-        XCTAssertEqual(word.lapseCount, 1, "repeated Again counts once")
-        SRSEngine.apply(.hard, to: word, now: now)
+        XCTAssertEqual(word.lapseCount, 1, "Again while relearning does not count")
+        SRSEngine.apply(.good, to: word, now: now)
         SRSEngine.apply(.again, to: word, now: now)
         XCTAssertEqual(word.lapseCount, 2)
+    }
+
+    func testWouldBeGradeTable() {
+        XCTAssertEqual(SRSEngine.wouldBeGrade(for: .choice(isCorrect: true)), .good)
+        XCTAssertEqual(SRSEngine.wouldBeGrade(for: .choice(isCorrect: false)), .again)
+        XCTAssertEqual(SRSEngine.wouldBeGrade(for: .typed(expected: "kot", submitted: "kot")), .good)
+        XCTAssertEqual(SRSEngine.wouldBeGrade(for: .typed(expected: "kot", submitted: "dom")), .again)
+        XCTAssertEqual(SRSEngine.wouldBeGrade(for: .typed(expected: "kotek", submitted: "kotex")), .hard)
     }
 
     func testPracticeGradeTable() {

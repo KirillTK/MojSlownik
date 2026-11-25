@@ -97,6 +97,46 @@ final class SaveFailureRestoreTests: XCTestCase {
         XCTAssertNil(repository.stored, "no activity is published when the save fails")
     }
 
+    /// Nothing reached the store (a fresh context sees no entry) and nothing is left pending in the
+    /// context, so no later successful save can persist a phantom entry. The failing context itself
+    /// may still return the dropped object from a fetch on iOS 26, so it is not asserted.
+    private func assertNoPendingLogEntry(in context: ModelContext, container: ModelContainer, line: UInt = #line) {
+        XCTAssertTrue(((try? ModelContext(container).fetch(FetchDescriptor<ReviewLogEntry>())) ?? []).isEmpty,
+                      "persisted", line: line)
+        XCTAssertFalse(context.insertedModelsArray.contains { $0 is ReviewLogEntry }, "still pending", line: line)
+    }
+
+    func testFailedReviewSaveLeavesNoLogEntryAndRestoresTheFSRSFields() throws {
+        let container = try readOnlyContainer()
+        let context = container.mainContext
+        let word = try XCTUnwrap(context.fetch(FetchDescriptor<Word>()).first)
+        word.fsrsStateRawValue = 2
+        word.fsrsStability = 6
+        word.fsrsDifficulty = 5
+        word.fsrsLastReviewedAt = t0.addingTimeInterval(-86_400)
+        word.repetitions = 2
+        word.intervalDays = 6
+        word.dueDate = t0
+        let before = SRSState(word: word)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), now: t0)
+
+        XCTAssertThrowsError(try store.review(.good, to: word, context: context, now: t0.addingTimeInterval(60)))
+        XCTAssertEqual(SRSState(word: word), before, "every FSRS field is restored")
+        assertNoPendingLogEntry(in: context, container: container)
+
+        XCTAssertThrowsError(try store.recordPracticeAnswer(
+            word: word, answer: .choice(isCorrect: false), context: context, mode: .quiz,
+            now: t0.addingTimeInterval(60)))
+        XCTAssertEqual(SRSState(word: word), before)
+        assertNoPendingLogEntry(in: context, container: container)
+        // A non-scheduling answer that fails to save leaves no entry either.
+        word.dueDate = t0.addingTimeInterval(86_400)
+        XCTAssertThrowsError(try store.recordPracticeAnswer(
+            word: word, answer: .choice(isCorrect: true), context: context, mode: .quiz,
+            now: t0.addingTimeInterval(60)))
+        assertNoPendingLogEntry(in: context, container: container)
+    }
+
     func testSetCategoryRestoresCategoryAndUpdatedAtWhenSaveFails() throws {
         let container = try readOnlyContainer()
         let word = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Word>()).first)

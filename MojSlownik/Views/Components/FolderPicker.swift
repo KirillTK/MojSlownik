@@ -121,7 +121,7 @@ struct FolderPicker: View {
                     .onMove(perform: moveFolders)
                 } footer: {
                     if progress != nil, !isEditingFolders {
-                        Text("“Learned”: the word is reviewed every 21 days or less often. Intervals grow to at most 30 days, so learned words come back once a month.")
+                        Text("“Learned”: the word is reviewed every 21 days or less often. Intervals grow to about a month, so learned words come back about once a month.")
                             .font(.footnote)
                             .foregroundStyle(Color.subtleText)
                     }

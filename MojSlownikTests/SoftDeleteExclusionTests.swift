@@ -54,6 +54,7 @@ final class SoftDeleteExclusionTests: XCTestCase {
         calendar.timeZone = TimeZone(identifier: "Europe/Warsaw")!
         let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
         second.repetitions = 2
+        second.intervalDays = 3
         try store.recordPracticeAnswer(word: second, answer: .choice(isCorrect: false), context: context,
                                        mode: .quiz, now: now)
         let secondSRS = SRSState(word: second)

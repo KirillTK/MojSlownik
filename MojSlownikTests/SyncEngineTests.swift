@@ -221,7 +221,7 @@ final class SyncEngineTests: XCTestCase {
 
         let local = try XCTUnwrap(Kit.word(container, id))
         XCTAssertEqual(local.polish, "kot-remote")
-        XCTAssertLessThanOrEqual(local.intervalDays, 30)
+        XCTAssertLessThanOrEqual(local.intervalDays, SRSEngine.maxLibraryIntervalDays)
         XCTAssertFalse(local.isSyncDirty)
         XCTAssertTrue(remote.upsertedWordBatches.isEmpty, "nothing is pushed for the normalized word")
     }

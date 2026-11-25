@@ -39,6 +39,8 @@ English. Code, comments, file names and project instructions are English.
   memory, and a changed row gets `updatedAt`.
 - SwiftData: never lose stored words. New properties must be optional or have defaults;
   do not rename or remove persisted properties without a migration.
+- Only Services/Practice/FSRSScheduler.swift imports FSRS (in tests only
+  MojSlownikTests/FSRSSchedulerTests.swift); scheduling goes through SRSEngine.
 - Achievements: catalog/evaluator in Services/Achievements/Achievements.swift, state in
   Stores/AchievementStore.swift (see docs/architecture.md).
 - Filter due words in memory with words.filter(\.isDue), not SwiftData #Predicate.

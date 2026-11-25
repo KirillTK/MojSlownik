@@ -114,12 +114,15 @@ final class SupabaseAdapterTests: XCTestCase {
         XCTAssertEqual(Set(object.keys),
                        ["id", "user_id", "workspace_id", "term", "translation", "entered_side", "category",
                         "created_at", "deleted_at", "ease_factor", "interval_days", "repetitions", "due_date",
-                        "last_review_grade", "knowledge_tier", "consecutive_soft_misses", "lapse_count"])
+                        "last_review_grade", "knowledge_tier", "consecutive_soft_misses", "lapse_count",
+                        "fsrs_state", "fsrs_stability", "fsrs_difficulty", "fsrs_learning_step",
+                        "fsrs_last_review"])
         for legacy in ["term_language", "translation_language", "entered_language", "folder_ids"] {
             XCTAssertFalse(object.keys.contains(legacy), "\(legacy) no longer exists on the server")
         }
         XCTAssertFalse(object.keys.contains("updated_at"), "the server assigns updated_at")
-        for key in ["deleted_at", "last_review_grade", "knowledge_tier"] {
+        for key in ["deleted_at", "last_review_grade", "knowledge_tier", "fsrs_state", "fsrs_stability",
+                    "fsrs_difficulty", "fsrs_last_review"] {
             XCTAssertTrue(object[key] is NSNull, "\(key) must be an explicit null")
         }
         // The select list names exactly the decoded columns.

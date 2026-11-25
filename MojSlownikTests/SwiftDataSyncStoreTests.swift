@@ -138,8 +138,8 @@ final class SwiftDataSyncStoreTests: XCTestCase {
 
         for id in [existing, insertedID] {
             let word = try XCTUnwrap(Kit.word(container, id))
-            XCTAssertLessThanOrEqual(word.intervalDays, 30)
-            XCTAssertLessThanOrEqual(word.dueDate, t0.addingTimeInterval(31 * 86_400))
+            XCTAssertLessThanOrEqual(word.intervalDays, SRSEngine.maxLibraryIntervalDays)
+            XCTAssertLessThanOrEqual(word.dueDate, t0.addingTimeInterval(33 * 86_400))
             XCTAssertFalse(word.isSyncDirty, "the clamp must not make the pulled row dirty")
             XCTAssertEqual(word.serverUpdatedAt, newer)
         }
