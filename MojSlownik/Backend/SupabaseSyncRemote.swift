@@ -10,6 +10,7 @@ final class SupabaseSyncRemote: SyncRemote {
     static let membershipsTable = "word_folders"
     static let wordsTable = "words"
     static let foldersTable = "folders"
+    static let reviewLogsTable = "review_logs"
 
     private let provider: SupabaseClientProvider
 
@@ -53,6 +54,18 @@ final class SupabaseSyncRemote: SyncRemote {
                 .select("word_id,folder_id,updated_at")
                 .execute()
             return response.value
+        } catch {
+            throw Self.classify(error)
+        }
+    }
+
+    /// `INSERT ... ON CONFLICT (user_id, id) DO NOTHING`: a retried batch is idempotent.
+    func insertReviewLogs(_ rows: [RemoteReviewLogInsert]) async throws {
+        guard !rows.isEmpty else { return }
+        do {
+            try await provider.client.from(Self.reviewLogsTable)
+                .upsert(rows, onConflict: "user_id,id", returning: .minimal, ignoreDuplicates: true)
+                .execute()
         } catch {
             throw Self.classify(error)
         }

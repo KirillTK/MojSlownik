@@ -97,6 +97,37 @@ final class SaveFailureRestoreTests: XCTestCase {
         XCTAssertNil(repository.stored, "no activity is published when the save fails")
     }
 
+    func testFailedReviewSaveLeavesNoLogEntryAndRestoresTheFSRSFields() throws {
+        let container = try readOnlyContainer()
+        let context = container.mainContext
+        let word = try XCTUnwrap(context.fetch(FetchDescriptor<Word>()).first)
+        word.fsrsStateRawValue = 2
+        word.fsrsStability = 6
+        word.fsrsDifficulty = 5
+        word.fsrsLastReviewedAt = t0.addingTimeInterval(-86_400)
+        word.repetitions = 2
+        word.intervalDays = 6
+        word.dueDate = t0
+        let before = SRSState(word: word)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), now: t0)
+
+        XCTAssertThrowsError(try store.review(.good, to: word, context: context, now: t0.addingTimeInterval(60)))
+        XCTAssertEqual(SRSState(word: word), before, "every FSRS field is restored")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
+
+        XCTAssertThrowsError(try store.recordPracticeAnswer(
+            word: word, answer: .choice(isCorrect: false), context: context, mode: .quiz,
+            now: t0.addingTimeInterval(60)))
+        XCTAssertEqual(SRSState(word: word), before)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
+        // A non-scheduling answer that fails to save leaves no entry either.
+        word.dueDate = t0.addingTimeInterval(86_400)
+        XCTAssertThrowsError(try store.recordPracticeAnswer(
+            word: word, answer: .choice(isCorrect: true), context: context, mode: .quiz,
+            now: t0.addingTimeInterval(60)))
+        XCTAssertTrue(try context.fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
+    }
+
     func testSetCategoryRestoresCategoryAndUpdatedAtWhenSaveFails() throws {
         let container = try readOnlyContainer()
         let word = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<Word>()).first)

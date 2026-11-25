@@ -169,6 +169,8 @@ enum UITestFixture: String, CaseIterable, Sendable {
             let hard = learning(word("привычка", "przyzwyczajenie", .translation), // l10n:data
                                 repetitions: 1, interval: 1, due: days(-1))
             hard.easeFactor = 1.3
+            // Exactly one day overdue, so the FSRS captions are deterministic (2 d / 3 d / 4 d).
+            hard.dueDate = now.addingTimeInterval(-86_400)
             hard.lapseCount = 7
             words = learned + [
                 learning(word("хлеб", "chleb", .translation, folders: [Self.lesson1ID]), // l10n:data

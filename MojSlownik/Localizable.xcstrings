@@ -6716,18 +6716,18 @@
         }
       }
     },
-    "“Learned”: the word is reviewed every 21 days or less often. Intervals grow to at most 30 days, so learned words come back once a month." : {
+    "“Learned”: the word is reviewed every 21 days or less often. Intervals grow to about a month, so learned words come back about once a month." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“Learned”: the word is reviewed every 21 days or less often. Intervals grow to at most 30 days, so learned words come back once a month."
+            "value" : "“Learned”: the word is reviewed every 21 days or less often. Intervals grow to about a month, so learned words come back about once a month."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "«Выучено»: слово повторяется раз в 21 день и реже. Интервалы растут не дальше 30 дней, поэтому выученные слова возвращаются раз в месяц."
+            "value" : "«Выучено»: слово повторяется раз в 21 день и реже. Интервалы растут примерно до месяца, поэтому выученные слова возвращаются примерно раз в месяц."
           }
         }
       }

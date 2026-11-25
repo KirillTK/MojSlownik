@@ -7,7 +7,8 @@ enum StudyProgress {
         case new, learning, learned
     }
 
-    /// "Learned" = the word is reviewed every 21 days or less often (Anki "mature").
+    /// "Learned" = the word is reviewed every 21 days or less often (Anki "mature"). `intervalDays` is
+    /// the FSRS scheduled interval (up to `SRSEngine.maxLibraryIntervalDays`), 0 while (re)learning.
     static let learnedThresholdDays = 21.0
     /// Forgotten this many times (and not yet learned) = a hard word (leech).
     static let hardWordLapseThreshold = 6

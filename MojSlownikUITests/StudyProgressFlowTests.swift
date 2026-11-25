@@ -70,9 +70,64 @@ final class StudyProgressFlowTests: E2ETestCase {
         card.tap()
 
         waitForValue(element("gradeButton-again"), equals: "Следующий показ через 10 минут")
-        waitForValue(element("gradeButton-hard"), equals: "Следующий показ через 1 день")
+        waitForValue(element("gradeButton-hard"), equals: "Следующий показ через 2 дня")
         waitForValue(element("gradeButton-good"), equals: "Следующий показ через 3 дня")
         waitForValue(element("gradeButton-easy"), equals: "Следующий показ через 4 дня")
+    }
+
+    /// FSRS learning steps on a brand-new word: 10 min, 15 min, then 2 and 8 days.
+    @MainActor
+    func testNewWordCaptionsFollowFSRSSteps() {
+        launch(.studyProgress)
+        openTab("Практика")
+        selectFolder("Урок 2")
+        let start = element("practiceStartButton")
+        waitForHittable(start)
+        start.tap()
+
+        let card = element("flashcard")
+        waitForHittable(card)
+        card.tap()
+
+        waitForValue(element("gradeButton-again"), equals: "Следующий показ через 10 минут")
+        waitForValue(element("gradeButton-hard"), equals: "Следующий показ через 15 минут")
+        waitForValue(element("gradeButton-good"), equals: "Следующий показ через 2 дня")
+        waitForValue(element("gradeButton-easy"), equals: "Следующий показ через 8 дней")
+    }
+
+    /// FSRS makes a new word answered Hard due again in 15 minutes, but a word answered correctly
+    /// today stays completed: Today never counts it as remaining.
+    @MainActor
+    func testHardOnNewWordsKeepsTodayCompleted() {
+        launch(.studyProgress)
+        openTab("Практика")
+        selectFolder("Урок 2")
+        let start = element("practiceStartButton")
+        waitForHittable(start)
+        start.tap()
+
+        for answered in 1...4 {
+            let cards = app.descendants(matching: .any).matching(identifier: "flashcard")
+            let single = NSPredicate { object, _ in (object as? XCUIElementQuery)?.count == 1 }
+            let expectation = XCTNSPredicateExpectation(predicate: single, object: cards)
+            XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 10), .completed, "Expected one flashcard")
+            waitForHittable(cards.firstMatch)
+            cards.firstMatch.tap()
+            let hard = element("gradeButton-hard")
+            waitForValue(hard, equals: "Следующий показ через 15 минут")
+            hard.tap()
+            if answered < 4 {
+                waitForValue(element("sessionProgress"), equals: "Ответов: \(answered) из 4")
+            }
+        }
+
+        XCTAssertTrue(element("flashcardsCompleted").waitForExistence(timeout: 10), "Completion view missing")
+        let back = element("backToPracticeButton")
+        waitForHittable(back)
+        back.tap()
+
+        waitForLabel(element("practiceStartButton"), equals: "Свободная практика")
+        waitForValue(element("todayProgress"), equals: "4 из 4. Осталось: 0")
     }
 
     @MainActor

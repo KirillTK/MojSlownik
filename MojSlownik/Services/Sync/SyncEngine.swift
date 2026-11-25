@@ -93,6 +93,7 @@ final class SyncEngine {
         try await pushFolders(ownerID: ownerID, state: current, report: &report)
         try await pushWords(ownerID: ownerID, state: current, report: &report)
         try await pushMemberships(ownerID: ownerID, state: current, report: &report)
+        try await pushReviewLogs(ownerID: ownerID, report: &report)
         current.lastSyncedAt = now()
         try persist(current, startedUnder: link)
         return report
@@ -337,6 +338,18 @@ final class SyncEngine {
             try await remote.upsertMemberships(rows).map {
                 RemoteAck(id: MembershipID.make(wordID: $0.wordID, folderID: $0.folderID), updatedAt: $0.updatedAt)
             }
+        }
+    }
+
+    /// The append-only review log goes last (push-only for now). The server ignores duplicates, so
+    /// a success marks the whole batch uploaded.
+    private func pushReviewLogs(ownerID: UUID, report: inout SyncReport) async throws {
+        let batch = try local.pendingReviewLogs(ownerID: ownerID, now: now())
+        for (reason, count) in batch.invalid { report.skipped[reason, default: 0] += count }
+        try await push(batch.rows, kind: .reviewLogs, report: &report) { [remote, now] rows in
+            try await remote.insertReviewLogs(rows)
+            let at = now()
+            return rows.map { RemoteAck(id: $0.id, updatedAt: at) }
         }
     }
 

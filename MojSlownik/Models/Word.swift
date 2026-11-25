@@ -25,7 +25,9 @@ final class Word {
     // nil = a row from before workspaces; reads treat it as the legacy pl ← ru workspace
     var workspaceID: UUID? = nil
 
-    // Spaced repetition (simplified SM-2)
+    // FSRS state + fields the app still reads (see SRSEngine)
+    /// Legacy SM-2, no longer written; read by the FSRS conversion and the KnowledgeProgressService
+    /// tier fallback.
     var easeFactor: Double
     var intervalDays: Double
     var repetitions: Int
@@ -35,6 +37,12 @@ final class Word {
     var consecutiveSoftMisses: Int = 0
     /// Failures after a success; see the SRSEngine lapse rule.
     var lapseCount: Int = 0
+    /// FSRS card state (0 new, 1 learning, 2 review, 3 relearning); nil until derived or reviewed.
+    var fsrsStateRawValue: Int? = nil
+    var fsrsStability: Double? = nil
+    var fsrsDifficulty: Double? = nil
+    var fsrsLearningStep: Int = 0
+    var fsrsLastReviewedAt: Date? = nil
 
     /// A word entered on `entry.enteredSide` of `pair`; texts are stored in each side's stored form.
     init(entry: WordEntry, pair: LanguagePair, workspaceID: UUID?, createdAt: Date = .now,

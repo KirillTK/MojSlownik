@@ -41,11 +41,12 @@ final class StudyProgressTests: XCTestCase {
         XCTAssertEqual(StudyProgress.breakdown([]).total, 0)
     }
 
-    /// The folder-sheet footer copy ("Learned" means 21+ days, at most 30 days) hardcodes these values
-    /// in Localizable.xcstrings; change the copy together with them.
+    /// The folder-sheet footer copy ("Learned" means 21+ days, intervals grow to about a month)
+    /// hardcodes these values in Localizable.xcstrings; change the copy together with them.
     func testLearnedCopyMatchesTheConstants() {
         XCTAssertEqual(StudyProgress.learnedThresholdDays, 21)
         XCTAssertEqual(SRSEngine.maxScheduledIntervalDays, 30)
+        XCTAssertEqual(SRSEngine.maxLibraryIntervalDays, 32)
     }
 
     func testLapseCountSaturates() {

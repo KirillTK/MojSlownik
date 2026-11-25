@@ -100,17 +100,24 @@ final class DailyStudyStoreTests: XCTestCase {
         }
     }
 
-    func testCurrentlyDueWordOverridesAnEarlierSuccessfulRecord() throws {
+    func testASuccessExemptsADueWordUntilTheNextDayAndPendingWins() throws {
         try withDefaults { defaults in
             let (container, words) = try makeWords(1)
             _ = container
             let store = DailyStudyStore(defaults: defaults, calendar: calendar, now: now)
-            try store.record(wordID: words[0].persistentModelID, grade: .good, now: now)
             XCTAssertEqual(store.progress(for: words, now: now), .init(completed: 0, remaining: 1))
+            try store.record(wordID: words[0].persistentModelID, grade: .good, now: now)
+            // Due again a minute later (FSRS may do that) but already answered correctly today.
             words[0].dueDate = now.addingTimeInterval(60)
-            XCTAssertEqual(store.progress(for: words, now: now).completed, 1)
-            XCTAssertEqual(store.progress(for: words, now: now.addingTimeInterval(60)).remaining, 1)
-            XCTAssertEqual(store.progress(for: words, now: now.addingTimeInterval(60)).completed, 0)
+            let later = now.addingTimeInterval(120)
+            XCTAssertEqual(store.progress(for: words, now: later), .init(completed: 1, remaining: 0))
+            XCTAssertTrue(store.reviewWords(for: words, now: later).isEmpty)
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+            XCTAssertEqual(store.progress(for: words, now: tomorrow), .init(completed: 0, remaining: 1))
+            // "Again" removes the completion and keeps the word pending.
+            try store.record(wordID: words[0].persistentModelID, grade: .again, now: later)
+            XCTAssertEqual(store.progress(for: words, now: later), .init(completed: 0, remaining: 1))
+            XCTAssertEqual(store.reviewWords(for: words, now: later).count, 1)
         }
     }
 
@@ -201,7 +208,7 @@ final class DailyStudyStoreTests: XCTestCase {
             for word in freshWords {
                 if answered.contains(word.persistentModelID) {
                     XCTAssertEqual(word.repetitions, 1)
-                    XCTAssertEqual(word.dueDate, now.addingTimeInterval(86_400))
+                    XCTAssertEqual(word.dueDate, now.addingTimeInterval(2 * 86_400), "FSRS Good on a new word")
                 } else if wrong.contains(word.persistentModelID) {
                     XCTAssertEqual(word.repetitions, 0)
                     XCTAssertEqual(word.dueDate, now.addingTimeInterval(600))
@@ -290,7 +297,8 @@ final class DailyStudyStoreTests: XCTestCase {
             XCTAssertEqual(store.answerTotals(for: [], now: now).total, 0)
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
             XCTAssertEqual(store.answerTotals(for: words, now: tomorrow).total, 0)
-            XCTAssertEqual(store.progress(for: words, now: tomorrow), .init(completed: 0, remaining: 3))
+            // Only the wrong answer (10 minutes) is due tomorrow; the two correct ones are due in 2 days.
+            XCTAssertEqual(store.progress(for: words, now: tomorrow), .init(completed: 0, remaining: 1))
             store.refresh(now: tomorrow)
             let reloaded = DailyStudyStore(defaults: defaults, calendar: calendar, now: tomorrow)
             XCTAssertEqual(reloaded.answerTotals(for: words, now: tomorrow).total, 0)
@@ -314,7 +322,7 @@ final class DailyStudyStoreTests: XCTestCase {
                 // Exercise the same bootstrap as the app, not a preconstructed test container.
                 let resources = try AppResources(configuration: configuration, defaults: defaults,
                                                  calendar: calendar, now: now)
-                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace", "FolderMembership"])
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace", "FolderMembership", "ReviewLogEntry"])
                 let context = resources.container.mainContext
                 let words = try context.fetch(FetchDescriptor<Word>())
                 let folders = try context.fetch(FetchDescriptor<WordFolder>())
@@ -325,9 +333,9 @@ final class DailyStudyStoreTests: XCTestCase {
                 XCTAssertEqual(completed.russian, "вода")
                 XCTAssertEqual(try context.fetch(FetchDescriptor<FolderMembership>()).map(\.folderID), [folderID])
                 XCTAssertEqual(completed.repetitions, 1)
-                XCTAssertEqual(completed.intervalDays, 1)
-                XCTAssertEqual(completed.easeFactor, 2.5)
-                XCTAssertEqual(completed.dueDate, now.addingTimeInterval(86_400))
+                XCTAssertEqual(completed.intervalDays, 2)
+                XCTAssertEqual(completed.easeFactor, 2.5, "ease is frozen")
+                XCTAssertEqual(completed.dueDate, now.addingTimeInterval(2 * 86_400))
                 let pending = try XCTUnwrap(words.first { $0.polish == "kawa" })
                 XCTAssertEqual(pending.repetitions, 0)
                 XCTAssertEqual(pending.dueDate, now.addingTimeInterval(600))
@@ -344,12 +352,163 @@ final class DailyStudyStoreTests: XCTestCase {
                 defaults.set(activity, forKey: "dailyStudyActivity.v1")
                 let resources = try AppResources(configuration: ModelConfiguration(isStoredInMemoryOnly: true),
                                                  defaults: defaults, calendar: calendar, now: now)
-                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace", "FolderMembership"])
+                XCTAssertEqual(Set(resources.container.schema.entities.map(\.name)), ["Word", "WordFolder", "Workspace", "FolderMembership", "ReviewLogEntry"])
                 XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<Word>()).isEmpty)
                 XCTAssertTrue(try resources.container.mainContext.fetch(FetchDescriptor<WordFolder>()).isEmpty)
                 XCTAssertEqual(resources.dailyStudy.progress(for: [], now: now).total, 0)
             }
         }
+    }
+
+    // MARK: Review log
+
+    private func entries(_ container: ModelContainer) throws -> [ReviewLogEntry] {
+        try container.mainContext.fetch(FetchDescriptor<ReviewLogEntry>())
+            .sorted { $0.reviewedAt < $1.reviewedAt }
+    }
+
+    func testFlashcardGradeSavesOneCompleteLogEntryWithTheWord() throws {
+        let (container, words) = try makeWords(1)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+        let word = words[0]
+        try store.review(.good, to: word, context: container.mainContext, now: now)
+
+        let logged = try entries(container)
+        XCTAssertEqual(logged.count, 1)
+        let entry = try XCTUnwrap(logged.first)
+        XCTAssertEqual(entry.wordID, word.uuid)
+        XCTAssertEqual(entry.workspaceID, word.effectiveWorkspaceID)
+        XCTAssertEqual(entry.reviewedAt, now)
+        XCTAssertEqual(entry.ratingRawValue, "good")
+        XCTAssertEqual(entry.modeRawValue, "flashcards")
+        XCTAssertTrue(entry.affectsSchedule)
+        XCTAssertEqual(entry.elapsedDays, 0)
+        XCTAssertEqual(entry.intervalDaysBefore, 0)
+        XCTAssertEqual(entry.intervalDaysAfter, word.intervalDays)
+        XCTAssertEqual(entry.dueBefore, now)
+        XCTAssertEqual(entry.dueAfter, word.dueDate)
+        XCTAssertEqual(entry.stateBefore, 0)
+        XCTAssertEqual(entry.stateAfter, word.fsrsStateRawValue)
+        XCTAssertEqual(entry.stabilityBefore, 0)
+        XCTAssertEqual(entry.stabilityAfter, word.fsrsStability)
+        XCTAssertEqual(entry.difficultyAfter, word.fsrsDifficulty)
+        XCTAssertNil(entry.lastReviewedAtBefore)
+        XCTAssertNil(entry.uploadedAt)
+
+        try store.review(.hard, to: word, context: container.mainContext, now: now.addingTimeInterval(3 * 86_400 + 60))
+        let second = try entries(container)
+        XCTAssertEqual(second.count, 2)
+        XCTAssertEqual(second[1].stateBefore, 2)
+        XCTAssertEqual(second[1].elapsedDays, 3)
+        XCTAssertEqual(second[1].lastReviewedAtBefore, now)
+        XCTAssertEqual(second[1].intervalDaysBefore, 2)
+    }
+
+    func testDueQuizAndListeningAnswersLogOneEntryThatAffectsTheSchedule() throws {
+        for mode in [PracticeMode.quiz, .listening] {
+            let (container, words) = try makeWords(2)
+            let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+            try store.recordPracticeAnswer(word: words[0], answer: .choice(isCorrect: true),
+                                           context: container.mainContext, mode: mode, now: now)
+            try store.recordPracticeAnswer(word: words[1], answer: .typed(expected: "słowo", submitted: "xyz"),
+                                           context: container.mainContext, mode: mode, now: now)
+            let logged = try entries(container)
+            XCTAssertEqual(logged.count, 2, "\(mode)")
+            XCTAssertTrue(logged.allSatisfy { $0.affectsSchedule && $0.modeRawValue == mode.rawValue })
+            XCTAssertEqual(Set(logged.map(\.ratingRawValue)), ["good", "again"])
+        }
+    }
+
+    func testNotDueAndSoftMissAnswersLogWithoutChangingTheWord() throws {
+        let (container, words) = try makeWords(2)
+        let notDue = words[0]
+        notDue.repetitions = 3
+        notDue.intervalDays = 10
+        notDue.dueDate = now.addingTimeInterval(5 * 86_400)
+        let before = SRSState(word: notDue)
+        let soft = words[1]
+        let softBefore = SRSState(word: soft)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+        let context = container.mainContext
+        try store.recordPracticeAnswer(word: notDue, answer: .choice(isCorrect: true), context: context,
+                                       mode: .quiz, now: now)
+        try store.recordPracticeAnswer(word: notDue, answer: .choice(isCorrect: false), context: context,
+                                       mode: .listening, now: now)
+        try store.recordPracticeAnswer(word: soft, answer: .typed(expected: "kotek", submitted: "kotex"),
+                                       context: context, mode: .listening, now: now)
+
+        XCTAssertEqual(SRSState(word: notDue), before)
+        XCTAssertEqual(SRSState(word: soft), softBefore)
+        let logged = try entries(container)
+        XCTAssertEqual(logged.count, 3)
+        XCTAssertTrue(logged.allSatisfy { !$0.affectsSchedule })
+        XCTAssertEqual(logged.map(\.ratingRawValue).sorted(), ["again", "good", "hard"])
+        for entry in logged {
+            XCTAssertEqual(entry.intervalDaysBefore, entry.intervalDaysAfter)
+            XCTAssertEqual(entry.dueBefore, entry.dueAfter)
+            XCTAssertEqual(entry.stateBefore, entry.stateAfter)
+            XCTAssertEqual(entry.stabilityBefore, entry.stabilityAfter)
+            XCTAssertEqual(entry.difficultyBefore, entry.difficultyAfter)
+        }
+        XCTAssertEqual(Set(logged.map(\.modeRawValue)), ["quiz", "listening"])
+    }
+
+    func testAWordWithoutAUUIDGetsNoEntryButStillSaves() throws {
+        let (container, words) = try makeWords(1)
+        words[0].uuid = nil
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+        try store.review(.good, to: words[0], context: container.mainContext, now: now)
+        XCTAssertTrue(try entries(container).isEmpty)
+        XCTAssertEqual(words[0].repetitions, 1)
+        try store.recordPracticeAnswer(word: words[0], answer: .choice(isCorrect: true),
+                                       context: container.mainContext, mode: .quiz, now: now)
+        XCTAssertTrue(try entries(container).isEmpty)
+    }
+
+    // MARK: Today's progress never goes backwards
+
+    func testHardOnANewWordStaysCompletedEvenWhenFSRSMakesItDueAgainToday() throws {
+        let (container, words) = try makeWords(1)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+        try store.review(.hard, to: words[0], context: container.mainContext, now: now)
+        XCTAssertEqual(words[0].dueDate, now.addingTimeInterval(900), "FSRS learning step after Hard")
+
+        let later = now.addingTimeInterval(16 * 60)
+        XCTAssertEqual(store.progress(for: words, now: later), .init(completed: 1, remaining: 0))
+        XCTAssertTrue(store.reviewWords(for: words, now: later).isEmpty, "a new session does not offer it")
+
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+        XCTAssertEqual(store.progress(for: words, now: tomorrow), .init(completed: 0, remaining: 1))
+        XCTAssertEqual(store.reviewWords(for: words, now: tomorrow).count, 1)
+    }
+
+    func testACorrectQuizAnswerBehavesTheSameWay() throws {
+        let (container, words) = try makeWords(1)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+        try quiz(store, words[0], correct: true, container: container)
+        words[0].dueDate = now.addingTimeInterval(900)
+        let later = now.addingTimeInterval(16 * 60)
+        XCTAssertEqual(store.progress(for: words, now: later), .init(completed: 1, remaining: 0))
+        XCTAssertTrue(store.reviewWords(for: words, now: later).isEmpty)
+    }
+
+    func testAgainKeepsTheWordPendingAndTheNextWrongAnswerReturnsItAfterHard() throws {
+        let (container, words) = try makeWords(1)
+        let store = DailyStudyStore(repository: InMemoryDailyActivityRepository(), calendar: calendar, now: now)
+        try store.review(.again, to: words[0], context: container.mainContext, now: now)
+        let later = now.addingTimeInterval(16 * 60)
+        XCTAssertEqual(store.reviewWords(for: words, now: now).count, 1)
+        XCTAssertEqual(store.reviewWords(for: words, now: later).count, 1)
+        XCTAssertEqual(store.progress(for: words, now: later), .init(completed: 0, remaining: 1))
+
+        try store.review(.hard, to: words[0], context: container.mainContext, now: later)
+        XCTAssertEqual(store.progress(for: words, now: later), .init(completed: 1, remaining: 0))
+        // A wrong quiz answer the same day makes it pending again.
+        words[0].dueDate = later
+        try quiz(store, words[0], correct: false, container: container, now: later.addingTimeInterval(60))
+        let after = later.addingTimeInterval(120)
+        XCTAssertEqual(store.progress(for: words, now: after), .init(completed: 0, remaining: 1))
+        XCTAssertEqual(store.reviewWords(for: words, now: after).count, 1)
     }
 
     private func seedStartupActivity(configuration: ModelConfiguration, defaults: UserDefaults) throws -> UUID {
@@ -410,7 +569,7 @@ final class DailyStudyStoreTests: XCTestCase {
                                            context: context, mode: mode, now: now)
             for word in words.prefix(2) {
                 XCTAssertEqual(word.repetitions, 1, "\(mode)")
-                XCTAssertEqual(word.dueDate, now.addingTimeInterval(86_400))
+                XCTAssertEqual(word.dueDate, now.addingTimeInterval(2 * 86_400))
                 XCTAssertEqual(word.lastReviewGradeRawValue, ReviewGrade.good.rawValue)
             }
             // Wrong answers: Again (+ a lapse when the word had been answered correctly before).

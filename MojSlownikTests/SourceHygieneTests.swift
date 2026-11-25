@@ -262,6 +262,19 @@ final class SourceHygieneTests: XCTestCase {
         XCTAssertEqual(failures, [], "Cyrillic string literal in the app: use the String Catalog or an l10n:data region")
     }
 
+    /// App code reaches swift-fsrs only through `FSRSScheduler`; tests only through `FSRSSchedulerTests`.
+    func testOnlyTheSchedulerWrapperImportsFSRS() throws {
+        let marker = "import FSRS"
+        func importers(in directory: String) throws -> [String] {
+            try swiftFiles(in: directory)
+                .filter { $0.lines.contains { $0.trimmingCharacters(in: .whitespaces) == marker } }
+                .map(\.path)
+        }
+        XCTAssertEqual(try importers(in: "MojSlownik"), ["MojSlownik/Services/Practice/FSRSScheduler.swift"])
+        XCTAssertEqual(try importers(in: "MojSlownikTests"), ["MojSlownikTests/FSRSSchedulerTests.swift"])
+        XCTAssertEqual(try importers(in: "MojSlownikUITests"), [])
+    }
+
     func testMarkerRulesOnSamples() {
         let ok = SourceFile(path: "ok", spans: Lexer.spans(of: "// l10n:data-begin\nlet a = \"кот\"\n// l10n:data-end\n"),
                             lines: ["// l10n:data-begin", "let a = \"кот\"", "// l10n:data-end", ""])

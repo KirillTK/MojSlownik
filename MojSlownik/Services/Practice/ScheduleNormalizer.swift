@@ -2,8 +2,9 @@ import Foundation
 import os
 import SwiftData
 
-/// Clamps schedules longer than `SRSEngine.maxScheduledIntervalDays` (set by older versions, or
-/// pulled from the server) so well-learned words come back about monthly.
+/// Clamps schedules longer than `SRSEngine.maxLibraryIntervalDays` (set by older versions, or
+/// pulled from the server) so well-learned words come back about monthly. A safety net for corrupt
+/// or foreign rows: it never shortens a schedule FSRS produced.
 ///
 /// Local-only repair like `WordIdentityBackfill`: it rewrites SRS fields and never touches
 /// `updatedAt`/`serverUpdatedAt`, so it never makes a row dirty. A dirty normalized row would win
@@ -14,7 +15,7 @@ enum ScheduleNormalizer {
 
     /// The clamped state, or nil when nothing needs to change. Idempotent.
     nonisolated static func normalized(_ state: SRSState, uuid: UUID?, now: Date) -> SRSState? {
-        let cap = SRSEngine.maxScheduledIntervalDays
+        let cap = SRSEngine.maxLibraryIntervalDays
         let day: TimeInterval = 86_400
         let intervalIsFinite = state.intervalDays.isFinite
         let needsClamp = !intervalIsFinite || state.intervalDays > cap

@@ -72,6 +72,12 @@ struct RemoteWordRecord: Decodable, Equatable, Sendable {
     let consecutiveSoftMisses: Int
     /// Absent on rows from before the `lapse_count` column; read as 0.
     var lapseCount: Int? = nil
+    /// FSRS memory; null until a device reviews the word after the FSRS migration.
+    var fsrsState: Int? = nil
+    var fsrsStability: Double? = nil
+    var fsrsDifficulty: Double? = nil
+    var fsrsLearningStep: Int? = nil
+    var fsrsLastReview: Date? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, term, translation, category, repetitions
@@ -88,6 +94,11 @@ struct RemoteWordRecord: Decodable, Equatable, Sendable {
         case knowledgeTier = "knowledge_tier"
         case consecutiveSoftMisses = "consecutive_soft_misses"
         case lapseCount = "lapse_count"
+        case fsrsState = "fsrs_state"
+        case fsrsStability = "fsrs_stability"
+        case fsrsDifficulty = "fsrs_difficulty"
+        case fsrsLearningStep = "fsrs_learning_step"
+        case fsrsLastReview = "fsrs_last_review"
     }
 }
 
@@ -163,6 +174,8 @@ struct ValidatedRemoteWord: Equatable, Sendable {
     let knowledgeTier: Int?
     let consecutiveSoftMisses: Int
     var lapseCount: Int = 0
+    /// The FSRS memory when the row carries a complete, valid block; nil = derive from SM-2.
+    var fsrs: FSRSMemory? = nil
 }
 
 struct ValidatedRemoteFolder: Equatable, Sendable {
@@ -299,7 +312,47 @@ enum RemoteRecordValidator {
             easeFactor: record.easeFactor, intervalDays: record.intervalDays,
             repetitions: record.repetitions, dueDate: record.dueDate, lastReviewGrade: grade,
             knowledgeTier: record.knowledgeTier, consecutiveSoftMisses: record.consecutiveSoftMisses,
-            lapseCount: record.lapseCount ?? 0)
+            lapseCount: record.lapseCount ?? 0, fsrs: validFSRS(record, now: now))
+    }
+
+    /// The FSRS block of a word row, or nil when it is absent, incomplete or out of range (the row
+    /// is still accepted; the memory is then derived from the SM-2 fields). Only the last review
+    /// is bounded by the clock: the word's due date does not affect the block.
+    static func validFSRS(_ record: RemoteWordRecord, now: Date) -> FSRSMemory? {
+        guard let state = record.fsrsState, let stability = record.fsrsStability,
+              let difficulty = record.fsrsDifficulty, let step = record.fsrsLearningStep else { return nil }
+        if let last = record.fsrsLastReview {
+            guard last >= earliestDate, last <= now.addingTimeInterval(allowedClockSkew) else { return nil }
+        }
+        let memory = FSRSMemory(state: state, stability: stability, difficulty: difficulty,
+                                learningStep: step, lastReviewedAt: record.fsrsLastReview)
+        return FSRSMigration.isValid(memory) ? memory : nil
+    }
+
+    /// Outgoing review-log rows get the same checks as the server CHECK constraints.
+    static func validate(_ row: RemoteReviewLogInsert, ownerID: UUID, now: Date) throws {
+        guard row.userID == ownerID, row.id != nilUUID, row.wordID != nilUUID, row.workspaceID != nilUUID else {
+            throw RemoteRecordError.invalidID
+        }
+        guard ReviewGrade(rawValue: row.rating) != nil, PracticeMode(rawValue: row.mode) != nil else {
+            throw RemoteRecordError.invalidSchedule
+        }
+        guard row.reviewedAt >= earliestDate, row.reviewedAt <= now.addingTimeInterval(allowedClockSkew),
+              row.dueBefore >= earliestDate, row.dueAfter >= earliestDate,
+              row.lastReviewedBefore.map({ $0 >= earliestDate }) ?? true else {
+            throw RemoteRecordError.invalidDate
+        }
+        let days = 0.0...maxIntervalDays
+        guard row.elapsedDays.isFinite, days.contains(row.elapsedDays),
+              row.intervalDaysBefore.isFinite, days.contains(row.intervalDaysBefore),
+              row.intervalDaysAfter.isFinite, days.contains(row.intervalDaysAfter),
+              row.stabilityBefore.isFinite, days.contains(row.stabilityBefore),
+              row.stabilityAfter.isFinite, days.contains(row.stabilityAfter),
+              row.difficultyBefore.isFinite, (0.0...10.0).contains(row.difficultyBefore),
+              row.difficultyAfter.isFinite, (0.0...10.0).contains(row.difficultyAfter),
+              (0...3).contains(row.stateBefore), (0...3).contains(row.stateAfter) else {
+            throw RemoteRecordError.invalidSchedule
+        }
     }
 
     static func validate(_ record: RemoteFolderRecord, ownerID: UUID, known: KnownRemoteIDs,
@@ -445,10 +498,16 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
     let knowledgeTier: Int?
     let consecutiveSoftMisses: Int
     var lapseCount: Int = 0
+    var fsrsState: Int? = nil
+    var fsrsStability: Double? = nil
+    var fsrsDifficulty: Double? = nil
+    var fsrsLearningStep: Int = 0
+    var fsrsLastReview: Date? = nil
 
     static let selectColumns = "id,user_id,workspace_id,term,translation,entered_side,category,created_at,"
         + "updated_at,deleted_at,ease_factor,interval_days,repetitions,due_date,last_review_grade,"
-        + "knowledge_tier,consecutive_soft_misses,lapse_count"
+        + "knowledge_tier,consecutive_soft_misses,lapse_count,fsrs_state,fsrs_stability,fsrs_difficulty,"
+        + "fsrs_learning_step,fsrs_last_review"
 
     enum CodingKeys: String, CodingKey {
         case id, term, translation, category, repetitions
@@ -464,6 +523,11 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
         case knowledgeTier = "knowledge_tier"
         case consecutiveSoftMisses = "consecutive_soft_misses"
         case lapseCount = "lapse_count"
+        case fsrsState = "fsrs_state"
+        case fsrsStability = "fsrs_stability"
+        case fsrsDifficulty = "fsrs_difficulty"
+        case fsrsLearningStep = "fsrs_learning_step"
+        case fsrsLastReview = "fsrs_last_review"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -485,6 +549,81 @@ struct RemoteWordUpsert: Encodable, Equatable, Sendable {
         try container.encode(knowledgeTier, forKey: .knowledgeTier)
         try container.encode(consecutiveSoftMisses, forKey: .consecutiveSoftMisses)
         try container.encode(lapseCount, forKey: .lapseCount)
+        try container.encode(fsrsState, forKey: .fsrsState)
+        try container.encode(fsrsStability, forKey: .fsrsStability)
+        try container.encode(fsrsDifficulty, forKey: .fsrsDifficulty)
+        try container.encode(fsrsLearningStep, forKey: .fsrsLearningStep)
+        try container.encode(fsrsLastReview, forKey: .fsrsLastReview)
+    }
+}
+
+/// Outgoing `public.review_logs` row (insert-only; never contains `updated_at`, the server assigns
+/// it). Every key is encoded, with an explicit `null` for `last_reviewed_before`.
+struct RemoteReviewLogInsert: Encodable, Equatable, Sendable {
+    let id: UUID
+    let userID: UUID
+    let workspaceID: UUID
+    let wordID: UUID
+    let reviewedAt: Date
+    let rating: String
+    let mode: String
+    let affectsSchedule: Bool
+    let elapsedDays: Double
+    let intervalDaysBefore: Double
+    let intervalDaysAfter: Double
+    let dueBefore: Date
+    let dueAfter: Date
+    let stateBefore: Int
+    let stateAfter: Int
+    let stabilityBefore: Double
+    let stabilityAfter: Double
+    let difficultyBefore: Double
+    let difficultyAfter: Double
+    let lastReviewedBefore: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, rating, mode
+        case userID = "user_id"
+        case workspaceID = "workspace_id"
+        case wordID = "word_id"
+        case reviewedAt = "reviewed_at"
+        case affectsSchedule = "affects_schedule"
+        case elapsedDays = "elapsed_days"
+        case intervalDaysBefore = "interval_days_before"
+        case intervalDaysAfter = "interval_days_after"
+        case dueBefore = "due_before"
+        case dueAfter = "due_after"
+        case stateBefore = "state_before"
+        case stateAfter = "state_after"
+        case stabilityBefore = "stability_before"
+        case stabilityAfter = "stability_after"
+        case difficultyBefore = "difficulty_before"
+        case difficultyAfter = "difficulty_after"
+        case lastReviewedBefore = "last_reviewed_before"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(userID, forKey: .userID)
+        try container.encode(workspaceID, forKey: .workspaceID)
+        try container.encode(wordID, forKey: .wordID)
+        try container.encode(reviewedAt, forKey: .reviewedAt)
+        try container.encode(rating, forKey: .rating)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(affectsSchedule, forKey: .affectsSchedule)
+        try container.encode(elapsedDays, forKey: .elapsedDays)
+        try container.encode(intervalDaysBefore, forKey: .intervalDaysBefore)
+        try container.encode(intervalDaysAfter, forKey: .intervalDaysAfter)
+        try container.encode(dueBefore, forKey: .dueBefore)
+        try container.encode(dueAfter, forKey: .dueAfter)
+        try container.encode(stateBefore, forKey: .stateBefore)
+        try container.encode(stateAfter, forKey: .stateAfter)
+        try container.encode(stabilityBefore, forKey: .stabilityBefore)
+        try container.encode(stabilityAfter, forKey: .stabilityAfter)
+        try container.encode(difficultyBefore, forKey: .difficultyBefore)
+        try container.encode(difficultyAfter, forKey: .difficultyAfter)
+        try container.encode(lastReviewedBefore, forKey: .lastReviewedBefore)
     }
 }
 

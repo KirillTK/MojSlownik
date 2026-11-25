@@ -23,6 +23,8 @@ final class InMemorySyncRemote: SyncRemote {
         var words: [Key: RemoteWordRecord] = [:]
         var folders: [Key: RemoteFolderRecord] = [:]
         var memberships: [MembershipKey: RemoteMembershipRecord] = [:]
+        /// Review log rows keyed like the table's primary key; inserts never overwrite.
+        var reviewLogs: [Key: RemoteReviewLogInsert] = [:]
 
         mutating func put(_ record: RemoteWorkspaceRecord, at clock: Date) {
             let key = Key(userID: record.userID, id: record.id)
@@ -75,6 +77,8 @@ final class InMemorySyncRemote: SyncRemote {
     /// Every call sleeps this long first (cancellable), to model a slow network.
     var callDelay: Duration?
     var rejectWhere: ((RemoteWordUpsert) -> Bool)?
+    /// A review log batch containing a matching row is permanently rejected (SQLSTATE 22/23).
+    var rejectReviewLogWhere: ((RemoteReviewLogInsert) -> Bool)?
     /// Runs after an upsert stored its rows and before the acks return (simulates an edit
     /// made during the request).
     var beforeAck: (() -> Void)?
@@ -93,6 +97,7 @@ final class InMemorySyncRemote: SyncRemote {
     private(set) var upsertedWordBatches: [[RemoteWordUpsert]] = []
     private(set) var upsertedMembershipBatches: [[RemoteMembershipUpsert]] = []
     private(set) var upsertedFolderBatches: [[RemoteFolderUpsert]] = []
+    private(set) var insertedReviewLogBatches: [[RemoteReviewLogInsert]] = []
     private(set) var callCount = 0
     /// Every fetch and upsert call, in order ("fetchFolders", "fetchWords", "upsertFolders", ...).
     private(set) var callLog: [String] = []
@@ -254,12 +259,33 @@ final class InMemorySyncRemote: SyncRemote {
                 createdAt: row.createdAt, updatedAt: at, deletedAt: row.deletedAt,
                 easeFactor: row.easeFactor, intervalDays: row.intervalDays, repetitions: row.repetitions,
                 dueDate: row.dueDate, lastReviewGrade: row.lastReviewGrade, knowledgeTier: row.knowledgeTier,
-                consecutiveSoftMisses: row.consecutiveSoftMisses, lapseCount: row.lapseCount), at: at)
+                consecutiveSoftMisses: row.consecutiveSoftMisses, lapseCount: row.lapseCount,
+                fsrsState: row.fsrsState, fsrsStability: row.fsrsStability,
+                fsrsDifficulty: row.fsrsDifficulty, fsrsLearningStep: row.fsrsLearningStep,
+                fsrsLastReview: row.fsrsLastReview), at: at)
             if let stored = word(id: row.id, userID: row.userID) {
                 acks.append(RemoteAck(id: stored.id, updatedAt: stored.updatedAt))
             }
         }
         return try finishUpsert(acks)
+    }
+
+    /// Like `INSERT ... ON CONFLICT (user_id, id) DO NOTHING`; the response carries no rows.
+    func insertReviewLogs(_ rows: [RemoteReviewLogInsert]) async throws {
+        try enter("insertReviewLogs")
+        try await pause()
+        guard rows.allSatisfy({ $0.userID == currentUserID }) else { throw SyncRemoteError.unauthorized }
+        if let rejectReviewLogWhere, rows.contains(where: rejectReviewLogWhere) { throw SyncRemoteError.rejected }
+        insertedReviewLogBatches.append(rows)
+        for row in rows {
+            let key = Key(userID: row.userID, id: row.id)
+            if server.reviewLogs[key] == nil { server.reviewLogs[key] = row }
+        }
+        if let error = nextErrorAfterStore {
+            nextErrorAfterStore = nil
+            throw error
+        }
+        beforeAck?()
     }
 
     // MARK: Internals
@@ -321,7 +347,8 @@ extension RemoteWordRecord {
             deletedAt: deletedAt ?? self.deletedAt, easeFactor: easeFactor, intervalDays: intervalDays,
             repetitions: repetitions, dueDate: dueDate, lastReviewGrade: lastReviewGrade,
             knowledgeTier: knowledgeTier, consecutiveSoftMisses: consecutiveSoftMisses,
-            lapseCount: lapseCount)
+            lapseCount: lapseCount, fsrsState: fsrsState, fsrsStability: fsrsStability,
+            fsrsDifficulty: fsrsDifficulty, fsrsLearningStep: fsrsLearningStep, fsrsLastReview: fsrsLastReview)
     }
 }
 

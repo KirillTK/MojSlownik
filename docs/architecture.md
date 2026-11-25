@@ -36,7 +36,7 @@ Layers stay at the top of `MojSlownik/`; domain sub-folders sit inside them.
 | Adding words | `Views/Dictionary/AddWordView.swift` and `Stores/AddWordDraft.swift`: source/translation draft, 600 ms debounce, editable translation and category/folder selection; saving through `ScanWordStore.add`. |
 | Translation | `Services/Translation/TranslationService.swift`: `Translator` facade; implementations in `AppleTranslator.swift`, `GoogleWebTranslator.swift`, `MyMemoryTranslator.swift`. `Services/Language/Language.swift` is the central descriptor table (10 languages: names, speech/OCR/provider codes, Apple identifier, script, case rule) and `LanguagePair`; `TranslationAlternatives.swift` parses, filters and merges extra translation candidates. |
 | Camera and results | `Views/Dictionary/ScannerView.swift`: permission, VisionKit live line tap, transient frame capture/freeze, full-screen still-image OCR, tappable OCR text blocks with multi-select, and translation of all recognized text; compact bilingual quick-add cards and an explicit correction menu opening nested `AddWordView`. Captured images stay in memory only and can be retaken. `Services/Scanning/ScannedTextTokenizer.swift` recognizes text in the captured image, maps Vision bounds through aspect-fill, and groups/orders recognized items into stable blocks. |
-| Practice | `Views/Practice/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/Practice/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/Practice/ListeningPracticeView.swift`/`Services/Practice/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/Practice/SRSEngine.swift`: card scheduling and last card grade. |
+| Practice | `Views/Practice/TrainingView.swift`: daily progress and entry points to flashcards, quiz and adaptive listening practice; `Services/Practice/KnowledgeProgressService.swift`: shared per-word confidence and typed-answer scoring; `Views/Practice/ListeningPracticeView.swift`/`Services/Practice/ListeningQuestion.swift`: audio recognition choices, translation input and audio dictation selected by confidence; `Stores/DailyStudyStore.swift`: atomic word-confidence and local daily activity updates; `Services/Practice/SRSEngine.swift`: FSRS card scheduling (through `FSRSScheduler`) and last card grade; `Services/Practice/FSRSMigration.swift`: one-time SM-2 to FSRS conversion; `Models/ReviewLogEntry.swift`: the append-only review log. |
 | Achievements | `Services/Achievements/Achievements.swift`: metrics, definitions, catalog and pure evaluator; `Services/Achievements/AchievementLedger.swift`: lifetime practice counters and events; `Stores/AchievementStore.swift`: unlocks, banner queue (`recordNextUnlocksSilently` skips banners for unlocks caused by just-pulled vocabulary); `Views/Practice/AchievementsView.swift` plus `Views/Components/Achievement*.swift`. |
 | Speech and styling | `Services/Speech/SpeechService.swift`, `Views/Components/PronounceButton.swift`: system speech; `Theme/Theme.swift`: dynamic colors and cards. |
 | Backend | `Backend/`: remote backend code, kept apart from `Services/`; the only place that imports `Supabase`. `SupabaseConfiguration.swift` (URL, publishable key, OAuth redirect), `SupabaseClientProvider.swift` (lazy client, no SDK logger), `SupabaseAuthBackend.swift` (native SDK OAuth), `SupabaseLogUploader.swift` (app_logs inserts), `SupabaseSyncRemote.swift` (PostgREST transport of the sync engine), `RemoteRecords.swift`/`RemoteMergePolicy.swift` (DTOs, validator, merge rule). Schema: `supabase/migrations`, tests: `supabase/tests`. |
@@ -126,10 +126,10 @@ restores only that word's prior SRS fields if saving fails; the screen reports t
 failure and does not advance. Each quiz question carries its source word's stable
 identifier. Quiz/listening answers update confidence and daily activity together.
 They also schedule due words (`SRSEngine.practiceGrade`): a correct answer on a due
-word schedules like Good, a wrong one like Again (with the lapse rule), a typed soft
+word schedules like Good, a wrong one like Again (with the FSRS lapse rule), a typed soft
 miss changes nothing, and a not-due word's schedule and `lapseCount` are never changed
 (a wrong answer still makes it pending, so the flashcard self-grade decides). A failed
-save restores the word's prior confidence, SRS and lapse state. Selecting an answer persists activity before local feedback;
+save restores the word's prior confidence, FSRS/SRS and lapse state and leaves no log entry. Selecting an answer persists activity before local feedback;
 Back retains accepted answers even in an unfinished quiz.
 The 0.9-second transition is cancellable when leaving the screen. Quiz questions,
 position and score remain session state.
@@ -144,15 +144,17 @@ start of day 8) and the hard words (`lapseCount >= 6` and not yet learned). Ever
 **Daily progress:** the app-scoped observable `DailyStudyStore` stores the local day
 and unique completed/pending `PersistentIdentifier` collections, today's quiz successes,
 and answer events as Codable data in UserDefaults. Successful flashcard and quiz
-answers add unique daily completion. A quiz success exempts that word from today's
-remaining practice; on a due word the answer already moved its SRS due date, so the
-exemption only matters for not-due words. It ends at local midnight. A later wrong quiz answer or "Не помню" removes all completion/exemption
-and keeps the word pending. A later success clears pending; a flashcard success
-returns the word to ordinary SRS-based due handling. The flashcard session also
-appends "Не помню" words for another attempt during its ten-minute SRS delay.
+answers add unique daily completion. Any success today (a flashcard Hard/Good/Easy or a
+correct quiz/listening answer) exempts that word from today's remaining practice until
+local midnight, even if FSRS makes it due again sooner, so the bar never goes backwards;
+a new same-day session does not offer it either. A later wrong quiz answer or "Не помню"
+removes all completion/exemption and keeps the word pending (pending always wins). A later
+success clears pending. The flashcard session also appends "Не помню" words for another
+attempt during their ten-minute FSRS (re)learning step.
 The training ring counts existing words in the selected folder: completed today
-versus currently due (unless successfully quizzed today) or pending. Pending always
-wins; due status still overrides flashcard-only completion. Daily answer/correct/error
+(answered correctly and not pending) versus remaining (pending, or due and not answered
+correctly today). The word keeps its FSRS due date and shows up the next day as overdue.
+Daily answer/correct/error
 statistics count every answer from either mode, independently of unique-word completion.
 Both counters use the current existing folder scope. New optional fields decode
 existing v1 completion and pending state without inventing historical answer counts.
@@ -223,8 +225,22 @@ Achievements stay global.
 ## Sync
 
 `public.words.lapse_count` (migration `20261122120000_words_lapse_count.sql`, defaulted, CHECK >= 0)
-syncs `Word.lapseCount`; apply it to Supabase before a build that syncs (the select list names the
-column). Old clients upsert without it and keep the stored value.
+syncs `Word.lapseCount`.
+
+`public.words.fsrs_state/stability/difficulty/learning_step/last_review` (migration
+`20261123100000_words_fsrs_state.sql`, nullable or defaulted, range CHECKs) sync the FSRS memory
+(`Word.fsrs*`). `public.review_logs` (migration `20261123100100_review_logs.sql`, RLS owner-only,
+insert and select grants only, no update/delete, no foreign key but `auth.users`) receives every
+`ReviewLogEntry`: push-only for now (`SyncEngine.pushReviewLogs`, last in the cycle, batches of 200,
+`INSERT ... ON CONFLICT (user_id, id) DO NOTHING`, a success marks the batch `uploadedAt`);
+`prepareLink` clears `uploadedAt` so a re-link uploads everything again, and a word adopted under a
+server id re-keys its not yet uploaded entries (uploaded ones are immutable). The pull is deferred to
+the on-device optimizer follow-up. There is no backward compatibility with pre-FSRS builds: an old
+build would ignore `fsrs_*` and overwrite schedules, so install the new build on every device.
+Deploy order: apply both migrations to Supabase (separate authorization), run the security advisors,
+then install the build. A pulled row with null `fsrs_*` (nobody reviewed it since) or an invalid block
+gets a memory derived from its SM-2 fields (`FSRSMigration.derive`), local-only and clean, identical on
+every device; there is no capability bump.
 
 Workspaces, folders, words and memberships (with SRS state) sync with `public.workspaces`, `public.folders`,
 `public.words` and `public.word_folders`;
@@ -428,17 +444,36 @@ motion and haptics are defined in [DESIGN.md](../DESIGN.md).
 - SRS intervals use days × 86,400 seconds, not calendar days. Achievements' learned
   statistic means `repetitions >= 3` (Again resets that counter); the Progress card's
   "learned" means `intervalDays >= 21`.
-- Intervals are capped at 30 days (`SRSEngine.maxScheduledIntervalDays`), so learned words return
-  about monthly. Grades are monotonic (`SRSEngine.next`): Hard <= Good < Easy below the cap, and
-  Hard < Good once a word has an interval. The validator and the outgoing clamp still accept 36,500
-  days (`maxIntervalDays`), because server rows from older versions may hold long intervals.
-- `ScheduleNormalizer` clamps longer schedules at launch and, via `SwiftDataSyncStore.apply`, on
-  pull. It is local-only: it rewrites SRS fields but never `updatedAt`/`serverUpdatedAt`, so rows
+- Scheduling is FSRS-6 (swift-fsrs 6.0.0, default weights, target retention 0.9, no fuzz,
+  10-minute learning/relearning steps, `maximumInterval` 30 = `SRSEngine.maxScheduledIntervalDays`).
+  The package is reached only through `Services/Practice/FSRSScheduler.swift` (the only app file
+  that imports FSRS; in tests only `FSRSSchedulerTests`), used by `SRSEngine` and `FSRSMigration`.
+  Intervals are the package's own, with no post-processing: the 30-day maximum is applied before
+  Good > Hard and Easy > Good, so Hard <= 30, Good <= 31, Easy <= 32 days
+  (`SRSEngine.maxLibraryIntervalDays`), and after a lapse Good may equal Easy. Preview and apply
+  share one path, so captions equal what is stored. Early reviews (free practice, hard words) may
+  shorten an interval.
+- After each review `SRSEngine` writes `dueDate`, `intervalDays` (scheduled days, 0 while
+  (re)learning), `repetitions` (0 after Again, else +1), `lastReviewGradeRawValue`, `lapseCount` and
+  the FSRS block. `easeFactor` is legacy SM-2: no longer written (kept, with `ease_factor`), read
+  only by the conversion and the `KnowledgeProgressService.tier` fallback.
+- `FSRSMigration` converts SM-2 once and deterministically (never changes the SM-2 fields or a due
+  date, never dirties a row): never reviewed -> new; interval < 1 -> (re)learning with S = D = 0;
+  otherwise review with S = interval and D from the ease (fsrs-rs `memory_state_from_sm2`). It runs
+  at launch after `ScheduleNormalizer`, on pull, and defensively in the engine.
+- Every answer appends one `ReviewLogEntry`, saved by the same `context.save()` as the word (a
+  failed save deletes it and restores the word). Answers that leave the schedule alone are logged
+  with `affectsSchedule = false`. Words without a sync uuid get no entry.
+- `ScheduleNormalizer` clamps schedules longer than `maxLibraryIntervalDays` (32) at launch and,
+  via `SwiftDataSyncStore.apply`, on pull; it is a safety net that never shortens what FSRS
+  produced. It is local-only: it rewrites SRS fields but never `updatedAt`/`serverUpdatedAt`, so rows
   stay clean. A dirty normalized row would win the merge over a newer remote edit and overwrite
   the server. Already-overdue words keep their due date; words whose clamped due date falls in
-  the past are spread over the next 7 days by a stable per-word offset.
-- A lapse is a failure (`.again`) on a word whose `repetitions > 0`; repeated Again or Again on a
-  never-learned word does not count. A hard word has `lapseCount >= 6` and `intervalDays < 21`.
+  the past are spread over the next 7 days by a stable per-word offset. The validator and the
+  outgoing clamp accept 36,500 days (`maxIntervalDays`).
+- A lapse is FSRS's: `.again` on a card in review state (`lapseCount` grows by the package's lapse
+  delta); Again in (re)learning does not count. A hard word has `lapseCount >= 6` and
+  `intervalDays < 21`.
 - Quiz requires at least 4 records and generates **up to** 10 questions. Options
   are deduplicated by exact text, so duplicate translations may yield fewer than
   four choices; questions without distractors are skipped.
@@ -505,7 +540,7 @@ Run the isolated `MojSlownikUnitTests` scheme (see AGENTS.md); it does not inclu
 `MojSlownikUITests`. New or changed nontrivial logic requires committed unit tests.
 Network translation and physical-camera behavior are not exercised by these tests.
 
-Follow-up (not implemented): an FSRS scheduler with a per-user retention target.
+Follow-up (not implemented): an on-device FSRS optimizer over the review log (with a log pull), a per-user retention target, interval fuzz and log retention.
 
 E2E: `MojSlownikUITests/` holds XCUITest classes (AddWordFlow, EditTranslationFlow,
 FlashcardsFlow, QuizFlow, FoldersFlow, AccountFlow, SyncFlow, LocalizationFlow) on the shared `E2ETestCase`, each launching a

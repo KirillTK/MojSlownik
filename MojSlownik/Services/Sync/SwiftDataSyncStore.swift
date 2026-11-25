@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 enum SyncKind: Sendable {
-    case workspaces, folders, words, memberships
+    case workspaces, folders, words, memberships, reviewLogs
 }
 
 struct SyncApplyResult: Equatable, Sendable {
@@ -84,6 +84,8 @@ final class SwiftDataSyncStore {
         for membership in try context.fetch(FetchDescriptor<FolderMembership>()) {
             membership.serverUpdatedAt = Self.linkedState(membership.serverUpdatedAt, dirty: membership.isSyncDirty)
         }
+        // The log is append-only: every entry goes up again to the new account (duplicates ignored).
+        for entry in try context.fetch(FetchDescriptor<ReviewLogEntry>()) { entry.uploadedAt = nil }
         try save(context)
     }
 
@@ -254,6 +256,7 @@ final class SwiftDataSyncStore {
                 if let adopted = adoptable.removeValue(forKey: key) {
                     if let oldID = adopted.uuid {
                         rekeyMemberships(word: oldID, to: remote.id, in: try loadMemberships(), context: context)
+                        try rekeyReviewLogs(word: oldID, to: remote.id, context: context)
                     }
                     apply(remote, to: adopted, pair: pair)
                     adopted.uuid = remote.id
@@ -354,8 +357,8 @@ final class SwiftDataSyncStore {
     }
 
     /// Remote content onto a local word (text keeps the per-language case rule).
-    private func apply(_ remote: ValidatedRemoteWord, to word: Word, pair: (term: String, translation: String),
-                       now: Date = .now) {
+    private func apply(_ remote: ValidatedRemoteWord, to word: Word, pair: (term: String, translation: String)) {
+        let now = self.now()
         word.term = LanguageCodes.storedForm(remote.term, language: pair.term)
         word.translation = LanguageCodes.storedForm(remote.translation, language: pair.translation)
         word.categoryRawValue = remote.category.rawValue
@@ -369,11 +372,16 @@ final class SwiftDataSyncStore {
         word.knowledgeTier = remote.knowledgeTier
         word.consecutiveSoftMisses = remote.consecutiveSoftMisses
         word.lapseCount = remote.lapseCount
-        // Older clients may hold long intervals: clamp like the launch normalizer. Callers mark
-        // the row synced right after, so the clamp never makes it dirty.
+        // Clamp corrupt or foreign schedules like the launch normalizer. Callers mark the row
+        // synced right after, so the clamp never makes it dirty.
         if let fixed = ScheduleNormalizer.normalized(SRSState(word: word), uuid: word.uuid, now: now) {
             fixed.write(to: word)
         }
+        // The remote FSRS block, or one derived from the schedule just written (a row nobody has
+        // reviewed since the FSRS migration); the derivation is the same on every device.
+        var state = SRSState(word: word)
+        state.memory = remote.fsrs ?? FSRSMigration.derive(from: state, now: now)
+        state.writeFSRS(to: word)
     }
 
     private func markSynced(_ word: Word, _ serverTime: Date) {
@@ -429,6 +437,15 @@ final class SwiftDataSyncStore {
         rekey(memberships.filter { $0.wordID == oldID }, all: memberships, context: context) {
             (newID, $0.folderID)
         }
+    }
+
+    /// Adoption re-keyed a word: its not yet uploaded log entries follow. Uploaded entries are
+    /// immutable and keep the old id.
+    private func rekeyReviewLogs(word oldID: UUID, to newID: UUID, context: ModelContext) throws {
+        guard oldID != newID else { return }
+        let pending = try context.fetch(FetchDescriptor<ReviewLogEntry>(
+            predicate: #Predicate { $0.wordID == oldID && $0.uploadedAt == nil }))
+        for entry in pending { entry.wordID = newID }
     }
 
     private func rekey(_ moving: [FolderMembership], all memberships: [FolderMembership], context: ModelContext,
@@ -525,6 +542,7 @@ final class SwiftDataSyncStore {
             let ease = word.easeFactor.isFinite ? word.easeFactor : 2.5
             let interval = word.intervalDays.isFinite ? word.intervalDays : 0
             let tierRange = KnowledgeProgressService.minimumTier...KnowledgeProgressService.maximumTier
+            let memory = FSRSMigration.effective(SRSState(word: word), now: now)
             // An unknown side code pushes `term`.
             let side = languages[word.effectiveWorkspaceID].map { word.enteredSide(in: $0) } ?? .term
             let record = RemoteWordRecord(
@@ -539,7 +557,9 @@ final class SwiftDataSyncStore {
                 lastReviewGrade: word.lastReviewGradeRawValue.flatMap { ReviewGrade(rawValue: $0)?.rawValue },
                 knowledgeTier: word.knowledgeTier.flatMap { tierRange.contains($0) ? $0 : nil },
                 consecutiveSoftMisses: max(0, word.consecutiveSoftMisses),
-                lapseCount: max(0, word.lapseCount))
+                lapseCount: max(0, word.lapseCount),
+                fsrsState: memory.state, fsrsStability: memory.stability, fsrsDifficulty: memory.difficulty,
+                fsrsLearningStep: memory.learningStep, fsrsLastReview: memory.lastReviewedAt)
             do {
                 let valid = try RemoteRecordValidator.validate(record, ownerID: ownerID, known: known, now: now)
                 batch.rows.append(PendingRow(
@@ -551,7 +571,36 @@ final class SwiftDataSyncStore {
                         deletedAt: valid.deletedAt, easeFactor: valid.easeFactor,
                         intervalDays: valid.intervalDays, repetitions: valid.repetitions, dueDate: valid.dueDate,
                         lastReviewGrade: valid.lastReviewGrade?.rawValue, knowledgeTier: valid.knowledgeTier,
-                        consecutiveSoftMisses: valid.consecutiveSoftMisses, lapseCount: valid.lapseCount)))
+                        consecutiveSoftMisses: valid.consecutiveSoftMisses, lapseCount: valid.lapseCount,
+                        fsrsState: record.fsrsState, fsrsStability: record.fsrsStability,
+                        fsrsDifficulty: record.fsrsDifficulty, fsrsLearningStep: record.fsrsLearningStep ?? 0,
+                        fsrsLastReview: record.fsrsLastReview)))
+            } catch {
+                batch.invalid[Self.reason(for: error), default: 0] += 1
+            }
+        }
+        return batch
+    }
+
+    /// Log entries not yet uploaded, oldest first. Invalid rows are counted and stay local.
+    func pendingReviewLogs(ownerID: UUID, now: Date) throws -> PendingBatch<RemoteReviewLogInsert> {
+        let entries = try makeContext().fetch(FetchDescriptor<ReviewLogEntry>(
+            predicate: #Predicate { $0.uploadedAt == nil }))
+            .sorted { ($0.reviewedAt, $0.id.uuidString) < ($1.reviewedAt, $1.id.uuidString) }
+        var batch = PendingBatch<RemoteReviewLogInsert>()
+        for entry in entries {
+            let row = RemoteReviewLogInsert(
+                id: entry.id, userID: ownerID, workspaceID: entry.workspaceID, wordID: entry.wordID,
+                reviewedAt: entry.reviewedAt, rating: entry.ratingRawValue, mode: entry.modeRawValue,
+                affectsSchedule: entry.affectsSchedule, elapsedDays: entry.elapsedDays,
+                intervalDaysBefore: entry.intervalDaysBefore, intervalDaysAfter: entry.intervalDaysAfter,
+                dueBefore: entry.dueBefore, dueAfter: entry.dueAfter, stateBefore: entry.stateBefore,
+                stateAfter: entry.stateAfter, stabilityBefore: entry.stabilityBefore,
+                stabilityAfter: entry.stabilityAfter, difficultyBefore: entry.difficultyBefore,
+                difficultyAfter: entry.difficultyAfter, lastReviewedBefore: entry.lastReviewedAtBefore)
+            do {
+                try RemoteRecordValidator.validate(row, ownerID: ownerID, now: now)
+                batch.rows.append(PendingRow(id: entry.id, snapshot: entry.reviewedAt, payload: row))
             } catch {
                 batch.invalid[Self.reason(for: error), default: 0] += 1
             }
@@ -635,6 +684,15 @@ final class SwiftDataSyncStore {
                 guard let workspace = byID[ack.id], let snapshot = snapshots[ack.id],
                       workspace.lastModifiedAt == snapshot else { continue }
                 stamp(workspace, ack.updatedAt)
+                changed = true
+            }
+        case .reviewLogs:
+            var byID: [UUID: ReviewLogEntry] = [:]
+            for entry in try context.fetch(FetchDescriptor<ReviewLogEntry>()) { byID[entry.id] = entry }
+            for ack in acks {
+                guard let entry = byID[ack.id], let snapshot = snapshots[ack.id],
+                      entry.reviewedAt == snapshot else { continue }
+                entry.uploadedAt = ack.updatedAt
                 changed = true
             }
         case .memberships:

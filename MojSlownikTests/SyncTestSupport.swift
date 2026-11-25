@@ -135,13 +135,17 @@ enum SyncTestKit {
                            workspace: UUID = WorkspaceID.legacy, entered: String = "translation",
                            category: String = "other", updatedAt: Date, deletedAt: Date? = nil,
                            repetitions: Int = 1, userID: UUID = owner, intervalDays: Double = 1,
-                           dueDate: Date? = nil, lapseCount: Int? = nil) -> RemoteWordRecord {
+                           dueDate: Date? = nil, lapseCount: Int? = nil,
+                           fsrs: FSRSMemory? = nil) -> RemoteWordRecord {
         RemoteWordRecord(id: id, userID: userID, workspaceID: workspace, term: term, translation: translation,
                          enteredSide: entered, category: category,
                          createdAt: t0.addingTimeInterval(-7_200), updatedAt: updatedAt, deletedAt: deletedAt,
                          easeFactor: 2.5, intervalDays: intervalDays, repetitions: repetitions,
                          dueDate: dueDate ?? t0.addingTimeInterval(86_400), lastReviewGrade: "good", knowledgeTier: 1,
-                         consecutiveSoftMisses: 0, lapseCount: lapseCount)
+                         consecutiveSoftMisses: 0, lapseCount: lapseCount,
+                         fsrsState: fsrs?.state, fsrsStability: fsrs?.stability,
+                         fsrsDifficulty: fsrs?.difficulty, fsrsLearningStep: fsrs.map(\.learningStep),
+                         fsrsLastReview: fsrs?.lastReviewedAt)
     }
 
     static func remoteFolder(id: UUID = UUID(), name: String = "Из облака", workspace: UUID = WorkspaceID.legacy,
