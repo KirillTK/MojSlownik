@@ -97,6 +97,15 @@ final class SaveFailureRestoreTests: XCTestCase {
         XCTAssertNil(repository.stored, "no activity is published when the save fails")
     }
 
+    /// Nothing reached the store (a fresh context sees no entry) and nothing is left pending in the
+    /// context, so no later successful save can persist a phantom entry. The failing context itself
+    /// may still return the dropped object from a fetch on iOS 26, so it is not asserted.
+    private func assertNoPendingLogEntry(in context: ModelContext, container: ModelContainer, line: UInt = #line) {
+        XCTAssertTrue(((try? ModelContext(container).fetch(FetchDescriptor<ReviewLogEntry>())) ?? []).isEmpty,
+                      "persisted", line: line)
+        XCTAssertFalse(context.insertedModelsArray.contains { $0 is ReviewLogEntry }, "still pending", line: line)
+    }
+
     func testFailedReviewSaveLeavesNoLogEntryAndRestoresTheFSRSFields() throws {
         let container = try readOnlyContainer()
         let context = container.mainContext
@@ -113,19 +122,19 @@ final class SaveFailureRestoreTests: XCTestCase {
 
         XCTAssertThrowsError(try store.review(.good, to: word, context: context, now: t0.addingTimeInterval(60)))
         XCTAssertEqual(SRSState(word: word), before, "every FSRS field is restored")
-        XCTAssertTrue(try context.fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
+        assertNoPendingLogEntry(in: context, container: container)
 
         XCTAssertThrowsError(try store.recordPracticeAnswer(
             word: word, answer: .choice(isCorrect: false), context: context, mode: .quiz,
             now: t0.addingTimeInterval(60)))
         XCTAssertEqual(SRSState(word: word), before)
-        XCTAssertTrue(try context.fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
+        assertNoPendingLogEntry(in: context, container: container)
         // A non-scheduling answer that fails to save leaves no entry either.
         word.dueDate = t0.addingTimeInterval(86_400)
         XCTAssertThrowsError(try store.recordPracticeAnswer(
             word: word, answer: .choice(isCorrect: true), context: context, mode: .quiz,
             now: t0.addingTimeInterval(60)))
-        XCTAssertTrue(try context.fetch(FetchDescriptor<ReviewLogEntry>()).isEmpty)
+        assertNoPendingLogEntry(in: context, container: container)
     }
 
     func testSetCategoryRestoresCategoryAndUpdatedAtWhenSaveFails() throws {

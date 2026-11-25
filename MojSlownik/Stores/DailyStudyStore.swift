@@ -124,10 +124,10 @@ final class DailyStudyStore {
         do {
             try logger.logged("word_progress.save") { try context.save() }
         } catch {
-            if let entry { context.delete(entry) }
             (word.knowledgeTier, word.consecutiveSoftMisses) = previous
             previousSRS.write(to: word)
             word.updatedAt = previousUpdatedAt
+            if let entry { discard(entry, in: context) }
             throw error
         }
         activity = next
@@ -163,16 +163,25 @@ final class DailyStudyStore {
         do {
             try logger.logged("word_progress.save") { try context.save() }
         } catch {
-            if let entry { context.delete(entry) }
             previous.write(to: word)
             (word.knowledgeTier, word.consecutiveSoftMisses) = previousKnowledge
             word.updatedAt = previousUpdatedAt
+            if let entry { discard(entry, in: context) }
             throw error
         }
         activity = next
         commit()
         logAnswer(.flashcards, isCorrect: grade != .again, grade: grade)
         changeSignal?.notify()
+    }
+
+    /// Drops an entry whose save failed. Nothing was written to the store; the delete also takes
+    /// the pending insert out of the context so a later save cannot persist it. (On iOS 26 the
+    /// same context may still return the dropped object from a fetch until it is reloaded; other
+    /// contexts, which sync and the views use, never see it.)
+    private func discard(_ entry: ReviewLogEntry, in context: ModelContext) {
+        context.delete(entry)
+        context.processPendingChanges()
     }
 
     /// The review-log entry saved together with the word; nil for a word without a sync uuid.
