@@ -26,7 +26,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
       `UITEST_QUICK_ACTION`). Dynamic item: appears after the first launch; skipped while a sheet is open
 - [x] Count taps from scan to saved word: scan button → tap a line → tap word chip (saves) → Done =
       4 taps for one word, +1 per extra word. Already minimal; no change
-- [~] /code-review (done, fixes applied) → PR → CI green
+- [x] /code-review (done, fixes applied) → PR → CI green (awaiting merge)
 - Manual: camera/OCR on a device; long-press icon → "Scan text" on a device. PR: #17
 
 ## Phase 1 — Narrow languages (small) · branch `feature/narrow-languages` (stacked on #17) · [~]
