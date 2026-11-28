@@ -4,10 +4,19 @@ import XCTest
 final class LanguageTests: XCTestCase {
     func testAllEqualsTheSyncSupportedList() {
         XCTAssertEqual(Language.all.map(\.code), LanguageCodes.supported)
-        XCTAssertEqual(Set(Language.studyOrder.map(\.code)), Set(LanguageCodes.supported))
-        XCTAssertEqual(Language.studyOrder.count, Language.all.count)
-        XCTAssertEqual(Set(Language.translationOrder.map(\.code)), Set(LanguageCodes.supported))
-        XCTAssertEqual(Language.translationOrder.count, Language.all.count)
+    }
+
+    func testOnlyTheGuidedPairsAreSelectable() {
+        XCTAssertEqual(Language.studyOrder.map(\.code), ["pl", "en", "de"])
+        XCTAssertEqual(Language.translationOrder.map(\.code), ["ru", "uk", "en"])
+    }
+
+    func testLegacyPairsStillResolve() {
+        for (term, translation) in [("fr", "ru"), ("pl", "cs"), ("es", "pt"), ("ru", "pl")] {
+            let pair = LanguagePair(termCode: term, translationCode: translation)
+            XCTAssertEqual(pair?.term.code, term)
+            XCTAssertEqual(pair?.translation.code, translation)
+        }
     }
 
     func testTableIntegrity() {

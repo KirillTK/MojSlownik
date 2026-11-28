@@ -17,16 +17,18 @@ struct WorkspaceWizardView: View {
     @State private var errorMessage: String?
 
     private var choices: WorkspaceWizardChoices {
-        WorkspaceWizardChoices(
+        let deleted = storedWorkspaces.filter { !$0.isActive }
+        return WorkspaceWizardChoices(
             activeIDs: Set(storedWorkspaces.filter(\.isActive).map(\.id)),
-            deletedIDs: Set(storedWorkspaces.filter { !$0.isActive }.map(\.id)))
+            deletedIDs: Set(deleted.map(\.id)),
+            deletedPairs: deleted.compactMap { LanguagePair(termCode: $0.termLanguageCode, translationCode: $0.translationLanguageCode) })
     }
 
     var body: some View {
         NavigationStack {
             WizardStepView(step: 1, title: "Which language are you learning?",
                            message: "Each language gets its own dictionary, folders and practice.",
-                           languages: Language.studyOrder, selection: studied, identifierPrefix: "wizardLanguage",
+                           languages: choices.studyLanguages, selection: studied, identifierPrefix: "wizardLanguage",
                            subtitle: { $0.endonym == $0.localizedName ? "" : $0.endonym }, isDisabled: { _ in false },
                            select: selectStudied) {
                 Button("Next") { showTranslationStep = true }
@@ -54,7 +56,7 @@ struct WorkspaceWizardView: View {
     private var translationStep: some View {
         WizardStepView(step: 2, title: "Translate into which language?",
                        message: "Usually your native language. The app interface follows your iPhone’s language.",
-                       languages: Language.translationOrder, selection: translation, identifierPrefix: "wizardTranslation",
+                       languages: choices.translationLanguages(for: studied), selection: translation, identifierPrefix: "wizardTranslation",
                        subtitle: translationSubtitle, isDisabled: { $0 == studied },
                        select: { translation = $0 }, footnote: "You can add a pair later: “New language…” in the dictionary title.") {
             Button { start() } label: {
@@ -96,7 +98,7 @@ struct WorkspaceWizardView: View {
 
     private func selectStudied(_ language: Language) {
         studied = language
-        translation = WorkspaceWizardChoices.translation(afterStudying: language, current: translation)
+        translation = choices.translation(afterStudying: language, current: translation)
     }
 
     private func start() {

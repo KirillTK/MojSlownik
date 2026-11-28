@@ -47,6 +47,25 @@ struct WorkspaceWizardChoices: Equatable {
 
     var activeIDs: Set<UUID> = []
     var deletedIDs: Set<UUID> = []
+    /// Soft-deleted pairs: they keep their languages listed even outside the selectable lists, so a
+    /// legacy pair (e.g. fr ← ru) can still be restored with its words.
+    var deletedPairs: [LanguagePair] = []
+
+    /// Step 1: the selectable studied languages, then studied languages of restorable legacy pairs.
+    var studyLanguages: [Language] {
+        Self.appending(deletedPairs.map(\.term), to: Language.studyOrder)
+    }
+
+    /// Step 2: the selectable translations, then translations of restorable pairs studying `term`.
+    func translationLanguages(for term: Language) -> [Language] {
+        Self.appending(deletedPairs.filter { $0.term == term }.map(\.translation), to: Language.translationOrder)
+    }
+
+    private static func appending(_ extra: [Language], to base: [Language]) -> [Language] {
+        extra.reduce(into: base) { list, language in
+            if !list.contains(language) { list.append(language) }
+        }
+    }
 
     func status(term: Language, translation: Language) -> PairStatus {
         if term == translation { return .sameAsStudied }
@@ -56,15 +75,18 @@ struct WorkspaceWizardChoices: Equatable {
         return .available
     }
 
-    /// Russian, unless it is the studied language (then nothing is preselected).
+    /// Russian, unless it is the studied language (then nothing is preselected; only reachable
+    /// when restoring a legacy pair that studies Russian).
     static func defaultTranslation(for term: Language) -> Language? {
         term == .russian ? nil : .russian
     }
 
     /// The translation after the studied language changed: kept unless it equals the new studied
-    /// language; an empty choice gets the default.
-    static func translation(afterStudying term: Language, current: Language?) -> Language? {
-        guard let current, current != term else { return defaultTranslation(for: term) }
+    /// language or is not offered for it (a legacy pair's translation); otherwise the default.
+    func translation(afterStudying term: Language, current: Language?) -> Language? {
+        guard let current, current != term, translationLanguages(for: term).contains(current) else {
+            return Self.defaultTranslation(for: term)
+        }
         return current
     }
 }

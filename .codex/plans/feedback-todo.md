@@ -26,16 +26,20 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
       `UITEST_QUICK_ACTION`). Dynamic item: appears after the first launch; skipped while a sheet is open
 - [x] Count taps from scan to saved word: scan button → tap a line → tap word chip (saves) → Done =
       4 taps for one word, +1 per extra word. Already minimal; no change
-- [~] /code-review (done, fixes applied) → PR → CI green
+- [x] /code-review (done, fixes applied) → PR → CI green (awaiting merge)
 - Manual: camera/OCR on a device; long-press icon → "Scan text" on a device. PR: #17
 
-## Phase 1 — Narrow languages (small) · branch `feature/narrow-languages`
+## Phase 1 — Narrow languages (small) · branch `feature/narrow-languages` (stacked on #17) · [~]
 
-- [ ] Selectable studied languages: pl, en, de. Translation: ru, uk, en. No same-language pairs
-- [ ] Sync validation still accepts every existing code; legacy workspaces load and keep their words
-- [ ] Legacy pairs cannot be created anew (wizard + workspace manager)
-- [ ] Unit tests (selectable list, legacy pair validates) → /code-review → PR → CI green
-- PR:
+- [x] Selectable studied languages: pl, en, de. Translation: ru, uk, en. No same-language pairs
+      (`Language.studyOrder` / `translationOrder`; en ← en stays disabled in the wizard)
+- [x] Sync validation still accepts every existing code; legacy workspaces load and keep their words
+      (`Language.all` / `LanguageCodes.supported` unchanged, so no provider mapping is removed)
+- [x] Legacy pairs cannot be created anew: the wizard is the only create path (the workspace manager
+      opens it too). A soft-deleted legacy pair keeps its languages listed so its words can come back
+      (`WorkspaceWizardChoices.studyLanguages` / `translationLanguages(for:)`)
+- [~] Unit tests + E2E picker check (CI) → /code-review (done, fixes applied) → PR → CI green
+- PR: #18 (base: feature/camera-access)
 
 ## Phase 2 — Onboarding wizard and study plan (large) · branch `feature/onboarding-plan`
 
