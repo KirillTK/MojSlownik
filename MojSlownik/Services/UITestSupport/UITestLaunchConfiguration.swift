@@ -8,17 +8,21 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
     static let prefillKey = "UITEST_PREFILL"
     static let authKey = "UITEST_AUTH"
     static let syncKey = "UITEST_SYNC"
+    /// Simulates a launch from a Home Screen quick action (`QuickAction` raw value).
+    static let quickActionKey = "UITEST_QUICK_ACTION"
     static let defaultsSuite = "MojSlownik.UITest"
 
     let fixture: UITestFixture
     let prefill: String?
     var auth: UITestAuthState = .signedOut
     var sync: UITestSyncState = .empty
+    var quickAction: QuickAction?
 
     enum ParseError: LocalizedError, Equatable {
         case unknownFixture(String)
         case unknownAuthState(String)
         case unknownSyncState(String)
+        case unknownQuickAction(String)
 
         var errorDescription: String? {
             switch self {
@@ -28,6 +32,9 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
             case .unknownSyncState(let name):
                 let known = UITestSyncState.allCases.map(\.rawValue).joined(separator: ", ")
                 return "Unknown UITEST_SYNC '\(name)'. Known: \(known)"
+            case .unknownQuickAction(let name):
+                let known = QuickAction.allCases.map(\.rawValue).joined(separator: ", ")
+                return "Unknown UITEST_QUICK_ACTION '\(name)'. Known: \(known)"
             case .unknownFixture(let name):
                 let known = UITestFixture.allCases.map(\.rawValue).joined(separator: ", ")
                 return "Unknown UITEST_FIXTURE '\(name)'. Known: \(known)"
@@ -36,13 +43,15 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
     }
 
     /// nil when no key is set (empty strings count as unset).
-    /// Prefill, auth or sync without a fixture implies fixture `.empty`. Unknown names throw.
+    /// Prefill, auth, sync or a quick action without a fixture implies fixture `.empty`. Unknown names throw.
     static func parse(_ environment: [String: String]) throws -> UITestLaunchConfiguration? {
         let fixtureName = environment[fixtureKey].flatMap { $0.isEmpty ? nil : $0 }
         let prefill = environment[prefillKey].flatMap { $0.isEmpty ? nil : $0 }
         let authName = environment[authKey].flatMap { $0.isEmpty ? nil : $0 }
         let syncName = environment[syncKey].flatMap { $0.isEmpty ? nil : $0 }
-        guard fixtureName != nil || prefill != nil || authName != nil || syncName != nil else { return nil }
+        let quickActionName = environment[quickActionKey].flatMap { $0.isEmpty ? nil : $0 }
+        guard fixtureName != nil || prefill != nil || authName != nil || syncName != nil
+                || quickActionName != nil else { return nil }
         var auth = UITestAuthState.signedOut
         if let authName {
             guard let known = UITestAuthState(rawValue: authName) else {
@@ -57,6 +66,13 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
             }
             sync = known
         }
+        var quickAction: QuickAction?
+        if let quickActionName {
+            guard let known = QuickAction(rawValue: quickActionName) else {
+                throw ParseError.unknownQuickAction(quickActionName)
+            }
+            quickAction = known
+        }
         let fixture: UITestFixture
         if let fixtureName {
             guard let known = UITestFixture(rawValue: fixtureName) else {
@@ -66,7 +82,8 @@ struct UITestLaunchConfiguration: Equatable, Sendable {
         } else {
             fixture = .empty
         }
-        return UITestLaunchConfiguration(fixture: fixture, prefill: prefill, auth: auth, sync: sync)
+        return UITestLaunchConfiguration(fixture: fixture, prefill: prefill, auth: auth, sync: sync,
+                                         quickAction: quickAction)
     }
 
     /// Cached for non-throwing call sites (Translator, WordListView). App launch calls

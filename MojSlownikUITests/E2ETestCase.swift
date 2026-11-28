@@ -54,7 +54,8 @@ class E2ETestCase: XCTestCase {
     @MainActor
     @discardableResult
     func launch(_ fixture: Fixture, prefill: String? = nil, auth: AuthState? = nil,
-                sync: SyncState? = nil, language: UILanguage = .russian) -> XCUIApplication {
+                sync: SyncState? = nil, quickAction: String? = nil,
+                language: UILanguage = .russian) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", language.appleLanguages, "-AppleLocale", language.appleLocale]
         app.launchEnvironment["UITEST_FIXTURE"] = fixture.rawValue
@@ -66,6 +67,9 @@ class E2ETestCase: XCTestCase {
         }
         if let prefill {
             app.launchEnvironment["UITEST_PREFILL"] = prefill
+        }
+        if let quickAction {
+            app.launchEnvironment["UITEST_QUICK_ACTION"] = quickAction
         }
         app.launch()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 60), "App did not reach the foreground")

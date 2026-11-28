@@ -199,6 +199,20 @@ final class UITestSupportTests: XCTestCase {
         }
     }
 
+    func testParseQuickAction() throws {
+        let configuration = try XCTUnwrap(UITestLaunchConfiguration.parse(["UITEST_QUICK_ACTION": "scan-text"]))
+        XCTAssertEqual(configuration.quickAction, .scanText)
+        XCTAssertEqual(configuration.fixture, .empty, "a quick action without a fixture implies .empty")
+        XCTAssertNil(try XCTUnwrap(UITestLaunchConfiguration.parse(["UITEST_FIXTURE": "empty"])).quickAction)
+    }
+
+    func testUnknownQuickActionThrowsNamingTheValue() {
+        XCTAssertThrowsError(try UITestLaunchConfiguration.parse(["UITEST_QUICK_ACTION": "nope"])) { error in
+            XCTAssertEqual(error as? UITestLaunchConfiguration.ParseError, .unknownQuickAction("nope"))
+            XCTAssertTrue(error.localizedDescription.contains("nope"))
+        }
+    }
+
     // MARK: Sync fixtures
 
     func testSyncedVocabularyHasFixedIDsAndCleanRows() throws {

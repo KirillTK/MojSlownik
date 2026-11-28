@@ -92,6 +92,7 @@ struct ScannerScreen: View {
                             .background(.regularMaterial, in: Circle())
                     }
                     .accessibilityLabel("Close scanner")
+                    .accessibilityIdentifier("closeScannerButton")
                 }
                 if cameraAuthorized && scannerSupported {
                     Text(instructionText)

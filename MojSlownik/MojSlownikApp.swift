@@ -4,6 +4,7 @@ import SwiftData
 @main
 @MainActor
 struct MojSlownikApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var workspaces: WorkspaceStore
     @State private var folders: FolderLibraryStore
     @State private var vocabulary: VocabularyStore
@@ -11,16 +12,21 @@ struct MojSlownikApp: App {
     @State private var achievements: AchievementStore
     @State private var auth: AuthStore
     @State private var sync: SyncStore
+    @State private var quickActions: QuickActionStore
     @Environment(\.scenePhase) private var scenePhase
     private let container: ModelContainer
     private let logger: any AppLogging
 
     init() {
+        let quickActions = QuickActionStore()
         do {
             #if DEBUG
             let resources: AppResources
             if let configuration = try UITestLaunchConfiguration.parse(ProcessInfo.processInfo.environment) {
                 resources = try AppResources.uiTest(configuration)
+                if let action = configuration.quickAction {
+                    quickActions.handle(shortcutType: action.shortcutType)
+                }
             } else if AppResources.isUnitTestHost {
                 resources = try AppResources.unitTestHost()
             } else {
@@ -38,6 +44,8 @@ struct MojSlownikApp: App {
             _auth = State(initialValue: resources.auth)
             _sync = State(initialValue: resources.sync)
             logger = resources.logger
+            _quickActions = State(initialValue: quickActions)
+            QuickActionSceneDelegate.store = quickActions
             AppLog.shared = resources.logger
             // Once per process (here, not in a view's .task that runs per scene).
             resources.logger.log(.appLaunched)
@@ -56,6 +64,7 @@ struct MojSlownikApp: App {
                 .environment(achievements)
                 .environment(auth)
                 .environment(sync)
+                .environment(quickActions)
                 .task { auth.start() }
         }
         .modelContainer(container)

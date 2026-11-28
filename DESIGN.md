@@ -113,6 +113,7 @@ card 18 (grouped cards, mode tiles), hero 24 (Today/Achievements hero, prompt ca
 | Component | Spec |
 |---|---|
 | Primary button | `PrimaryButtonStyle(kind:)`: full width, min height 50, radius button, `.body.bold`. `.accent`: yellow + `appOnAccent`; `.inverse` (inside the yellow hero only): ink + yellow; `.ink` (Apple sign-in): `appInverseSurface` + `appOnInverse` + 1 pt `appInverseEdge`; `.card` (Google sign-in): `cardBackground` + `appInk` + 1 pt `appCardEdge`; `.ink`/`.card` disabled: opacity 0.5. Disabled `.accent`: `appSecondarySurface` + `subtleText`. Pressed: scale 0.97 + opacity 0.9 (opacity only with Reduce Motion) |
+| Dictionary FABs | Bottom trailing, spacing `AppSpacing.s`, radius button, floating shadow. Add: `fabSize` square (`@ScaledMetric` 56, max 72), yellow + `appOnAccent` `plus`. Scan: `cardBackground`, ink `camera.viewfinder` (`.title2.medium`) + visible «Сканировать» label (`.body.semibold`, one line, scales down to 0.7), horizontal padding `AppSpacing.m`, height `fabSize - 4`; VoiceOver label «Сканировать текст» |
 | Secondary actions | No custom secondary button; text actions are system `Button` with `appAccentText` tint |
 | Chip | `chipStyle(isSelected:)`: padding 14, visible capsule min height 36, 44 pt hit frame. Selected yellow + `appOnAccent`, else `appSecondarySurface` + `appInk`. Callers set no colours on the label |
 | Progress bar | `MarkerProgressBar(value:track:fill:height:)`: capsule, value clamped 0…1, `.snappy` change (none with Reduce Motion), hidden from accessibility; callers supply label/value |
@@ -159,7 +160,8 @@ Mode and achievements icons sit on `appAccentSoft` tiles with an ink glyph.
 | Purpose | Symbol |
 |---|---|
 | Tab Словарь / Практика | `character.book.closed` / `rectangle.stack` |
-| Add word / Scan text | `plus` / `text.viewfinder` |
+| Add word / Scan text (FAB, Home Screen quick action) | `plus` / `camera.viewfinder` |
+| Scanner: translate all text | `text.viewfinder` |
 | Scan chip add / remove (chip + menu) | `plus.circle` / `minus.circle` |
 | Switch camera | `camera.rotate` |
 | Recoverable service error hint | `info.circle` |

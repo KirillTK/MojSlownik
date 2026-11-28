@@ -4040,6 +4040,22 @@
         }
       }
     },
+    "Scan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сканировать"
+          }
+        }
+      }
+    },
     "Scan text" : {
       "localizations" : {
         "en" : {
