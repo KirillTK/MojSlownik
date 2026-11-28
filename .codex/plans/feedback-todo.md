@@ -39,7 +39,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
       opens it too). A soft-deleted legacy pair keeps its languages listed so its words can come back
       (`WorkspaceWizardChoices.studyLanguages` / `translationLanguages(for:)`)
 - [~] Unit tests + E2E picker check (CI) → /code-review (done, fixes applied) → PR → CI green
-- PR:
+- PR: #18 (base: feature/camera-access)
 
 ## Phase 2 — Onboarding wizard and study plan (large) · branch `feature/onboarding-plan`
 
