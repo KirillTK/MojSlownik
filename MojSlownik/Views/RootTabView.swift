@@ -6,6 +6,8 @@ struct RootTabView: View {
     @Environment(WorkspaceStore.self) private var workspaces
     @Environment(AuthStore.self) private var auth
     @Environment(SyncStore.self) private var sync
+    @Environment(QuickActionStore.self) private var quickActions
+    @State private var selectedTab = RootTab.dictionary
     /// One timer for loading and waiting together (not restarted between them).
     @State private var timedOut = false
     @State private var timerStarted = false
@@ -63,18 +65,28 @@ struct RootTabView: View {
     }
 
     private var tabs: some View {
-        TabView {
-            WordListView()
+        TabView(selection: $selectedTab) {
+            WordListView(isSelectedTab: selectedTab == .dictionary)
                 .tabItem { Label("Dictionary", systemImage: "character.book.closed") }
+                .tag(RootTab.dictionary)
 
             TrainingView()
                 .tabItem { Label("Practice", systemImage: "rectangle.stack") }
+                .tag(RootTab.practice)
+        }
+        .onChange(of: quickActions.pending, initial: true) { _, action in
+            // The scanner lives on the Dictionary tab, which takes the action once it is selected.
+            if action == .scanText { selectedTab = .dictionary }
         }
         .tint(.appAccentStrong)
         .background { AchievementTracker() }
         .achievementBanner()
         .modifier(AppleTranslationHost())
     }
+}
+
+private enum RootTab: Hashable {
+    case dictionary, practice
 }
 
 #Preview {
@@ -88,4 +100,5 @@ struct RootTabView: View {
         .environment(resources.achievements)
         .environment(resources.auth)
         .environment(resources.sync)
+        .environment(QuickActionStore())
 }

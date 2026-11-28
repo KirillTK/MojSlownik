@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct WordListView: View {
+    /// The Home Screen scan action opens the scanner only from the selected tab.
+    var isSelectedTab = true
+
     @Query(sort: \Word.createdAt, order: .reverse) private var storedWords: [Word]
     private var words: [Word] { WorkspaceScope.words(storedWords, workspaceID: workspaces.activeID) }
 
@@ -11,6 +14,7 @@ struct WordListView: View {
     @Environment(WorkspaceStore.self) private var workspaces
     @Environment(FolderLibraryStore.self) private var folderLibrary
     @Environment(VocabularyStore.self) private var vocabulary
+    @Environment(QuickActionStore.self) private var quickActions
     @State private var selectedFolderID: UUID?
     @State private var showDeleteFolder = false
     @State private var deletionError: String?
@@ -135,6 +139,13 @@ struct WordListView: View {
                     }
                 }
             }
+            .onChange(of: ScanRequestTrigger(pending: quickActions.pending, isSelectedTab: isSelectedTab),
+                      initial: true) {
+                if quickActions.takeScanRequest(dictionaryIsSelected: isSelectedTab,
+                                                isPresenting: PresentationProbe.isPresenting) {
+                    showScanner = true
+                }
+            }
             .onChange(of: workspaces.activeID) {
                 // Sheets and filters were built for the previous workspace's pair and folders.
                 showAddSheet = false
@@ -164,13 +175,20 @@ struct WordListView: View {
             Button {
                 showScanner = true
             } label: {
-                Image(systemName: "text.viewfinder")
-                    .font(.title2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.appInk)
-                    .frame(width: fabSize - 4, height: fabSize - 4)
-                    .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
-                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                    Text("Scan")
+                        .font(.body.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .foregroundStyle(Color.appInk)
+                .padding(.horizontal, AppSpacing.m)
+                .frame(height: fabSize - 4)
+                .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Scan text")
@@ -423,6 +441,11 @@ private struct WordRow: View {
     }
 }
 
+private struct ScanRequestTrigger: Equatable {
+    let pending: QuickAction?
+    let isSelectedTab: Bool
+}
+
 #Preview {
     let resources = AppResources.preview
     WordListView()
@@ -433,4 +456,5 @@ private struct WordRow: View {
         .environment(resources.dailyStudy)
         .environment(resources.achievements)
         .environment(resources.auth)
+        .environment(QuickActionStore())
 }
