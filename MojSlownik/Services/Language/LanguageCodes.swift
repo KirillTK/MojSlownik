@@ -1,7 +1,9 @@
 import Foundation
 
 /// The language codes this build can show (Latin and Cyrillic scripts). Sync validates workspaces
-/// against it; phase 3's `Language.all` must equal it. Widening the list bumps
+/// against it; `Language.all` must equal it. Narrower than this: the wizard's selectable lists
+/// (`Language.studyOrder`, `Language.translationOrder`); never shrink this list, or legacy
+/// workspaces stop loading. Widening the list bumps
 /// `SyncEngine.capabilityVersion` so rows held by an older build are re-pulled.
 enum LanguageCodes {
     static let supported: [String] = ["pl", "ru", "uk", "en", "de", "fr", "es", "it", "cs", "pt"]

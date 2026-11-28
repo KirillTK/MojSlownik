@@ -74,16 +74,16 @@ struct Language: Hashable, Sendable, Identifiable {
                                      speech: "pt-PT", ocr: "pt-BR", apple: "pt", script: .latin)
     // l10n:data-end
 
-    /// Same order as `LanguageCodes.supported`.
+    /// Every language a stored workspace may use; same order as `LanguageCodes.supported`.
+    /// Legacy pairs outside the selectable lists below still load, sync and practice.
     static let all: [Language] = [.polish, .russian, .ukrainian, .english, .german,
                                   .french, .spanish, .italian, .czech, .portuguese]
 
-    /// Wizard step 1 order (preselected: pl).
-    static let studyOrder: [Language] = [.polish, .english, .german, .spanish, .ukrainian,
-                                         .french, .italian, .czech, .portuguese, .russian]
-    /// Wizard step 2 order (preselected: ru).
-    static let translationOrder: [Language] = [.russian, .ukrainian, .english, .polish, .german,
-                                               .french, .spanish, .italian, .czech, .portuguese]
+    /// Selectable studied languages, wizard step 1 order (preselected: pl).
+    static let studyOrder: [Language] = [.polish, .english, .german]
+    /// Selectable translation languages, wizard step 2 order (preselected: ru).
+    /// The studied language is disabled there, so no same-language pair can be created.
+    static let translationOrder: [Language] = [.russian, .ukrainian, .english]
 
     init?(code: String) {
         guard let match = Self.all.first(where: { $0.code == code }) else { return nil }

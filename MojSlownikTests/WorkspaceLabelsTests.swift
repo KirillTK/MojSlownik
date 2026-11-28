@@ -63,17 +63,49 @@ final class WorkspaceWizardChoicesTests: XCTestCase {
     }
 
     func testChangingTheStudiedLanguageKeepsOrResetsTheTranslation() {
-        XCTAssertEqual(WorkspaceWizardChoices.translation(afterStudying: .german, current: .ukrainian), .ukrainian)
-        XCTAssertEqual(WorkspaceWizardChoices.translation(afterStudying: .ukrainian, current: .ukrainian), .russian,
+        let choices = WorkspaceWizardChoices()
+        XCTAssertEqual(choices.translation(afterStudying: .german, current: .ukrainian), .ukrainian)
+        XCTAssertEqual(choices.translation(afterStudying: .english, current: .english), .russian,
                        "the studied language cannot be the translation")
-        XCTAssertNil(WorkspaceWizardChoices.translation(afterStudying: .russian, current: .russian))
-        XCTAssertEqual(WorkspaceWizardChoices.translation(afterStudying: .polish, current: nil), .russian)
+        XCTAssertEqual(choices.translation(afterStudying: .polish, current: nil), .russian)
+        XCTAssertEqual(choices.translation(afterStudying: .german, current: .czech), .russian,
+                       "a translation not offered for the new studied language is reset")
     }
 
-    func testEveryWizardLanguageIsListedOnceInBothSteps() {
-        XCTAssertEqual(Set(Language.studyOrder.map(\.code)), Set(Language.all.map(\.code)))
-        XCTAssertEqual(Set(Language.translationOrder.map(\.code)), Set(Language.all.map(\.code)))
-        XCTAssertEqual(Language.studyOrder.count, Language.all.count)
-        XCTAssertEqual(Language.translationOrder.count, Language.all.count)
+    func testWizardListsEachSelectableLanguageOnce() {
+        XCTAssertEqual(Set(Language.studyOrder).count, Language.studyOrder.count)
+        XCTAssertEqual(Set(Language.translationOrder).count, Language.translationOrder.count)
+    }
+
+    /// Every selectable studied language gets a preselected, listed, different translation,
+    /// whatever was chosen before; a same-language pair is never available.
+    func testNoSameLanguagePairFromTheWizardLists() {
+        let choices = WorkspaceWizardChoices()
+        XCTAssertEqual(choices.studyLanguages, Language.studyOrder)
+        for term in Language.studyOrder {
+            for current in [nil] + Language.all.map(Optional.some) {
+                let preselected = choices.translation(afterStudying: term, current: current)
+                XCTAssertNotNil(preselected, term.code)
+                XCTAssertNotEqual(preselected, term)
+                XCTAssertTrue(preselected.map(choices.translationLanguages(for: term).contains) ?? false, term.code)
+            }
+        }
+        XCTAssertEqual(choices.status(term: .english, translation: .english), .sameAsStudied)
+    }
+
+    /// A deleted legacy pair keeps its languages in the wizard so its words can come back.
+    func testDeletedLegacyPairStaysRestorable() {
+        let frRu = LanguagePair(term: .french, translation: .russian)
+        let ruPl = LanguagePair(term: .russian, translation: .polish)
+        let choices = WorkspaceWizardChoices(
+            deletedIDs: [WorkspaceID.make(term: "fr", translation: "ru"), WorkspaceID.make(term: "ru", translation: "pl")],
+            deletedPairs: [frRu, ruPl])
+        XCTAssertEqual(choices.studyLanguages, Language.studyOrder + [.french, .russian])
+        XCTAssertEqual(choices.translationLanguages(for: .french), Language.translationOrder)
+        XCTAssertEqual(choices.translationLanguages(for: .russian), Language.translationOrder + [.polish])
+        XCTAssertEqual(choices.translationLanguages(for: .polish), Language.translationOrder)
+        XCTAssertEqual(choices.status(term: .french, translation: .russian), .restorable)
+        XCTAssertEqual(choices.status(term: .russian, translation: .polish), .restorable)
+        XCTAssertNil(choices.translation(afterStudying: .russian, current: .russian), "nothing preselected")
     }
 }

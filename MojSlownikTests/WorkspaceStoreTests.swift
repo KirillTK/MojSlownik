@@ -69,6 +69,16 @@ final class WorkspaceStoreTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: "workspace.active.v1"), WorkspaceID.legacy.uuidString)
     }
 
+    /// A pair the wizard no longer offers (fr ← ru) still loads and resolves to its own languages.
+    func testLegacyPairStillLoadsWithItsOwnLanguages() throws {
+        let fr = try WorkspaceCatalog.ensure(term: "fr", translation: "ru", container: container)
+        let store = makeStore()
+        try store.load()
+        XCTAssertEqual(store.options.map(\.termCode), ["pl", "de", "fr"])
+        store.select(id: fr)
+        XCTAssertEqual(store.pair, LanguagePair(term: .french, translation: .russian))
+    }
+
     func testLoadPicksThePersistedActiveWorkspace() throws {
         defaults.set(de.uuidString, forKey: "workspace.active.v1")
         let store = makeStore()

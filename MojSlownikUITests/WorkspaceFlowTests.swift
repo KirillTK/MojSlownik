@@ -12,11 +12,16 @@ final class WorkspaceFlowTests: E2ETestCase {
     @MainActor
     func testFreshInstallWizardCreatesWorkspace() {
         launch(.freshInstall)
+        waitForHittable(element("wizardLanguage-de"))
+        XCTAssertFalse(element("wizardLanguage-fr").exists, "only pl, en and de are offered")
+        XCTAssertFalse(element("wizardLanguage-ru").exists)
         tapRow("wizardLanguage-de")
         tapRow("wizardNextButton")
         let russian = element("wizardTranslation-ru")
         waitForHittable(russian)
         XCTAssertTrue(russian.isSelected, "Russian is preselected")
+        XCTAssertTrue(element("wizardTranslation-en").exists)
+        XCTAssertFalse(element("wizardTranslation-pl").exists, "only ru, uk and en are offered")
         tapRow("wizardStartButton")
         waitForDictionary()
         XCTAssertTrue(app.navigationBars.buttons["🇩🇪 Немецкий"].waitForExistence(timeout: 10))
